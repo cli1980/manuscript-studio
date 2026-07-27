@@ -1,0 +1,231 @@
+---
+name: literary-translation
+description: Set up and translate literary works chapter by chapter through source discovery and normalization, a living glossary, whole-chapter analysis, systematic passage division with temporary internal passage files, two-path drafting, dialogue-based source-grounded editorial review, and durable completed-chapter output. Use when translating fiction, memoir, narrative nonfiction, poetry-inflected prose, or other literary writing from a source language into natural English, especially for new translation projects, passage-by-passage collaboration, close fidelity review, preservation of voice and reader experience, or continuity with earlier translated chapters.
+---
+
+# Literary Translation
+
+Translate a complete chapter through a chapter-level reading followed by a repeating passage workflow. Treat the source as authoritative throughout.
+
+## Governing Standard
+
+Produce English that works as literature while preserving how the source communicates:
+
+> An English reader should receive the same information, with the same emphasis, implications, uncertainties, and manner of revelation, as a source-language reader.
+
+Use natural English rather than reproducing source-language syntax. Do not add explanation, motivation, atmosphere, symbolism, certainty, or drama absent from the source.
+
+## Initialize or Resume the Project
+
+Determine the project state before beginning Step 1.
+
+For a new project, or an existing project missing normalized source files, `glossary.md`, or `translated_english/`, read [references/project-setup.md](references/project-setup.md) in full and complete the applicable setup steps.
+
+Read [references/workflow-state.md](references/workflow-state.md) in full before creating, verifying, or resuming an internal chapter workspace, and follow it throughout the chapter workflow.
+
+For an existing active chapter, verify the required internal artifacts, then resume from the last verified workflow phase without repeating settled work.
+
+Before starting the full chapter workflow, confirm access to the complete original-language chapter. If it cannot be located, ask the user to provide it. Do not perform whole-chapter analysis, passage division, two-path drafting, or finalization from a translation, summary, or incomplete excerpt in place of the original. An isolated passage may be translated only provisionally, as described under **Establish Chapter Context**.
+
+Treat `glossary.md` as living project state. Record user-approved or corrected terminology there promptly rather than leaving binding decisions only in chat history.
+
+## Establish Chapter Context
+
+Obtain:
+
+- the complete source chapter;
+- prior translated text and established decisions when available;
+- `glossary.md` and its established names and terminology;
+- any benchmark translation defining the target English style.
+
+If the user supplies only one isolated passage and no chapter context, translate it provisionally or request the complete chapter before fixing context-sensitive choices.
+
+Consult the immediately preceding completed English chapter when one exists. Consult other source chapters or prior translations only when the current chapter contains a specific continuity dependency, such as established terminology, recurring phrasing, a deliberate echo or motif, character knowledge or voice, chronology, or withheld information. Inspect only enough context to resolve that dependency; do not perform a full cross-chapter review by default. Use previous English translations to preserve continuity, but let the original source control whenever they conflict.
+
+## Step 1: Read the Complete Chapter
+
+Read the chapter before sustained passage translation. Produce a concise chapter translation brief covering:
+
+1. **Chapter essence** — narrative purpose and the change achieved.
+2. **Emotional arc** — dominant mood, pressure, turns, and ending state.
+3. **Viewpoint and distance** — focal character, narrative access, tense, and shifts.
+4. **Character dynamics and voices** — intentions, relationships, subtext, power, register, and rhetorical behavior.
+5. **Structure and rhythm** — scenes, pacing, tonal turns, parallels, and contrasts.
+6. **Continuity** — established terms, recurring images, repeated wording, and cross-chapter echoes.
+7. **Ambiguities and risks** — withheld information, degrees of certainty, cultural or technical issues, and likely translation distortions.
+
+Keep the brief concise and decision-oriented. Record only chapter-level observations that will affect passage boundaries, wording, voice, continuity, or review. Do not analyze individual sentences or draft translation yet.
+
+## Step 2: Map the Chapter into Passages
+
+Read [references/passage-division.md](references/passage-division.md) in full before creating the passage map or changing a boundary.
+
+Divide the chapter into the largest coherent units that remain manageable for close translation and review. Present the map briefly for visibility. Unless the user explicitly asks to approve passage boundaries, do not pause; proceed directly to preparing the internal passage set.
+
+### Prepare the Internal Passage Set
+
+Immediately after mapping, create the passage map and extract every source passage according to [references/workflow-state.md](references/workflow-state.md). Do this automatically; do not wait for the user to copy passages manually. Use the saved source files—not reconstructed chat excerpts—as inputs to the later loop.
+
+Do not begin Step 3 until the complete internal passage set exists and passes the reference's exact-once validation.
+
+## Step 3: Repeat for Each Passage
+
+Load the current numbered source-passage file. Do not translate beyond it unless requested. Carry the chapter brief, finalized preceding passage, terminology, and user decisions forward.
+
+### Step 3.1: Create the Provisional Translation
+
+Create two internal translation drafts independently before consolidating them.
+
+#### Path A: Fidelity-First Translation Tryout
+
+Translate the complete passage into readable English while preserving as much of the source information and communicative structure as possible. Produce continuous English prose, not notes, glosses, or a word-for-word crib. Some sentences may sound translated when staying close to the source helps expose information or relationships that a more natural rendering might lose. Account for:
+
+- explicit facts and logical relations;
+- implication and withheld information;
+- certainty, ambiguity, and emphasis;
+- viewpoint and narrative distance;
+- imagery, sensory detail, and meaningful repetition;
+- emotional relations, tone, register, and character voice.
+
+Path A is a diagnostic translation tryout, not the final prose model. Keep it readable, but tolerate limited source-shaped phrasing when it makes omissions, ambiguities, emphasis, or interpretive shifts easier to detect. Do not make it awkward merely to imitate source-language syntax.
+
+#### Path B: Direct Literary Translation
+
+Translate the complete passage directly from the source and chapter context without reusing or referring to Path A's wording. Prioritize natural syntax, idiom, cadence, dialogue, local register, reader effect, and fit with the chapter brief.
+
+#### Refine Path B
+
+Use Path B as the base text. Audit it against Path A and the source. Revise Path B wherever the audit reveals lost or altered information, implication, ambiguity, imagery, logic, viewpoint, emphasis, or tone.
+
+Do not average the drafts, stitch them together, or replace natural Path B phrasing merely because Path A follows the source surface more closely. Recast each necessary correction within Path B's unified English prose.
+
+> Path B supplies the prose. Path A supplies the fidelity benchmark. The source decides every disagreement.
+
+The refined Path B is the provisional translation. Do not show raw Path A or the unrefined Path B unless the user explicitly requests them. Resolve interpretive conflicts internally during Step 3.1: preserve source ambiguity where possible, choose the best-supported provisional wording, and carry any meaningful unresolved choice into Step 3.2. Do not interrupt the completion gate to present alternatives or request a decision.
+
+#### Mandatory Step 3.1 Completion Gate
+
+Treat Step 3.1 as an indivisible prerequisite for Step 3.2. For the complete current passage, finish all four operations in order:
+
+1. Path A: complete fidelity-first translation tryout;
+2. Path B: independent direct literary translation;
+3. source-grounded audit of Path B against Path A;
+4. one refined Path B covering the entire passage.
+
+Do not begin editorial review, present alternatives, label anything a decision, or ask the user to choose wording until all four operations are complete. Sentence-level alternatives do not substitute for the two-path process; both paths must address the complete passage.
+
+Save and verify the refined full-passage provisional checkpoint, then initialize its review state, according to [references/workflow-state.md](references/workflow-state.md).
+
+Reread the saved checkpoint, then show the user its complete translation text exactly as saved before raising the first editorial issue. Never display an unsaved provisional draft or alter the text while displaying it.
+
+Immediately after the draft, state:
+
+> Step 3.1 is complete for Passage [number]. The full provisional translation above has been produced through two-path drafting and consolidation and saved as the passage checkpoint. I am now beginning Step 3.2.
+
+Do not make this statement unless the checkpoint exists and contains the displayed refined draft.
+
+When resuming after an interruption, apply the reference's recovery rules. If the checkpoint is missing, incomplete, or not the refined full-passage draft, resume or restart Step 3.1. Do not proceed directly to editorial review.
+
+### Step 3.2: Conduct an Independent Translation Editorial Review
+
+Reset the process. Treat the provisional translation simply as an English draft. Set aside Path A and Path B; do not cite or continue reconciling them.
+
+Use the source as the sole authority. The chapter brief and established continuity supply context but cannot override it.
+
+#### Build the Review Ledger
+
+Review the complete source passage and provisional translation once for both source fidelity and English prose. Check meaning, logic, implication, ambiguity, emphasis, viewpoint, tone, revelation, naturalness, idiom, cadence, voice, dialogue, and coherence. Natural English may rearrange syntax, but must not add, remove, explain, intensify, soften, or reorder information in a way that changes the reader's experience.
+
+Correct objective errors directly when only one credible correction exists, including grammar, reference, clear mistranslation or omission, unjustified addition, broken logic, inconsistent terminology, or accidental viewpoint, tense, or certainty shifts. Save those corrections to the provisional checkpoint before freezing the ledger.
+
+Create a fixed, source-ordered issue ledger only for choices where defensible alternatives would create materially different reader effects or change characterization, culpability, intimacy, certainty, emotional force, implication, or revelation. Persist it according to [references/workflow-state.md](references/workflow-state.md). For each issue, record:
+
+- decision number;
+- a stable source location or short source-text anchor;
+- a concise editorial question;
+- status: `pending`, `current`, `settled`, or `withdrawn`.
+
+Order issues by first occurrence in the source and set both the workflow phase and current passage status to `reviewing`. If the ledger is empty, mark the cursor `passage-end` and proceed directly to **Finalize the Passage**.
+
+#### Work Through the Ledger Once
+
+Present only the earliest pending issue. Give:
+
+1. the current relevant wording;
+2. the source effect and the problem in the English;
+3. concrete alternatives with distinct reader effects;
+4. one recommendation and its decisive reason;
+5. a request for the user's decision.
+
+Do not invent alternatives or request a decision when the source, grammar, established terminology, or a prior binding decision permits only one credible correction.
+
+Accept a selection, qualification, replacement wording, rejection of all options, source correction, defense of the current wording, revision of an earlier decision, question, or “continue” as a valid response. Then:
+
+1. if the issue remains unresolved, answer the user and repeat the decision request;
+2. if it is settled, apply the decision to the checkpoint and update `glossary.md` when terminology changes;
+3. record the decision and briefly confirm the resulting wording or interpretation;
+4. present the next pending issue in the same response, or proceed to finalization when none remain.
+
+If the user explicitly revises an earlier decision, reopen only that item, apply the revision, and then resume from the prior cursor position.
+
+After freezing the ledger, add a late issue only for:
+
+- an objective source-fidelity, grammar, reference, continuity, or terminology error that cannot be corrected without a meaningful choice;
+- a conflict introduced by an accepted revision; or
+- a genuine finalization blocker that could not reasonably have been identified during the initial complete review.
+
+Record why the late issue qualifies. Do not add late issues for optional style changes or marginal improvements. After every ledger item is `settled` or `withdrawn`, mark the cursor `passage-end` and proceed to finalization; do not rebuild the ledger or conduct another optional-issue scan.
+
+#### Continue and Preserve State
+
+Keep Step 3.2 active until the passage is finalized, the user explicitly pauses or changes tasks, or a genuine blocking ambiguity requires information. While it is active, every response must end by awaiting one clearly presented decision, presenting the finalized passage, or stating why the workflow is paused or blocked.
+
+Persist checkpoint and review state according to [references/workflow-state.md](references/workflow-state.md). Update both before each user-facing response and apply the reference's recovery rules when resuming.
+
+### Finalize the Passage
+
+When the cursor reaches `passage-end`, including when the ledger was empty:
+
+1. Verify that every ledger item is `settled` or `withdrawn`.
+2. Apply all accepted decisions and leave unaffected wording unchanged.
+3. Read the passage continuously for cadence, transitions, tense, reference, and sound.
+4. Compare it with the source, chapter brief, preceding text, terminology, and approved decisions.
+5. Correct objective errors directly. If a meaningful choice is a qualified late blocker, resolve only that blocker through dialogue and return immediately to finalization. Do not reopen optional wording or conduct a second stylistic review.
+6. Save and assemble the finalized passage, and mark its state `finalized`, according to [references/workflow-state.md](references/workflow-state.md). Update `glossary.md` for terminology or name decisions.
+7. Present the final translation exactly as saved, add a short decision note only when it aids continuity, then stop and wait for the next passage.
+
+## Complete the Chapter
+
+Repeat Step 3 until the chapter ends or the user asks to pause or stop.
+
+Do not begin chapter completion until the internal state satisfies the chapter-completion gate in [references/workflow-state.md](references/workflow-state.md).
+
+When all passages are finalized:
+
+1. Rebuild and verify the assembled chapter according to [references/workflow-state.md](references/workflow-state.md).
+2. Conduct a restrained line-editor-style check of the assembled chapter:
+   - Limit the check to grammar, punctuation, broken cross-passage syntax or references, tense and terminology consistency, missing or duplicated text, and content integrity against the source. Do not retranslate, stylistically polish, or alter sound sentences.
+   - Before changing any text, present a concise source-ordered diff for every proposed edit, giving its location, current wording, proposed wording, and reason, and ask the user to approve it.
+   - Apply only approved edits to both the affected passage checkpoints and the assembled chapter; leave rejected text unchanged. After applying all approved edits, rebuild the assembled chapter.
+   - If a proposed edit affects meaning, implication, ambiguity, imagery, characterization, voice, emphasis, repetition, cadence, emotional force, or an approved decision, exclude it from the line-edit diff and return only the affected passage to Step 3.2.
+3. Compare the complete assembled English chapter with the complete source chapter under the governing standard and verify consistency with `glossary.md`, the chapter brief, and established continuity.
+
+Save the verified chapter as a durable Markdown file under `translated_english/`. Preserve the project's established filename for that chapter; otherwise derive a stable sortable filename from the source order, chapter number, and English chapter title, for example:
+
+`00_chapter_1_new_year.md`
+
+If the target already represents the same chapter, update it. If its chapter identity or version is ambiguous, ask the user before overwriting it. Never overwrite a file belonging to another chapter.
+
+Reread the saved durable file, verify that it matches the assembled chapter, then present the complete saved translation and make the file available.
+
+If the user asked to translate the full work or to continue, select the next untranslated chapter in source order and return to **Establish Chapter Context**. Carry forward `glossary.md`, relevant decisions, prior completed English chapters, and any benchmark translation. Otherwise, stop after delivering the completed chapter.
+
+## Operating Rules
+
+- Keep uncertainty uncertain and implication implicit when the source does.
+- Preserve focal knowledge; do not introduce judgments unavailable to the viewpoint character.
+- Preserve deliberate repetitions and echoes without forcing identical English where the source meaning changes.
+- Distinguish voices through syntax, register, directness, and rhetorical behavior, not conspicuous quirks.
+- Prefer precise action, image, rhythm, and silence over explanatory emotional language.
+- Make local fixes locally.
+- Treat user-approved wording and qualifications as binding continuity decisions unless the user revises them.
