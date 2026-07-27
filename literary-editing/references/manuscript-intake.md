@@ -2,6 +2,8 @@
 
 Use this workflow before the first editorial review or when required project artifacts are missing.
 
+Read [task-artifact-fallback.md](task-artifact-fallback.md) before persistent setup. Perform safe Git preflight before creating any generated project files. If Git cannot support a safe baseline, keep user-supplied inputs untouched and redirect every generated setup and review output to the environment-provided task artifact area.
+
 ## Locate and qualify the manuscript
 
 Search available project files, attachments, and connected sources by title, author, chapter heading, and likely filename. Confirm the work identity, responsible user, intended draft, file type, completeness for the requested service, chapter order, and in-scope book components.
@@ -16,7 +18,9 @@ Resolve objective extraction corruption against the received artifact. Report un
 
 ## Normalize without editing
 
-If the manuscript is not already a verified chapter set:
+In task-artifact fallback, perform any necessary extraction and normalization only inside the task artifact area; do not create `manuscript/chapters/` in the project.
+
+After Git preflight succeeds, if the manuscript is not already a verified chapter set:
 
 1. Use the appropriate document or PDF workflow to extract it.
 2. Identify real chapter boundaries from headings and structure, not arbitrary length.
@@ -31,7 +35,7 @@ Normalization may fix extraction errors only when the artifact makes the intende
 
 ## Establish the project layout
 
-Use an existing convention when present. Otherwise create:
+After Git preflight succeeds, use an existing convention when present. Otherwise create:
 
 ```text
 project/
@@ -53,7 +57,7 @@ Keep the received artifact unchanged. Do not create version-numbered copies of t
 
 ## Write the manifest and brief
 
-Record in `source/manuscript-manifest.md`:
+In Git-managed setup, record in `source/manuscript-manifest.md`:
 
 - work, author, and manuscript identity;
 - received artifact path, type, and checksum when feasible;
@@ -69,7 +73,7 @@ Create empty style and continuity records using `style-and-continuity.md`. Do no
 
 ## Hand off to Git
 
-After exact-once verification, complete `git-versioning.md`. Normally, do not begin editorial review until the baseline commit exists, the manifest records its full SHA, and tracked manuscript paths are clean. If Git is unavailable or setup fails, enter `verdict-score-only` mode and limit the work to a verdict and acceptance score without proposals or manuscript changes.
+After exact-once verification, complete [git-versioning.md](git-versioning.md). Normally, do not begin editorial review until the baseline commit exists, the manifest records its full SHA, and tracked manuscript paths are clean. If Git is unavailable or setup fails, follow [task-artifact-fallback.md](task-artifact-fallback.md): stop project-local output, redirect all generated setup and review artifacts to the task artifact area, enter `verdict-score-only` mode, and create no proposals or manuscript changes.
 
 ## Resume an existing project
 

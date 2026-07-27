@@ -53,7 +53,7 @@ When several editorial levels are requested together, perform higher-level diagn
 
 ### 2.5 Original preservation and Git binding
 
-Never edit the received source artifact. After normalization, use one canonical chapter set under Git rather than duplicating complete draft folders. Every verdict and proposal must identify the exact reviewed commit. If the manuscript changes before approval or application, revalidate or regenerate affected proposals against the new commit. If Git is unavailable or setup fails, switch to verdict-and-score-only work and do not create proposals or apply edits.
+Never edit the received source artifact. After normalization, use one canonical chapter set under Git rather than duplicating complete draft folders. Every verdict and proposal must identify the exact reviewed commit. If the manuscript changes before approval or application, revalidate or regenerate affected proposals against the new commit. If Git is unavailable or setup fails, redirect all generated outputs away from the project and into the current task artifact area, switch to verdict-and-score-only work, and do not create proposals or apply edits.
 
 ### 2.6 Evidence over prescription
 
@@ -143,7 +143,7 @@ The baseline commit is the immutable reference point. The checked-out manuscript
 
 If the supplied source is a large binary DOCX or PDF, retain it as the received source of record but do not rely on Git to provide meaningful textual diffs. Use its checksum and the normalized Markdown chapters to verify provenance. Track the binary only when project policy and repository size make that appropriate.
 
-If Git is unavailable, initialization fails, or no safe baseline commit can be created, record the diagnostic and identify the reviewed artifact by path and checksum when feasible. Continue only in `verdict-score-only` mode. Do not produce proposal diffs, accept or apply changes, create alternate version folders, or claim Git-bound completion. If Git later works, establish a clean baseline and start a new commit-bound review before proposing edits.
+If Git is unavailable, initialization fails, or no safe baseline commit can be created, stop writing generated files into the manuscript project. Resolve the environment-provided task artifact or Outputs destination without inventing a path and redirect every generated setup and review output there. Continue only in `verdict-score-only` mode. Permitted task artifacts are limited to the diagnostic, artifact manifest, any normalized review copy needed for assessment, the scoped verdict, acceptance score, and score revisions. Do not produce project-local editorial state, proposal diffs, decision tables, approval records, application reports, revised manuscripts, alternate project draft folders, or Git-bound completion claims. If no task-artifact facility exists, write no generated editorial files into the project and return the permitted result in chat with the persistence limitation stated. If Git later works, establish a clean baseline and start a new commit-bound review before proposing edits; treat fallback artifacts as reference evidence only.
 
 ## 4. Intent and Service Routing
 
@@ -504,7 +504,7 @@ project/
 `-- exports/
 ```
 
-Adapt names to an established project convention rather than creating duplicates.
+Adapt names to an established project convention rather than creating duplicates. This layout becomes valid only after safe Git preflight succeeds. When Git setup cannot support a baseline, keep the manuscript project untouched by generated outputs and route the complete permitted fallback bundle to the current task artifact area.
 
 ### 8.2 Editorial brief
 
@@ -629,7 +629,7 @@ A review job is complete when:
 
 - the required scope has been read;
 - the verdict, editorial-acceptance score, and evidence are saved;
-- all expected proposal artifacts are saved, except in `verdict-score-only` mode;
+- all expected proposal artifacts are saved, except in `verdict-score-only` mode, where every permitted generated output is stored in the task artifact area and no project-local editorial output is created;
 - no manuscript text has been changed;
 - the user has received the verdict and proposal status.
 
@@ -696,7 +696,7 @@ Before implementation, use at least these cases to test the workflow design:
 7. A typeset PDF is supplied for proofreading, with a serious plot inconsistency discovered during the proof.
 8. All chapters have been copyedited separately, and the user asks whether the whole novel is complete.
 9. A normalized manuscript project is already inside a Git repository that contains unrelated uncommitted user changes.
-10. Git is unavailable or baseline creation fails; the output must stop at verdict and score.
+10. Git is unavailable or baseline creation fails; every generated setup and review output is redirected to the task artifact area, and the editorial output stops at verdict and score.
 11. The author clarifies intent after the verdict; the score is reconsidered without requiring a manuscript change.
 
 Success requires correct routing, honest scope labels, no pre-approval edits, exact approval provenance, preservation of the baseline, and appropriate whole-novel completion gates.

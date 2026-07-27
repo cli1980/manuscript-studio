@@ -34,6 +34,8 @@ editorial/
 
 Create a stable job ID from service, scope, and sequence, for example `line-ch04-001`. Do not reuse an ID for a different reviewed commit or scope.
 
+This project-local layout applies only in `git-managed` mode. If Git is unusable during setup, follow [task-artifact-fallback.md](task-artifact-fallback.md), store every generated output in the task artifact area, and create no project-local editorial state.
+
 ## Project state
 
 Record:
@@ -176,7 +178,7 @@ On resume, reread project state, the active job’s verdict, proposals, approval
 
 A review completes when the required scope was read, the verdict and acceptance score were saved or delivered, applicable proposals were saved, and no manuscript text changed. Approval is not required.
 
-In `verdict-score-only` mode, the verdict and score are the only deliverables. Do not create proposals, approval records, application reports, or manuscript changes. Intervention cannot begin until Git is available, a clean baseline exists, and the manuscript is reviewed again against that commit.
+In `verdict-score-only` mode, persist the diagnostic, artifact manifest, any necessary normalized review copy, verdict, score, and score revisions only in the task artifact area. Do not create project-local editorial state, proposals, decision tables, approval records, application reports, revised manuscripts, or alternate draft folders. If no task-artifact facility is available, write no generated editorial files into the project and deliver the permitted result in chat with the persistence limitation stated. Intervention cannot begin until Git is available, a clean baseline exists, and the manuscript is reviewed again against that commit.
 
 An intervention completes when every manuscript change has approval, the correct base was used, a new commit exists, the approved-only diff and text integrity were verified, shared state was updated, and the result was delivered.
 

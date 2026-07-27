@@ -1,6 +1,6 @@
 ---
 name: literary-editing
-description: Review and edit book-length literary manuscripts through professional assessment, developmental review, line editing, copyediting, specialist review, proofreading, and final QA. Use when Codex needs to initialize a fiction, memoir, or narrative nonfiction editing project; route a whole manuscript or selected chapters to the right service; produce verdicts with scoped 1-5 editorial-acceptance scores; revise scores after author clarification without requiring manuscript changes; propose diffs without changing the draft; present and quick-check editable proposal decision tables; apply only explicitly approved proposals; preserve voice and editorial state; manage approved revisions through local Git; or fall back safely when Git or table writing is unavailable.
+description: Review and edit book-length literary manuscripts through professional assessment, developmental review, line editing, copyediting, specialist review, proofreading, and final QA. Use when Codex needs to initialize a fiction, memoir, or narrative nonfiction editing project; route a whole manuscript or selected chapters to the right service; produce verdicts with scoped 1-5 editorial-acceptance scores; revise scores after author clarification without requiring manuscript changes; propose diffs without changing the draft; present and quick-check editable proposal decision tables; apply only explicitly approved proposals; preserve voice and editorial state; manage approved revisions through local Git; redirect no-Git setup outputs to task artifacts; or fall back safely when table writing is unavailable.
 ---
 
 # Literary Editing
@@ -24,10 +24,11 @@ Follow these rules in every service:
 11. Do not claim whole-book completion from chapter passes without the required manuscript-wide synthesis or consistency check.
 12. Give every verdict an editorial-acceptance score from 1 to 5, scoped to the requested service and reviewed material. Do not present it as a publication, sales, or market forecast.
 13. Treat an editable decision table as a review interface, not manuscript-change authorization. A quick check validates decisions only; application still requires a separate explicit user instruction.
+14. If Git is unusable during project setup, stop writing generated outputs into the manuscript project. Redirect all permitted fallback outputs to the current task's artifact area and remain `verdict-score-only`.
 
 ## Initialize or Resume the Project
 
-For a new project, an unsplit artifact, or missing normalized chapters, manifest, editorial state, or local Git, read [references/manuscript-intake.md](references/manuscript-intake.md) and [references/git-versioning.md](references/git-versioning.md) in full. Complete initialization before editorial review when Git works. If Git is unavailable or setup fails, record the limitation and enter `verdict-score-only` mode: review safely, return only a verdict and score, and do not produce proposals, apply edits, or modify the manuscript.
+For a new project, an unsplit artifact, or missing normalized chapters, manifest, editorial state, or local Git, read [references/manuscript-intake.md](references/manuscript-intake.md), [references/git-versioning.md](references/git-versioning.md), and [references/task-artifact-fallback.md](references/task-artifact-fallback.md) in full. Complete initialization before editorial review when Git works. If Git is unavailable or setup fails, enter `verdict-score-only` mode and redirect all generated setup and review outputs to the task artifact area. Do not create project-local proposals, apply edits, or modify the manuscript.
 
 For an existing project, read [references/editorial-state.md](references/editorial-state.md) in full. Verify the repository root, current commit, manuscript paths, active job, verdicts, proposals, approvals, and shared records before resuming.
 
@@ -75,7 +76,7 @@ Use [references/editorial-state.md](references/editorial-state.md) for exact sch
 
 ### 1. Freeze the review input
 
-Record the job ID, service, scope, reviewed commit SHA, manuscript paths, brief, shared records, and limitations. In `verdict-score-only` mode, record a stable artifact fingerprint or precise file identity instead of a commit SHA. Keep manuscript paths unchanged during review.
+Record the job ID, service, scope, reviewed commit SHA, manuscript paths, brief, shared records, and limitations. In `verdict-score-only` mode, record a stable artifact fingerprint or precise file identity instead of a commit SHA and persist it only in the task artifact area. Keep manuscript paths unchanged during review.
 
 ### 2. Analyze without editing
 
@@ -84,6 +85,8 @@ Build an evidence ledger. Distinguish objective defects, supported concerns, def
 ### 3. Save and present the verdict
 
 Include service and scope, reviewed SHA or fallback artifact identity, readiness, overall verdict, editorial-acceptance score, score rationale, strengths, prioritized evidenced findings, next actions, and proposal status. Use `ready`, `ready-with-reservations`, `revision-needed`, `not-ready-for-requested-stage`, `provisional`, or `blocked`.
+
+In `verdict-score-only` mode, save every generated verdict, score revision, diagnostic, manifest, or normalized review artifact to the task artifact area described in [references/task-artifact-fallback.md](references/task-artifact-fallback.md), never to the manuscript project.
 
 The score may change after editorial conversation clarifies intent, context, audience, or an apparent inconsistency. A manuscript edit is not required. Preserve the earlier score, issue a revised score with its reason and conversation basis, and state whether the manuscript content changed. Clarification may improve, reduce, or leave the score unchanged; never raise it merely to reward agreement.
 

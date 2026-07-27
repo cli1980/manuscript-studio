@@ -89,11 +89,13 @@ On resume, inspect the repository root, HEAD, status, manifest baseline, current
 
 If the Git executable is unavailable, repository initialization fails, the baseline commit cannot be created, or Git cannot safely protect the manuscript:
 
-1. Record the failure and its diagnostic evidence without repeatedly retrying destructive or broad alternatives.
-2. Identify the reviewed artifact precisely with path, size, modification time, and checksum when feasible.
-3. Enter `verdict-score-only` mode.
-4. Read and assess the requested scope without changing manuscript files.
-5. Deliver only the verdict and 1–5 editorial-acceptance score.
-6. Do not produce proposal diffs, record approvals, apply edits, create alternate version folders, or claim a Git-bound completion state.
+1. Read and follow [task-artifact-fallback.md](task-artifact-fallback.md).
+2. Stop writing generated outputs into the manuscript project.
+3. Resolve the environment-provided task artifact or Outputs destination without inventing or guessing a path.
+4. Record the failure stage and diagnostic evidence in the task artifact area without repeatedly retrying destructive or broad alternatives.
+5. Redirect every generated setup and review output there, including any normalized review copy needed to assess the requested scope.
+6. Identify the reviewed artifact precisely with path, size, modification time, and checksum when feasible, and enter `verdict-score-only` mode.
+7. Create only the diagnostic, artifact manifest, normalized review copy when necessary, verdict, score, and score revisions.
+8. Do not produce project-local editorial state, proposal diffs, decision tables, approvals, application reports, revised manuscripts, alternate project draft folders, or Git-bound completion claims.
 
-If Git later becomes available, establish and verify a clean baseline first. Start a new review bound to that commit before creating proposals; do not retroactively attach a fallback verdict to a commit.
+If Git later becomes available, return to the original or verified source, establish and verify a clean baseline, and start a new review bound to that commit before creating proposals. Treat fallback task artifacts as reference evidence only; do not retroactively attach their verdict, approvals, or implied edit authority to a commit.
