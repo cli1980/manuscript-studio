@@ -68,8 +68,8 @@ If separation causes the damage described in question 5, move or remove the boun
 
 ## Output
 
-Produce a concise passage map identifying each unit by filename, opening and closing words, and a short structural reason for its boundary. Do not translate the passages during mapping.
+Produce a concise complete passage map identifying each unit by filename, opening and closing words, and a short structural reason for its boundary. Present it as a proposal, explicitly request the user's approval of the complete map, and stop. Do not translate or extract the passages while approval is pending.
 
-After creating the map, follow Step 2 in `SKILL.md` to create and validate the internal passage set.
+If the user questions, qualifies, or proposes any boundary change, treat the response as negotiation rather than partial approval. Redo the passage-division step using that feedback, present the entire revised map, and request explicit approval again. Repeat until the user approves the current complete map. Only then follow Step 2 in `SKILL.md` to create and validate the internal passage set.
 
-Treat boundaries as fixed once Step 3 begins for either affected passage. If translation exposes a structural problem that genuinely requires a later change, explain the change and obtain user approval. Then update the map and source-passage files, invalidate or rebuild affected checkpoints and review state, rerun the Step 2 completeness checks, and repeat Step 3 for every affected passage. Never silently discard finalized wording or decisions.
+Treat boundaries as fixed once Step 3 begins for either affected passage. If translation exposes a structural problem that genuinely requires a later change, explain the issue and re-enter Step 2 with approval pending. Present the complete revised map and obtain explicit approval before changing source-passage files or invalidating any downstream state. After approval, update the map and source-passage files, invalidate or rebuild affected checkpoints and review state, rerun the Step 2 completeness checks, and repeat Step 3 for every affected passage. Never silently discard finalized wording or decisions.

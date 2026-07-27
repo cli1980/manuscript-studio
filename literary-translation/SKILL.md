@@ -60,13 +60,15 @@ Keep the brief concise and decision-oriented. Record only chapter-level observat
 
 Read [references/passage-division.md](references/passage-division.md) in full before creating the passage map or changing a boundary.
 
-Divide the chapter into the largest coherent units that remain manageable for close translation and review. Present the map briefly for visibility. Unless the user explicitly asks to approve passage boundaries, do not pause; proceed directly to preparing the internal passage set.
+Divide the chapter into the largest coherent units that remain manageable for close translation and review. Present the complete proposed map and explicitly ask the user to approve its passage boundaries. Stop at this human gate; do not extract source passages or begin Step 3 until the user gives explicit approval.
+
+Treat questions, qualifications, counterproposals, and requests to move, merge, or split boundaries as negotiation, not approval. Discuss the concern, then redo Step 2 using the user's feedback: regenerate and present the complete proposed map, mark its approval as pending, and request explicit approval again. Repeat this cycle until the user approves the current complete map. Do not treat silence, “continue,” or approval of only one boundary as approval of the whole map.
 
 ### Prepare the Internal Passage Set
 
-Immediately after mapping, create the passage map and extract every source passage according to [references/workflow-state.md](references/workflow-state.md). Do this automatically; do not wait for the user to copy passages manually. Use the saved source files—not reconstructed chat excerpts—as inputs to the later loop.
+Only after explicit approval, mark the current passage map approved and extract every source passage according to [references/workflow-state.md](references/workflow-state.md). Do this automatically; do not wait for the user to copy passages manually. Use the saved source files—not reconstructed chat excerpts—as inputs to the later loop.
 
-Do not begin Step 3 until the complete internal passage set exists and passes the reference's exact-once validation.
+Do not begin Step 3 until the current complete map is explicitly approved and the corresponding internal passage set exists and passes the reference's exact-once validation.
 
 ## Step 3: Repeat for Each Passage
 
@@ -141,7 +143,8 @@ Correct objective errors directly when only one credible correction exists, incl
 Create a fixed, source-ordered issue ledger only for choices where defensible alternatives would create materially different reader effects or change characterization, culpability, intimacy, certainty, emotional force, implication, or revelation. Persist it according to [references/workflow-state.md](references/workflow-state.md). For each issue, record:
 
 - decision number;
-- a stable source location or short source-text anchor;
+- a stable source location and the exact original-language excerpt corresponding to the problem;
+- the exact current English sentence or segment that is problematic;
 - a concise editorial question;
 - status: `pending`, `current`, `settled`, or `withdrawn`.
 
@@ -151,11 +154,13 @@ Order issues by first occurrence in the source and set both the workflow phase a
 
 Present only the earliest pending issue. Give:
 
-1. the current relevant wording;
+1. a paired display labeled **Original** and **Current translation**, quoting the exact original-language excerpt and the exact problematic English sentence or segment from the saved checkpoint;
 2. the source effect and the problem in the English;
 3. concrete alternatives with distinct reader effects;
 4. one recommendation and its decisive reason;
 5. a request for the user's decision.
+
+Always show this pair for every editorial decision, including after resuming an interrupted review. Do not replace the original with a back-translation, transliteration, summary, source anchor, or explanation. When source and English sentence boundaries do not align, quote the smallest exact spans that make the relationship clear, adding limited adjacent context from each text when necessary.
 
 Do not invent alternatives or request a decision when the source, grammar, established terminology, or a prior binding decision permits only one credible correction.
 
@@ -203,12 +208,14 @@ Do not begin chapter completion until the internal state satisfies the chapter-c
 When all passages are finalized:
 
 1. Rebuild and verify the assembled chapter according to [references/workflow-state.md](references/workflow-state.md).
-2. Conduct a restrained line-editor-style check of the assembled chapter:
-   - Limit the check to grammar, punctuation, broken cross-passage syntax or references, tense and terminology consistency, missing or duplicated text, and content integrity against the source. Do not retranslate, stylistically polish, or alter sound sentences.
-   - Before changing any text, present a concise source-ordered diff for every proposed edit, giving its location, current wording, proposed wording, and reason, and ask the user to approve it.
-   - Apply only approved edits to both the affected passage checkpoints and the assembled chapter; leave rejected text unchanged. After applying all approved edits, rebuild the assembled chapter.
-   - If a proposed edit affects meaning, implication, ambiguity, imagery, characterization, voice, emphasis, repetition, cadence, emotional force, or an approved decision, exclude it from the line-edit diff and return only the affected passage to Step 3.2.
-3. Compare the complete assembled English chapter with the complete source chapter under the governing standard and verify consistency with `glossary.md`, the chapter brief, and established continuity.
+2. Conduct one complete chapter sanity check before making any further textual change:
+   - Compare the complete assembled English chapter with the complete source chapter under the governing standard and verify consistency with `glossary.md`, the chapter brief, established continuity, and approved decisions.
+   - Limit possible direct edits to grammar, punctuation, broken cross-passage syntax or references, tense and terminology consistency, missing or duplicated text, and objective content-integrity errors. Do not retranslate, stylistically polish, or alter sound sentences.
+   - If a possible edit affects meaning, implication, ambiguity, imagery, characterization, voice, emphasis, repetition, cadence, emotional force, or an approved decision, exclude it from the sanity-check diff and return only the affected passage to Step 3.2. After that passage is finalized again, rebuild the chapter and restart the complete sanity check.
+3. Freeze and persist the complete source-ordered sanity-check diff according to [references/workflow-state.md](references/workflow-state.md). For every proposed edit, give its location, current wording, proposed wording, and reason.
+4. Present the complete diff to the user and explicitly ask for approval. If no edits are proposed, state **No textual changes proposed** and still ask the user to approve completing the chapter. Stop at this human gate: do not apply proposed edits, save or overwrite the durable chapter file, declare the chapter complete, or move to the next chapter while approval is pending.
+5. Treat questions, qualifications, replacement wording, or requests to add, remove, accept, or reject edits as negotiation rather than approval of the complete diff. Resolve the feedback, redo the sanity check as needed, persist and present the complete revised diff, and ask for explicit approval again. Partial approval does not clear the gate.
+6. After explicit approval, apply only the approved edits to both the affected passage checkpoints and the assembled chapter; leave rejected text unchanged. Rebuild and verify the assembled chapter, mark the sanity-check gate `approved`, and make no additional textual change outside the approved diff. If rebuilding reveals a new necessary edit, restart the sanity check and human gate.
 
 Save the verified chapter as a durable Markdown file under `translated_english/`. Preserve the project's established filename for that chapter; otherwise derive a stable sortable filename from the source order, chapter number, and English chapter title, for example:
 
