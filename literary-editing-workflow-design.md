@@ -251,17 +251,22 @@ Review one complete chapter or coherent passage in sufficient narrative context.
 - clarity, flow, cadence, and emphasis;
 - diction, imagery, repetition, and figurative language;
 - dialogue, subtext, and differentiated voices;
-- sentence and paragraph structure;
+- sentence structure and a dedicated paragraph-boundary pass;
 - point-of-view control;
 - exposition, interiority, action, and scene rhythm;
 - preservation of intentional ambiguity and stylistic irregularity.
+
+The paragraph-boundary pass inspects every existing break and plausible missing break for paragraph unity, speaker change, shifts in time/place/viewpoint/mode, action-reaction sequence, emphasis, pacing, overlong blocks, and overfragmentation. It distinguishes paragraph boundaries from scene/section breaks and production line/page wraps. The verdict includes a paragraph-break assessment even when no changes are proposed.
 
 Produce:
 
 1. a chapter-level verdict;
 2. a prioritized issue summary;
-3. a proposed line-edit diff;
-4. queries for decisions that cannot be responsibly proposed as a single edit.
+3. a paragraph-break assessment;
+4. a proposed line-edit diff;
+5. queries for decisions that cannot be responsibly proposed as a single edit.
+
+Every paragraph-boundary proposal names category `paragraph-break`, an `insert-break`, `remove-break`, or `move-break` operation, exact text anchors on both sides, current and proposed boundary states, and whether wording remains unchanged. Do not represent the operation only through invisible whitespace.
 
 Do not modify the working draft before approval.
 
@@ -451,7 +456,7 @@ After application:
 1. compare the new manuscript commit with the reviewed commit;
 2. verify that every applied change maps to an approval record;
 3. verify that rejected, deferred, and pending proposals were not applied;
-4. check for missing, duplicated, reordered, or corrupted text;
+4. check for missing, duplicated, reordered, or corrupted text and for paragraph-boundary changes without approved proposal IDs;
 5. update the style sheet and continuity record only for approved decisions;
 6. identify cascade tasks created by the applied changes;
 7. record the resulting commit SHA in the application report;
@@ -698,5 +703,6 @@ Before implementation, use at least these cases to test the workflow design:
 9. A normalized manuscript project is already inside a Git repository that contains unrelated uncommitted user changes.
 10. Git is unavailable or baseline creation fails; every generated setup and review output is redirected to the task artifact area, and the editorial output stops at verdict and score.
 11. The author clarifies intent after the verdict; the score is reconsidered without requiring a manuscript change.
+12. A line-edit unit contains both an overlong paragraph that may need splitting and short adjacent paragraphs that may need merging; the paragraph-boundary pass must assess every boundary and produce explicit approval-controlled operations.
 
 Success requires correct routing, honest scope labels, no pre-approval edits, exact approval provenance, preservation of the baseline, and appropriate whole-novel completion gates.

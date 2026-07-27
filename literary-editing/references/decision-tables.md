@@ -61,9 +61,10 @@ When the user asks to quick-check, validate the decision table without changing 
 4. require deterministic wording or an exact operation for `accept-with-modification`;
 5. treat comments on `accept` as notes, not textual modifications;
 6. allow comments on `reject` and `defer` without turning them into counterproposals;
-7. detect unresolved queries, missing dependencies, overlapping accepted edits, and decisions made stale by manuscript changes;
-8. update `Agent check` for each row and the table's quick-check status when writable;
-9. return a concise count of valid, undecided, needs-input, stale, and conflicting rows.
+7. for a `paragraph-break` proposal, validate the exact left and right anchors, current boundary state, and one deterministic operation: `insert-break`, `remove-break`, or `move-break`;
+8. detect unresolved queries, missing dependencies, overlapping accepted edits, and decisions made stale by manuscript changes;
+9. update `Agent check` for each row and the table's quick-check status when writable;
+10. return a concise count of valid, undecided, needs-input, stale, and conflicting rows.
 
 A quick check does not authorize manuscript changes. Do not create `approvals.md`, apply text, or treat “quick-check,” “review this table,” or the user's act of editing the table as an application command.
 

@@ -1,6 +1,6 @@
 ---
 name: literary-editing
-description: Review and edit book-length literary manuscripts through professional assessment, developmental review, line editing, copyediting, specialist review, proofreading, and final QA. Use when Codex needs to initialize a fiction, memoir, or narrative nonfiction editing project; route a whole manuscript or selected chapters to the right service; produce verdicts with scoped 1-5 editorial-acceptance scores; revise scores after author clarification without requiring manuscript changes; propose diffs without changing the draft; present and quick-check editable proposal decision tables; apply only explicitly approved proposals; preserve voice and editorial state; manage approved revisions through local Git; redirect no-Git setup outputs to task artifacts; or fall back safely when table writing is unavailable.
+description: Review and edit book-length literary manuscripts through professional assessment, developmental review, line editing, copyediting, specialist review, proofreading, and final QA. Use when Codex needs to initialize a fiction, memoir, or narrative nonfiction editing project; route a whole manuscript or selected chapters to the right service; produce verdicts with scoped 1-5 editorial-acceptance scores; revise scores after author clarification without requiring manuscript changes; propose diffs without changing the draft; run first-class paragraph-break checks during line editing; present and quick-check editable proposal decision tables; apply only explicitly approved proposals; preserve voice and editorial state; manage approved revisions through local Git; redirect no-Git setup outputs to task artifacts; or fall back safely when table writing is unavailable.
 ---
 
 # Literary Editing
@@ -25,6 +25,7 @@ Follow these rules in every service:
 12. Give every verdict an editorial-acceptance score from 1 to 5, scoped to the requested service and reviewed material. Do not present it as a publication, sales, or market forecast.
 13. Treat an editable decision table as a review interface, not manuscript-change authorization. A quick check validates decisions only; application still requires a separate explicit user instruction.
 14. If Git is unusable during project setup, stop writing generated outputs into the manuscript project. Redirect all permitted fallback outputs to the current task's artifact area and remain `verdict-score-only`.
+15. Treat paragraph breaks as a first-class line-edit dimension. Review boundary placement separately from wording, and make every proposed boundary change an explicit approval-controlled operation.
 
 ## Initialize or Resume the Project
 
@@ -42,7 +43,7 @@ Infer the service when the prompt is clear. Ask only when ambiguity would materi
 |---|---|---|
 | Determine what the manuscript needs | Manuscript assessment | Complete manuscript |
 | Evaluate plot, character, structure, pacing, theme, POV architecture, or narrative coherence | Developmental/structural review | Complete manuscript for a final verdict |
-| Improve voice, cadence, diction, dialogue, clarity, flow, or paragraph-level effect | Line/stylistic review | Chapter or coherent passage with relevant context |
+| Improve voice, cadence, diction, dialogue, clarity, flow, paragraph breaks, or paragraph-level effect | Line/stylistic review | Chapter or coherent passage with relevant context |
 | Correct grammar, usage, punctuation, spelling, factual consistency, and house style | Copyedit review | Chapter or batch; global pass for whole-book completion |
 | Evaluate representation, authenticity, permissions, factual claims, or legal-risk signals | Specialist review | Scope depends on the issue |
 | Check a final formatted artifact | Proofreading | Formatted proof; whole publication for completion |
@@ -125,7 +126,7 @@ If implementation exposes a new creative choice, stop and create a new proposal.
 
 ### 7. Verify
 
-Compare the resulting commit with the reviewed commit. Verify that every manuscript change maps to approval, no unapproved proposal was applied, and no text was lost, duplicated, reordered, or corrupted. Record the resulting SHA and cascade tasks.
+Compare the resulting commit with the reviewed commit. Verify that every manuscript change maps to approval, no unapproved proposal was applied, and no text or paragraph boundary was lost, duplicated, reordered, or changed without approval. Record the resulting SHA and cascade tasks.
 
 ## Scope and Completion Rules
 

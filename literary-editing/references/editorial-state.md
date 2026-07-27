@@ -131,6 +131,8 @@ Save proposals in source order. For every textual change record:
 
 The exact before/after records constitute the proposed diff. Keep the manuscript unchanged. If alternatives create materially different effects, record them under one query rather than pretending they are equivalent edits.
 
+For a `paragraph-break` proposal, additionally record `Operation`, `Left anchor`, `Right anchor`, `Current boundary state`, `Proposed boundary state`, and whether wording is unchanged. Never rely on invisible whitespace alone to define the approved operation.
+
 Allowed statuses are `pending`, `accepted`, `accepted-with-modification`, `rejected`, `deferred`, `withdrawn`, `stale`, `applied`, and `verified`.
 
 ## Editable decision tables
@@ -169,7 +171,7 @@ After application, save `application-report.md` with:
 - rejected, deferred, pending, stale, and withdrawn IDs left unapplied;
 - style or continuity updates;
 - approved-only diff verification;
-- integrity verification;
+- integrity verification, including an approved-only paragraph-boundary comparison for line edits;
 - cascade tasks and invalidated jobs.
 
 On resume, reread project state, the active job’s verdict, proposals, approvals, the relevant shared records, and Git status. Reconstruct from durable state when chat conflicts with files. Never reopen a settled item unless the user explicitly revises it or a later approved change invalidates it.

@@ -17,12 +17,31 @@ Evaluate:
 - diction, imagery, specificity, cliché, and unintended repetition;
 - dialogue, subtext, attribution, and character differentiation;
 - point-of-view control and psychic distance;
-- paragraph movement, transitions, and scene-level flow;
+- paragraph boundaries, paragraph movement, transitions, and scene-level flow;
 - exposition, action, interiority, and description balance;
 - clarity versus productive ambiguity;
 - local pacing and emotional rhythm.
 
 Protect deliberate fragments, dialect, code-switching, idiolect, repetition, ambiguity, and unconventional grammar when they serve the work. Do not homogenize the prose into a generic house voice.
+
+## First-class paragraph-break pass
+
+After the initial read for effect, run a dedicated paragraph-boundary pass over the complete selected unit. Inspect every existing break and every plausible missing break rather than noticing paragraphing only when another sentence-level issue draws attention to it.
+
+Evaluate:
+
+- paragraph unity: whether each paragraph carries a coherent action, image, thought, or rhetorical movement;
+- dialogue control: new speakers, interrupted speech, attribution, and deliberately continuous dialogue;
+- shifts in time, place, viewpoint, narrative distance, subject, or mode;
+- action and reaction sequencing, including whether a break sharpens or falsely separates causality;
+- emphasis, reveal, suspense, comic timing, emotional turn, and white-space rhythm;
+- overlong blocks that bury distinct movements;
+- overfragmentation that produces unintended staccato, false emphasis, or visual mannerism;
+- consistency with the work's established paragraphing without flattening purposeful exceptions.
+
+Distinguish a manuscript paragraph break from a scene or section break and from automatic typesetting line or page wraps. A paragraph-break pass may propose a narrative paragraph boundary; it must not silently create a scene division or prescribe production reflow.
+
+Include a `Paragraph-break assessment` in the verdict even when no changes are proposed. Summarize strengths, recurring boundary patterns, intentional exceptions to preserve, and the number of paragraph-break proposals.
 
 ## Verdict and proposal diff
 
@@ -37,6 +56,16 @@ Each proposal must contain:
 - dependencies or continuity impact;
 - status.
 
+For every paragraph-boundary change, use category `paragraph-break` and record:
+
+- operation: `insert-break`, `remove-break`, or `move-break`;
+- exact left and right text anchors;
+- current boundary state and proposed boundary state;
+- whether wording remains unchanged;
+- interaction with adjacent textual proposals.
+
+Do not encode a boundary change only as invisible whitespace inside a replacement block. Label the operation explicitly. Keep wording changes under a separate proposal ID unless the boundary and wording are inseparable; if combined, provide the complete deterministic result and explain why.
+
 Quote enough exact text to make the change deterministic without replacing unreviewed surrounding prose. Offer alternatives only when they create materially different effects, and explain the tradeoff. If authorial intent cannot be inferred safely, ask a query instead of manufacturing certainty.
 
 Do not alter manuscript files while producing the verdict or proposal diff.
@@ -45,10 +74,12 @@ Do not alter manuscript files while producing the verdict or proposal diff.
 
 The author may approve individual IDs, ranges, or a clearly identified batch. Partial approval is valid. When the author wants an editable checklist, use [decision-tables.md](decision-tables.md), quick-check the completed table without editing the manuscript, and require a separate explicit apply instruction. Use its chat or structured-block fallback if the table cannot be written.
 
-Revalidate the reviewed commit SHA and exact current text before applying; if either changed, mark the proposal stale and regenerate it.
+Revalidate the reviewed commit SHA and exact current text before applying. For paragraph-break proposals, also revalidate both anchors and the recorded boundary state; if any changed, mark the proposal stale and regenerate it.
 
 Apply only approved proposal IDs, update any affected style or continuity records, write an application report, and create a distinct Git commit. Do not silently include nearby cleanup.
 
 ## Completion
 
-Work in manageable units. After all intended units are processed, perform a whole-book consistency pass for voice drift, repeated mannerisms, character differentiation, and cross-chapter effects. This pass should confirm coherence, not reopen every optional stylistic preference indefinitely.
+Before completing a line-edit unit, compare its paragraph-boundary map with the reviewed commit. Verify that every inserted, removed, or moved break maps to an approved proposal and that no other boundary changed.
+
+Work in manageable units. After all intended units are processed, perform a whole-book consistency pass for voice drift, repeated mannerisms, character differentiation, paragraphing drift, and cross-chapter effects. This pass should confirm coherence, not reopen every optional stylistic preference indefinitely.
