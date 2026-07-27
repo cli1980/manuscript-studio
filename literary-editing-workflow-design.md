@@ -413,6 +413,12 @@ Questions, discussion, “continue,” or approval of the general direction do n
 
 Partial approval is valid. Apply only proposal IDs explicitly accepted or accepted with user-specified modifications. Pending and deferred proposals remain unapplied.
 
+When a writable project supports it, create a compact `decision-table.md` linked to the authoritative proposal ledger. Let the user mark each row `accept`, `accept-with-modification`, `reject`, `defer`, or leave it blank, with a comment or modification reference. Keep long exact wording in keyed modification blocks below the table rather than crowding cells.
+
+On a “quick check,” validate IDs, allowed values, exact modified wording, dependencies, overlaps, and stale text; annotate the table when writable and return a concise status summary. A quick check, table edit, or request to review the table does not authorize manuscript changes. Require a separate explicit apply instruction, then translate the selected valid rows into durable approval records.
+
+If permissions, sandboxing, or format restrictions prevent table creation or update, present the same rows in chat or as copyable `ID | decision= | comment=` lines and run the same validation. Do not skip the approval gate. If durable approval provenance cannot be written, remain validation-only and do not edit the manuscript.
+
 ### Phase F: Revalidate approval
 
 Before applying a proposal:
@@ -492,6 +498,7 @@ project/
 |       `-- <job-id>/
 |           |-- verdict.md
 |           |-- proposals.md
+|           |-- decision-table.md
 |           |-- approvals.md
 |           `-- application-report.md
 `-- exports/
@@ -549,6 +556,7 @@ For each review job, record:
 - phase;
 - verdict status;
 - proposal set and statuses;
+- decision-table path, quick-check status, or fallback mode when used;
 - approval records;
 - applied output commit SHA;
 - verification result;

@@ -43,7 +43,9 @@ Do not alter manuscript files while producing the verdict or proposal diff.
 
 ## Approval and application
 
-The author may approve individual IDs, ranges, or a clearly identified batch. Partial approval is valid. Revalidate the reviewed commit SHA and exact current text before applying; if either changed, mark the proposal stale and regenerate it.
+The author may approve individual IDs, ranges, or a clearly identified batch. Partial approval is valid. When the author wants an editable checklist, use [decision-tables.md](decision-tables.md), quick-check the completed table without editing the manuscript, and require a separate explicit apply instruction. Use its chat or structured-block fallback if the table cannot be written.
+
+Revalidate the reviewed commit SHA and exact current text before applying; if either changed, mark the proposal stale and regenerate it.
 
 Apply only approved proposal IDs, update any affected style or continuity records, write an application report, and create a distinct Git commit. Do not silently include nearby cleanup.
 

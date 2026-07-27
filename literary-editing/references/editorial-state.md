@@ -7,8 +7,9 @@
 3. Verdict and score schema
 4. Clarification and score revision
 5. Proposal and approval schemas
-6. Application and recovery
-7. Completion gates
+6. Editable decision tables
+7. Application and recovery
+8. Completion gates
 
 Persist state so a review can stop, resume, and prove which changes were authorized.
 
@@ -26,6 +27,7 @@ editorial/
     `-- <job-id>/
         |-- verdict.md
         |-- proposals.md
+        |-- decision-table.md
         |-- approvals.md
         `-- application-report.md
 ```
@@ -43,7 +45,8 @@ Record:
 - phase: `intake`, `normalizing`, `ready`, `reviewing`, `verdict-presented`, `awaiting-approval`, `applying`, `verifying`, `completed`, `paused`, or `blocked`;
 - reviewed commit SHA and manuscript paths;
 - fallback artifact identity or fingerprint when no reviewed commit exists;
-- verdict and proposal paths;
+- verdict, proposal, and decision-table paths;
+- decision-table quick-check status or fallback mode when used;
 - current proposal batch and unresolved query;
 - resulting commit SHA when applied;
 - next action;
@@ -128,6 +131,14 @@ The exact before/after records constitute the proposed diff. Keep the manuscript
 
 Allowed statuses are `pending`, `accepted`, `accepted-with-modification`, `rejected`, `deferred`, `withdrawn`, `stale`, `applied`, and `verified`.
 
+## Editable decision tables
+
+Read [decision-tables.md](decision-tables.md) in full when proposals need user disposition. Use `decision-table.md` as an editable checklist linked to the authoritative proposal ledger. The table may collect `accept`, `accept-with-modification`, `reject`, `defer`, or blank decisions plus comments.
+
+A quick check validates IDs, values, modified wording, dependencies, overlaps, and staleness. It does not authorize manuscript changes or replace `approvals.md`. Require a later explicit apply instruction and convert only the selected, valid rows into approval records.
+
+If the table cannot be written, use the defined chat or structured-block fallback. Record the fallback cause. Do not apply if the durable approval record cannot be written.
+
 ## Approval schema
 
 Record the user’s disposition before application:
@@ -142,6 +153,8 @@ Record the user’s disposition before application:
 ```
 
 Discussion, questions, “continue,” approval of a verdict, or approval of a general direction are not proposal approval. Partial approval is valid. Do not force the user to decide unrelated proposals as one all-or-nothing block.
+
+An edited or quick-checked decision table is not, by itself, an application instruction. When the user explicitly instructs application of validated rows, translate those decisions into this approval schema before revalidation.
 
 ## Application and recovery
 

@@ -1,6 +1,6 @@
 ---
 name: literary-editing
-description: Review and edit book-length literary manuscripts through professional assessment, developmental review, line editing, copyediting, specialist review, proofreading, and final QA. Use when Codex needs to initialize a fiction, memoir, or narrative nonfiction editing project; route a whole manuscript or selected chapters to the right service; produce verdicts with scoped 1-5 editorial-acceptance scores; revise scores after author clarification without requiring manuscript changes; propose diffs without changing the draft; apply only explicitly approved proposals; preserve voice and editorial state; manage approved revisions through local Git; or fall back to verdict-and-score-only review when Git is unavailable.
+description: Review and edit book-length literary manuscripts through professional assessment, developmental review, line editing, copyediting, specialist review, proofreading, and final QA. Use when Codex needs to initialize a fiction, memoir, or narrative nonfiction editing project; route a whole manuscript or selected chapters to the right service; produce verdicts with scoped 1-5 editorial-acceptance scores; revise scores after author clarification without requiring manuscript changes; propose diffs without changing the draft; present and quick-check editable proposal decision tables; apply only explicitly approved proposals; preserve voice and editorial state; manage approved revisions through local Git; or fall back safely when Git or table writing is unavailable.
 ---
 
 # Literary Editing
@@ -23,6 +23,7 @@ Follow these rules in every service:
 10. Keep each service within scope. Flag other editorial levels separately instead of silently performing them.
 11. Do not claim whole-book completion from chapter passes without the required manuscript-wide synthesis or consistency check.
 12. Give every verdict an editorial-acceptance score from 1 to 5, scoped to the requested service and reviewed material. Do not present it as a publication, sales, or market forecast.
+13. Treat an editable decision table as a review interface, not manuscript-change authorization. A quick check validates decisions only; application still requires a separate explicit user instruction.
 
 ## Initialize or Resume the Project
 
@@ -92,11 +93,17 @@ For line editing, copyediting, and proofreading, produce source-ordered before/a
 
 The proposal file is a reviewable diff, not an applied edit. Keep manuscript files unchanged.
 
+When proposals require author disposition, read [references/decision-tables.md](references/decision-tables.md) in full. Create a compact editable `decision-table.md` when the project is writable, unless the user prefers direct ID responses. Keep detailed before/after text in the proposal ledger.
+
 Skip this and all later intervention steps in `verdict-score-only` mode.
 
 ### 5. Stop at the approval gate
 
-Present the verdict before asking whether to apply proposals. Accept all, selected IDs, modified wording, rejection, or deferral. Persist the user’s dispositions before applying anything.
+Present the verdict before asking whether to apply proposals. Accept all, selected IDs, modified wording, rejection, or deferral.
+
+If the decision-table path is used, quick-check the edited table for allowed values, complete modification wording, dependencies, conflicts, and stale text. Update its agent-check fields when writable. Quick-checking, editing, or discussing the table does not authorize manuscript changes. Require a separate explicit apply instruction, then persist the selected dispositions to `approvals.md` before applying anything.
+
+If table creation or update fails because of permissions, sandboxing, or format restrictions, use the chat or structured-block fallback in [references/decision-tables.md](references/decision-tables.md). Do not apply when approval provenance itself cannot be saved.
 
 ### 6. Revalidate and apply
 
