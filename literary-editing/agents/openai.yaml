@@ -1,0 +1,4 @@
+interface:
+  display_name: "Literary Editing"
+  short_description: "Verdict-first editing with acceptance scores"
+  default_prompt: "Use $literary-editing to assess my manuscript, provide a 1-5 editorial-acceptance score, and route it to the right professional editing workflow."
