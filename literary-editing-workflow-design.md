@@ -256,7 +256,7 @@ Review one complete chapter or coherent passage in sufficient narrative context.
 - exposition, interiority, action, and scene rhythm;
 - preservation of intentional ambiguity and stylistic irregularity.
 
-The paragraph-boundary pass inspects every existing break and plausible missing break for paragraph unity, speaker change, shifts in time/place/viewpoint/mode, action-reaction sequence, emphasis, pacing, overlong blocks, and overfragmentation. It distinguishes paragraph boundaries from scene/section breaks and production line/page wraps. The verdict includes a paragraph-break assessment even when no changes are proposed.
+The paragraph-boundary pass inspects every existing break and plausible missing break for paragraph unity, speaker change, shifts in time/place/viewpoint/mode, action-reaction sequence, emphasis, pacing, overlong blocks, and overfragmentation. It presumes the existing paragraphing is intentional and requires both reader-effect evidence and manuscript-pattern evidence before proposing a change; paragraph length or visual density alone is insufficient. It classifies findings as `clarity`, `attribution`, `narrative-shift`, `pacing`, `emphasis`, `unity`, `consistency`, or `intentional-exception`, with `intentional-exception` retained rather than proposed as a change. It distinguishes paragraph boundaries from scene/section breaks and production line/page wraps. The verdict includes a paragraph-break assessment even when no changes are proposed.
 
 Produce:
 
@@ -266,7 +266,7 @@ Produce:
 4. a proposed line-edit diff;
 5. queries for decisions that cannot be responsibly proposed as a single edit.
 
-Every paragraph-boundary proposal names category `paragraph-break`, an `insert-break`, `remove-break`, or `move-break` operation, exact text anchors on both sides, current and proposed boundary states, and whether wording remains unchanged. Do not represent the operation only through invisible whitespace.
+Every paragraph-boundary proposal names category `paragraph-break`, an allowed change classification, an `insert-break`, `remove-break`, or `move-break` operation, exact text anchors on both sides, current and proposed boundary states, whether wording remains unchanged, reader-effect evidence, and manuscript-pattern evidence. Do not represent the operation only through invisible whitespace.
 
 Do not modify the working draft before approval.
 

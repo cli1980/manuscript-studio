@@ -131,7 +131,7 @@ Save proposals in source order. For every textual change record:
 
 The exact before/after records constitute the proposed diff. Keep the manuscript unchanged. If alternatives create materially different effects, record them under one query rather than pretending they are equivalent edits.
 
-For a `paragraph-break` proposal, additionally record `Operation`, `Left anchor`, `Right anchor`, `Current boundary state`, `Proposed boundary state`, and whether wording is unchanged. Never rely on invisible whitespace alone to define the approved operation.
+For a `paragraph-break` proposal, additionally record `Classification`, `Operation`, `Left anchor`, `Right anchor`, `Current boundary state`, `Proposed boundary state`, whether wording is unchanged, `Reader-effect evidence`, and `Manuscript-pattern evidence`. Allowed change classifications are `clarity`, `attribution`, `narrative-shift`, `pacing`, `emphasis`, `unity`, and `consistency`. Record `intentional-exception` only as a retained assessment finding, not a change proposal. Never rely on invisible whitespace alone to define the approved operation.
 
 Allowed statuses are `pending`, `accepted`, `accepted-with-modification`, `rejected`, `deferred`, `withdrawn`, `stale`, `applied`, and `verified`.
 

@@ -28,6 +28,8 @@ Protect deliberate fragments, dialect, code-switching, idiolect, repetition, amb
 
 After the initial read for effect, run a dedicated paragraph-boundary pass over the complete selected unit. Inspect every existing break and every plausible missing break rather than noticing paragraphing only when another sentence-level issue draws attention to it.
 
+Presume the manuscript's existing paragraphing is intentional. The burden of proof rests on the proposed change. Do not recommend a break merely because a paragraph is long, short, visually dense, or unlike a generic house preference. Compare analogous passages in the selected unit and, when available, elsewhere in the manuscript. Preserve the boundary when its reader effect is defensible and it fits the manuscript's prose or structural pattern.
+
 Evaluate:
 
 - paragraph unity: whether each paragraph carries a coherent action, image, thought, or rhetorical movement;
@@ -38,6 +40,8 @@ Evaluate:
 - overlong blocks that bury distinct movements;
 - overfragmentation that produces unintended staccato, false emphasis, or visual mannerism;
 - consistency with the work's established paragraphing without flattening purposeful exceptions.
+
+Classify every paragraph-boundary finding as `clarity`, `attribution`, `narrative-shift`, `pacing`, `emphasis`, `unity`, `consistency`, or `intentional-exception`. Use `intentional-exception` to document a nonstandard but defensible boundary that should be retained; do not create a change proposal for it unless unresolved intent requires a query.
 
 Distinguish a manuscript paragraph break from a scene or section break and from automatic typesetting line or page wraps. A paragraph-break pass may propose a narrative paragraph boundary; it must not silently create a scene division or prescribe production reflow.
 
@@ -58,11 +62,16 @@ Each proposal must contain:
 
 For every paragraph-boundary change, use category `paragraph-break` and record:
 
+- classification: `clarity`, `attribution`, `narrative-shift`, `pacing`, `emphasis`, `unity`, or `consistency`;
 - operation: `insert-break`, `remove-break`, or `move-break`;
 - exact left and right text anchors;
 - current boundary state and proposed boundary state;
 - whether wording remains unchanged;
+- reader-effect evidence: the specific clarity, attribution, rhythm, pacing, emphasis, or narrative consequence;
+- manuscript-pattern evidence: the analogous local or manuscript-wide pattern supporting the change, or a precise explanation of why this boundary is an unintended deviation;
 - interaction with adjacent textual proposals.
+
+Both evidence fields are required. Paragraph length or visual density alone is not sufficient evidence. If manuscript-pattern evidence is unavailable or the effect remains plausibly intentional, retain the boundary or raise a query instead of proposing a change.
 
 Do not encode a boundary change only as invisible whitespace inside a replacement block. Label the operation explicitly. Keep wording changes under a separate proposal ID unless the boundary and wording are inseparable; if combined, provide the complete deterministic result and explain why.
 
