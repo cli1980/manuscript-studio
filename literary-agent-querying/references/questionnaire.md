@@ -65,16 +65,17 @@ Do not infer readership from protagonist age alone, genre from setting or isolat
 
 ### Round 5: Agent discovery and priority review
 
-Use the confirmed or provisional positioning profile to research a broad candidate pool, verify viable candidates through current official agent or agency sources, and present:
+Use the confirmed or provisional positioning profile to research a broad candidate pool. If author information was supplied or acquired alongside the manuscript, include relevant author-approved facts in matching and priority; otherwise use manuscript positioning and verified agent evidence alone. Verify viable candidates through current official agent or agency sources, and present:
 
 - an ordered active shortlist grouped into `Priority 1`, `Priority 2`, and `Priority 3`;
 - the specific manuscript-positioning evidence matched by each agent's documented interests or list;
+- author-agent matching evidence only when the supporting author information was available at intake and approved for this use;
 - current open status, represented categories, exclusions, territory, and agency concurrency constraints;
 - official source URLs, supplementary evidence when useful, and access dates;
 - a concise fit rationale, limitation, and reason for the assigned priority;
 - a separate watchlist for closed, uncertain, or otherwise ineligible candidates.
 
-Ask the author to confirm exclusions, disclose prior submissions to shortlisted agents or agencies, and select which candidates should receive tailored materials. Make clear that the ordering is a research recommendation, not a prediction of representation.
+Ask the author to confirm exclusions, disclose prior submissions to shortlisted agents or agencies, and select which candidates should receive tailored materials. State whether author information was used in the ranking. Make clear that the ordering is a research recommendation, not a prediction of representation.
 
 ### Round 6: Author information
 
@@ -88,7 +89,7 @@ Ask only for relevant information:
 - previous traditionally published books;
 - debut status.
 
-Never pressure the author to disclose protected or private identity. A short biography with no publishing credentials is valid for debut fiction.
+Never pressure the author to disclose protected or private identity. A short biography with no publishing credentials is valid for debut fiction. Information first acquired in this round supports biography and tailoring, but does not retroactively become ranking evidence unless the author explicitly requests a refreshed shortlist.
 
 ### Round 7: Series architecture
 
@@ -152,6 +153,7 @@ Before drafting, show:
 - ...
 
 ## Proposed agent priorities
+- Author information used in ranking: <intake source and approved factors | none available>
 - Priority 1:
 - Priority 2:
 - Priority 3:

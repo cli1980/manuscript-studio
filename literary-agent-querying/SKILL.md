@@ -18,7 +18,7 @@ Build a truthful, manuscript-grounded query package through a short guided dialo
 7. Describe a book as `standalone with series potential` only when its principal dramatic movement resolves sufficiently on its own. Otherwise state its series dependency honestly.
 8. Reveal the ending in the synopsis. Do not reveal it in the query pitch unless doing so is necessary to represent the premise accurately.
 9. Follow each named agent's current official submission requirements exactly. Browse official agency or agent sources when current requirements or market status matter.
-10. Treat agent rankings as evidence-based priorities, not guarantees of fit or representation. Use official agent or agency sources to verify identity, categories, exclusions, submission status, and requirements. Use reputable interviews or deal records only as supplementary fit evidence, and record source dates.
+10. Treat agent rankings as evidence-based priorities, not guarantees of fit or representation. Use official agent or agency sources to verify identity, categories, exclusions, submission status, and requirements. Use reputable interviews or deal records only as supplementary fit evidence, and record source dates. Factor relevant, author-approved information into selection and ordering only when it was supplied or acquired with the manuscript at intake. Otherwise omit author-side factors rather than guessing, requesting disclosure solely for ranking, or treating missing credentials, platform, identity, or connections negatively.
 11. Prepare materials only. Do not submit a query, contact an agent, upload a form, or send a message without separate explicit authorization.
 12. Save generated files only to the current Codex task-artifact or Outputs facility. Treat its path or identifier as opaque. Never create query outputs inside the manuscript or book project.
 13. If no task-artifact destination is available, return the package in clearly labeled chat sections and state that persistent artifact writing was unavailable. Do not redirect it into the manuscript project.
@@ -31,7 +31,8 @@ Build a truthful, manuscript-grounded query package through a short guided dialo
 Identify:
 
 - manuscript or relevant source files;
-- existing synopsis, pitch, biography, or series notes;
+- existing synopsis, pitch, or series notes;
+- author biography or other author-profile material supplied alongside the manuscript, when available;
 - requested package scope;
 - target publishing market or territory, when known;
 - named agent and the agent, agency, or submission-guidelines URL supplied by the author, when available;
@@ -57,16 +58,19 @@ For each consequential classification, record manuscript evidence, confidence, a
 
 ### 3. Discover and prioritize suitable agents
 
-Use the positioning profile to search the web for agents whose current interests plausibly match the novel. Unless the author declines agent discovery, create an ordered shortlist before drafting the package.
+Use the positioning profile to search the web for agents whose current interests plausibly match the novel. When author information was supplied or acquired alongside the manuscript, use relevant author-approved facts as additional matching evidence. If it was not available at intake, rank from the manuscript positioning and verified agent evidence alone. Unless the author declines agent discovery, create an ordered shortlist before drafting the package.
 
 Build the candidate pool broadly, then verify each shortlisted agent through current official agent or agency pages. Exclude agents who are closed to queries, do not represent the category or genre, prohibit the submission because of agency concurrency rules, or have another documented hard conflict. Do not rank an unverified directory listing as if it were current official evidence.
+
+Author-side evidence may include publishing background, relevant expertise or connection to the material, language and territory, career goals, previous books, meaningful platform, and any lived or cultural connection explicitly approved for matching. Never infer protected identity or expose information beyond the approved disclosure boundary.
 
 Order the eligible agents by:
 
 1. demonstrated fit with the novel's category, genre, readership, story engine, tone, themes, and differentiating promise;
-2. specificity and strength of current evidence, including named interests, representative clients or titles, and recent credible interviews or deal activity;
-3. practical submission fit, including open status, territory, language, agency restrictions, and requested materials;
-4. genuine personalization opportunities grounded in documented interests or connections.
+2. when author information was available at intake, relevant author-agent fit supported by author-approved facts;
+3. specificity and strength of current evidence, including named interests, representative clients or titles, and recent credible interviews or deal activity;
+4. practical submission fit, including open status, territory, language, agency restrictions, and requested materials;
+5. genuine personalization opportunities grounded in documented interests or connections.
 
 Use `Priority 1`, `Priority 2`, and `Priority 3` tiers, with an ordered list within each tier. Explain the evidence, fit, limitations, and priority rationale for every agent. Record official source URLs, supplementary sources, and access dates. Keep uncertain or closed-but-promising agents on a separate watchlist rather than mixing them into the active query order.
 
@@ -82,7 +86,7 @@ Show the manuscript-derived profile, then ask the author to confirm, correct, or
 - category, genre, word count, language, and target market;
 - protagonist, destabilizing event, objective, opposition, choice, stakes, and ending;
 - themes, tone, readership, and comparable works;
-- author biography and relevant connection or credentials;
+- author biography and relevant connection or credentials for package drafting and tailoring; treat them as ranking inputs only if they were already available at intake or the author explicitly requests reranking;
 - publication, representation, submission, and rights history;
 - standalone or series architecture;
 - named-agent requirements and personalization;
@@ -124,7 +128,8 @@ Check:
 - that biography claims are relevant and supported;
 - that comparable titles are real, suitable, and not presented as guarantees;
 - that named-agent status and requirements come from current official sources;
-- that every actively ranked agent is currently eligible, supported by cited evidence, and ordered using the stated priority criteria;
+- that every actively ranked agent is currently eligible, supported by cited evidence, and ordered using manuscript criteria plus author-approved intake information when such information was available;
+- that rankings omit author-side claims when author information was not supplied with the manuscript, and never treat missing credentials, platform, identity, or connections as negative evidence;
 - that closed, uncertain, or hard-conflict candidates are separated from the active query order;
 - that requested page counts, attachment rules, form fields, and one-agent-per-agency policies are honored;
 - that no placeholder remains hidden in a submission-ready file;

@@ -41,7 +41,7 @@ Record:
 
 ## Intake summary
 
-Preserve the author-approved facts, positioning, series classification, relevant history, and open items. This is package state, not text intended for agents.
+Preserve the author-approved facts, positioning, series classification, relevant history, and open items. Record whether author-profile material accompanied the manuscript, which factors were approved for agent matching, and any disclosure boundary. This is package state, not text intended for agents.
 
 ## Master query letter
 
@@ -108,17 +108,19 @@ Treat word-count conventions and market trends as guidance, not proof of quality
 Create an evidence-backed query order derived from the book-positioning profile. Include:
 
 - research date, target market, and search scope;
-- priority criteria and any author-supplied constraints;
+- priority criteria, any author-supplied constraints, and whether author information was available at intake and used;
 - `Priority 1`, `Priority 2`, and `Priority 3` tiers, with agents ordered within each tier;
 - agent name, agency, territory, open status, represented categories, and relevant exclusions;
 - the documented interests, clients, titles, interviews, or deal evidence that support the fit;
-- a concise fit rationale tied to the novel's category, genre, readership, story engine, tone, themes, or differentiating promise;
+- a concise fit rationale tied to the novel's positioning and, only when available at intake, relevant author-approved matching factors;
 - limitations, uncertainties, agency concurrency rules, and prior-submission conflicts;
 - official source URLs, supplementary source URLs when used, and access dates;
 - a separate watchlist for closed, uncertain, or currently ineligible agents;
 - the author's selected tailoring targets, when decided.
 
 Use current official agent or agency pages as the controlling source for eligibility and submission status. Do not rely on search-result snippets or third-party directories as final verification. Do not treat priority order as a prediction of representation, and do not hide weak evidence behind a numerical score.
+
+When author-profile material accompanied the manuscript, it may refine candidate selection, tier placement, ordering, and personalization within the approved disclosure boundary. When it did not, omit author-side factors and do not infer or penalize missing credentials, platform, identity, previous books, or connections. Author information never overrides a hard category, eligibility, territory, or submission conflict.
 
 ## Series overview
 
