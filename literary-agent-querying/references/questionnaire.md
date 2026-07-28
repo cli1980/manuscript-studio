@@ -63,7 +63,20 @@ For each consequential field, state the manuscript evidence, confidence, credibl
 
 Do not infer readership from protagonist age alone, genre from setting or isolated tropes, story type from a rigid universal taxonomy, or prose essence from a single passage. Do not require the author to supply comps unaided. Offer researched candidates when requested. Verify current facts before recommending them, and explain both the fit and limitation of each candidate.
 
-### Round 5: Author information
+### Round 5: Agent discovery and priority review
+
+Use the confirmed or provisional positioning profile to research a broad candidate pool, verify viable candidates through current official agent or agency sources, and present:
+
+- an ordered active shortlist grouped into `Priority 1`, `Priority 2`, and `Priority 3`;
+- the specific manuscript-positioning evidence matched by each agent's documented interests or list;
+- current open status, represented categories, exclusions, territory, and agency concurrency constraints;
+- official source URLs, supplementary evidence when useful, and access dates;
+- a concise fit rationale, limitation, and reason for the assigned priority;
+- a separate watchlist for closed, uncertain, or otherwise ineligible candidates.
+
+Ask the author to confirm exclusions, disclose prior submissions to shortlisted agents or agencies, and select which candidates should receive tailored materials. Make clear that the ordering is a research recommendation, not a prediction of representation.
+
+### Round 6: Author information
 
 Ask only for relevant information:
 
@@ -77,7 +90,7 @@ Ask only for relevant information:
 
 Never pressure the author to disclose protected or private identity. A short biography with no publishing credentials is valid for debut fiction.
 
-### Round 6: Series architecture
+### Round 7: Series architecture
 
 When the book is connected to other volumes, establish:
 
@@ -97,7 +110,7 @@ Classify honestly as one of:
 
 Do not use `standalone with series potential` merely because it sounds safer.
 
-### Round 7: Named-agent tailoring
+### Round 8: Named-agent tailoring
 
 For each named agent, establish or research:
 
@@ -137,6 +150,13 @@ Before drafting, show:
 
 ## Planned artifacts
 - ...
+
+## Proposed agent priorities
+- Priority 1:
+- Priority 2:
+- Priority 3:
+- Watchlist or exclusions:
+- Selected tailoring targets:
 ```
 
 Require confirmation for facts that affect rights, debut status, category, series dependency, story outcome, biography, or agent personalization. Allow drafting with clearly marked open items for optional comps, platform links, or agent selection.

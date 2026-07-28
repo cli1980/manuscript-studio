@@ -12,6 +12,7 @@ query-package/
 |-- synopsis.md
 |-- author-bio.md
 |-- book-positioning.md
+|-- agent-shortlist.md
 |-- submission-checklist.md
 |-- series-overview.md                 # when applicable
 `-- tailored/
@@ -102,6 +103,23 @@ Record:
 
 Treat word-count conventions and market trends as guidance, not proof of quality. Browse current reliable sources when a recommendation depends on changing market conditions.
 
+## Agent shortlist
+
+Create an evidence-backed query order derived from the book-positioning profile. Include:
+
+- research date, target market, and search scope;
+- priority criteria and any author-supplied constraints;
+- `Priority 1`, `Priority 2`, and `Priority 3` tiers, with agents ordered within each tier;
+- agent name, agency, territory, open status, represented categories, and relevant exclusions;
+- the documented interests, clients, titles, interviews, or deal evidence that support the fit;
+- a concise fit rationale tied to the novel's category, genre, readership, story engine, tone, themes, or differentiating promise;
+- limitations, uncertainties, agency concurrency rules, and prior-submission conflicts;
+- official source URLs, supplementary source URLs when used, and access dates;
+- a separate watchlist for closed, uncertain, or currently ineligible agents;
+- the author's selected tailoring targets, when decided.
+
+Use current official agent or agency pages as the controlling source for eligibility and submission status. Do not rely on search-result snippets or third-party directories as final verification. Do not treat priority order as a prediction of representation, and do not hide weak evidence behind a numerical score.
+
 ## Series overview
 
 Create only when applicable. Include:
@@ -125,6 +143,7 @@ The master checklist covers:
 - publication and submission-history disclosure;
 - file naming and contact details;
 - tracking fields for agent, agency, date, channel, materials, status, and response;
+- a transfer of the active priority order from `agent-shortlist.md`;
 - a reminder that sending requires separate explicit authorization.
 
 For a named agent, replace general guidance with verified requirements and record:

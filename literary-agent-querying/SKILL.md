@@ -1,6 +1,6 @@
 ---
 name: literary-agent-querying
-description: Build complete literary-agent query packages for novels through a guided author interview, manuscript-grounded positioning, package drafting, and agent-specific validation. Use when Codex needs to prepare or revise a fiction query letter, hook, synopsis, author bio, book metadata, comparable-title positioning, series overview, submission checklist, or tailored agent submission; gather missing information through dialogue; adapt the workflow to any fiction genre, prose style, audience, or book length; and save all generated outputs as Codex task artifacts rather than in the manuscript project.
+description: Build complete literary-agent query packages for novels through manuscript-grounded positioning, web research and priority ranking of suitable agents, a guided author interview, package drafting, and agent-specific validation. Use when Codex needs to identify and rank agents for a novel; prepare or revise a fiction query letter, hook, synopsis, author bio, book metadata, comparable-title positioning, series overview, submission checklist, or tailored agent submission; gather missing information through dialogue; adapt the workflow to any fiction genre, prose style, audience, or book length; and save all generated outputs as Codex task artifacts rather than in the manuscript project.
 ---
 
 # Literary Agent Querying
@@ -18,10 +18,11 @@ Build a truthful, manuscript-grounded query package through a short guided dialo
 7. Describe a book as `standalone with series potential` only when its principal dramatic movement resolves sufficiently on its own. Otherwise state its series dependency honestly.
 8. Reveal the ending in the synopsis. Do not reveal it in the query pitch unless doing so is necessary to represent the premise accurately.
 9. Follow each named agent's current official submission requirements exactly. Browse official agency or agent sources when current requirements or market status matter.
-10. Prepare materials only. Do not submit a query, contact an agent, upload a form, or send a message without separate explicit authorization.
-11. Save generated files only to the current Codex task-artifact or Outputs facility. Treat its path or identifier as opaque. Never create query outputs inside the manuscript or book project.
-12. If no task-artifact destination is available, return the package in clearly labeled chat sections and state that persistent artifact writing was unavailable. Do not redirect it into the manuscript project.
-13. Derive category, genre, target readership, prose essence, story type, tone, and reader promise from manuscript evidence. Use author input to confirm or correct the analysis, not as a substitute for reading the novel.
+10. Treat agent rankings as evidence-based priorities, not guarantees of fit or representation. Use official agent or agency sources to verify identity, categories, exclusions, submission status, and requirements. Use reputable interviews or deal records only as supplementary fit evidence, and record source dates.
+11. Prepare materials only. Do not submit a query, contact an agent, upload a form, or send a message without separate explicit authorization.
+12. Save generated files only to the current Codex task-artifact or Outputs facility. Treat its path or identifier as opaque. Never create query outputs inside the manuscript or book project.
+13. If no task-artifact destination is available, return the package in clearly labeled chat sections and state that persistent artifact writing was unavailable. Do not redirect it into the manuscript project.
+14. Derive category, genre, target readership, prose essence, story type, tone, and reader promise from manuscript evidence. Use author input to confirm or correct the analysis, not as a substitute for reading the novel.
 
 ## Run the Workflow
 
@@ -54,7 +55,24 @@ Before asking the author to classify the book, analyze the complete novel and pr
 
 For each consequential classification, record manuscript evidence, confidence, and credible alternatives. Do not classify from character age, setting, isolated tropes, or word count alone.
 
-### 3. Build the intake record through dialogue
+### 3. Discover and prioritize suitable agents
+
+Use the positioning profile to search the web for agents whose current interests plausibly match the novel. Unless the author declines agent discovery, create an ordered shortlist before drafting the package.
+
+Build the candidate pool broadly, then verify each shortlisted agent through current official agent or agency pages. Exclude agents who are closed to queries, do not represent the category or genre, prohibit the submission because of agency concurrency rules, or have another documented hard conflict. Do not rank an unverified directory listing as if it were current official evidence.
+
+Order the eligible agents by:
+
+1. demonstrated fit with the novel's category, genre, readership, story engine, tone, themes, and differentiating promise;
+2. specificity and strength of current evidence, including named interests, representative clients or titles, and recent credible interviews or deal activity;
+3. practical submission fit, including open status, territory, language, agency restrictions, and requested materials;
+4. genuine personalization opportunities grounded in documented interests or connections.
+
+Use `Priority 1`, `Priority 2`, and `Priority 3` tiers, with an ordered list within each tier. Explain the evidence, fit, limitations, and priority rationale for every agent. Record official source URLs, supplementary sources, and access dates. Keep uncertain or closed-but-promising agents on a separate watchlist rather than mixing them into the active query order.
+
+Treat the shortlist as a research recommendation for author review. Do not generate tailored variants for every candidate automatically; ask the author which shortlisted agents to target.
+
+### 4. Build the intake record through dialogue
 
 Extract what the sources establish, then interview for missing or ambiguous information. Ask one topic or a compact group of closely related questions at a time. Briefly explain why a difficult question matters when that helps the author answer.
 
@@ -67,11 +85,12 @@ Show the manuscript-derived profile, then ask the author to confirm, correct, or
 - author biography and relevant connection or credentials;
 - publication, representation, submission, and rights history;
 - standalone or series architecture;
-- named-agent requirements and personalization.
+- named-agent requirements and personalization;
+- shortlist priorities and which agents, if any, the author wants to target first.
 
 Permit `unknown`, `not applicable`, and `decide with me`. Offer reasoned options when the author is unsure, but do not silently select a consequential answer.
 
-### 4. Confirm before drafting
+### 5. Confirm before drafting
 
 Present a compact intake summary containing:
 
@@ -80,19 +99,20 @@ Present a compact intake summary containing:
 - consequential inferences;
 - unresolved items;
 - proposed positioning;
-- planned artifacts.
+- planned artifacts;
+- proposed agent priorities, exclusions, and selected tailoring targets.
 
 Ask the author to correct or approve the summary. Do not block on minor optional fields, but label omissions in the package manifest.
 
-### 5. Generate the package
+### 6. Generate the package
 
-Create the applicable artifacts defined in [references/package-spec.md](references/package-spec.md). Always create a master query letter, synopsis, author biography, book-positioning sheet, submission checklist, and package manifest. Create a series overview and agent-tailored variants only when applicable.
+Create the applicable artifacts defined in [references/package-spec.md](references/package-spec.md). Always create a master query letter, synopsis, author biography, book-positioning sheet, prioritized agent shortlist, submission checklist, and package manifest. Create a series overview and agent-tailored variants only when applicable.
 
 Keep master materials independent of any single agent. Put agent-specific personalization and formatting in separately named variants.
 
 Shape the query from the confirmed positioning profile: foreground the dominant story engine, use an appropriate amount of worldbuilding, align the pitch's register with the prose essence without imitating the novel, and select metadata and comparisons for the actual readership.
 
-### 6. Validate
+### 7. Validate
 
 Check:
 
@@ -104,6 +124,8 @@ Check:
 - that biography claims are relevant and supported;
 - that comparable titles are real, suitable, and not presented as guarantees;
 - that named-agent status and requirements come from current official sources;
+- that every actively ranked agent is currently eligible, supported by cited evidence, and ordered using the stated priority criteria;
+- that closed, uncertain, or hard-conflict candidates are separated from the active query order;
 - that requested page counts, attachment rules, form fields, and one-agent-per-agency policies are honored;
 - that no placeholder remains hidden in a submission-ready file;
 - that every artifact is in the task-artifact destination and no manuscript-project file changed.
