@@ -1,0 +1,4 @@
+interface:
+  display_name: "Literary Agent Querying"
+  short_description: "Build complete, tailored literary query packages"
+  default_prompt: "Use $literary-agent-querying to interview me and build a complete literary-agent query package."
