@@ -1,6 +1,6 @@
 # Guided Query Questionnaire
 
-Use this as a routing guide, not a form to dump on the author. First extract answers from supplied sources. Then ask only for missing or consequential information in short conversational rounds.
+Use this as a routing guide, not a form to dump on the author. First read the complete novel, extract factual answers, and derive a positioning profile. Then ask only for confirmation, correction, missing facts, or consequential choices in short conversational rounds.
 
 ## Interview sequence
 
@@ -10,18 +10,19 @@ Establish:
 
 - which novel and manuscript version the package represents;
 - whether the user wants a master package, a named-agent submission, or both;
+- whether the user already has a specific agent in mind and, if so, the agent's profile, agency, or submission-guidelines link;
 - target market or territory, if already decided;
 - any deadline or submission window.
 
 If the manuscript and existing materials are available, read them before continuing.
 
-### Round 2: Book identity
+### Round 2: Book identity and provisional classification
 
 Confirm:
 
 - title and optional subtitle;
-- adult, young adult, middle grade, or other category;
-- primary genre and useful secondary positioning;
+- the manuscript-derived adult, young adult, middle grade, or other category;
+- the manuscript-derived primary genre and useful secondary positioning;
 - exact or rounded word count;
 - completion and revision status;
 - original language and query language;
@@ -45,18 +46,22 @@ Acquire enough information to answer:
 
 Derive these from the manuscript when possible. Ask the author to resolve competing protagonists, concealed premises, or intentionally ambiguous endings when they materially affect the pitch.
 
-### Round 4: Reader promise and positioning
+### Round 4: Manuscript-derived reader promise and positioning
 
-Confirm or develop:
+Present an evidence-based proposal for the author to confirm or correct:
 
-- intended readership;
-- tone and prose character;
+- target and crossover readership;
+- prose essence: register, cadence, density, narrative distance, interiority, and tonal character;
+- dominant story type or narrative engine;
+- tone;
 - central themes or questions;
 - two or three comparable books, authors, films, or other works;
 - what each comparison demonstrates: audience, voice, structure, premise, or tone;
 - the novel's differentiating element.
 
-Do not require the author to supply comps unaided. Offer researched candidates when requested. Verify current facts before recommending them, and explain both the fit and limitation of each candidate.
+For each consequential field, state the manuscript evidence, confidence, credible alternative classifications, and how the finding should change the query's hook, plot emphasis, diction, worldbuilding, metadata, or comparisons. Do not make the author define these fields from scratch.
+
+Do not infer readership from protagonist age alone, genre from setting or isolated tropes, story type from a rigid universal taxonomy, or prose essence from a single passage. Do not require the author to supply comps unaided. Offer researched candidates when requested. Verify current facts before recommending them, and explain both the fit and limitation of each candidate.
 
 ### Round 5: Author information
 
@@ -96,6 +101,7 @@ Do not use `standalone with series potential` merely because it sounds safer.
 
 For each named agent, establish or research:
 
+- the agent, agency, or submission-guidelines URL supplied by the author, when available;
 - official name, agency, and submission channel;
 - open or closed status;
 - represented categories and exclusions;
@@ -105,7 +111,7 @@ For each named agent, establish or research:
 - response policy;
 - a genuine personalization basis.
 
-Use current official sources. If official instructions conflict, identify the conflict and do not guess.
+Ask the author to paste the link when one is available. Treat a supplied link as the starting point for customization, then confirm that it is current and official. If no link is available, locate the official agent or agency page. If official instructions conflict, identify the conflict and do not guess.
 
 ## Confirmation record
 
@@ -116,7 +122,12 @@ Before drafting, show:
 - ...
 
 ## Proposed positioning
-- ...
+- Category and genre:
+- Target readership:
+- Prose essence:
+- Story type:
+- Tone and reader promise:
+- Query implications:
 
 ## Inferences requiring confirmation
 - ...

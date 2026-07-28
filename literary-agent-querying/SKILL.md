@@ -10,7 +10,7 @@ Build a truthful, manuscript-grounded query package through a short guided dialo
 ## Governing Rules
 
 1. Treat the author as the authority on intent, identity, publication history, rights, and career goals.
-2. Read supplied manuscripts and existing pitch materials before asking questions they already answer.
+2. Read the complete supplied novel and existing pitch materials before asking questions they already answer. Treat positioning derived from an incomplete manuscript as provisional.
 3. Ask only questions that materially affect the package. Use short conversational rounds organized by topic, not one long form.
 4. Do not invent story facts, credentials, comparable titles, market claims, personalization, submission requirements, or rights status.
 5. Distinguish an inference from an author-confirmed fact. Ask for confirmation before using a consequential inference.
@@ -21,6 +21,7 @@ Build a truthful, manuscript-grounded query package through a short guided dialo
 10. Prepare materials only. Do not submit a query, contact an agent, upload a form, or send a message without separate explicit authorization.
 11. Save generated files only to the current Codex task-artifact or Outputs facility. Treat its path or identifier as opaque. Never create query outputs inside the manuscript or book project.
 12. If no task-artifact destination is available, return the package in clearly labeled chat sections and state that persistent artifact writing was unavailable. Do not redirect it into the manuscript project.
+13. Derive category, genre, target readership, prose essence, story type, tone, and reader promise from manuscript evidence. Use author input to confirm or correct the analysis, not as a substitute for reading the novel.
 
 ## Run the Workflow
 
@@ -32,17 +33,32 @@ Identify:
 - existing synopsis, pitch, biography, or series notes;
 - requested package scope;
 - target publishing market or territory, when known;
+- named agent and the agent, agency, or submission-guidelines URL supplied by the author, when available;
 - current task-artifact destination.
 
 Read [references/questionnaire.md](references/questionnaire.md) in full before interviewing the author. Read [references/package-spec.md](references/package-spec.md) in full before drafting or validating outputs.
 
 If the manuscript is unavailable, the skill may still build a package from the author's answers, but label all manuscript-dependent conclusions `author-supplied` and identify what remains unverified.
 
-### 2. Build the intake record through dialogue
+### 2. Derive the positioning profile
+
+Before asking the author to classify the book, analyze the complete novel and propose:
+
+- category and genre or subgenre;
+- target and crossover readership;
+- prose essence, including register, cadence, density, narrative distance, interiority, and tonal character;
+- dominant story type or narrative engine;
+- tone, themes, and reader promise;
+- plausible comparable-title functions;
+- the practical implication of each finding for the query's metadata, hook, emphasis, voice, and level of worldbuilding.
+
+For each consequential classification, record manuscript evidence, confidence, and credible alternatives. Do not classify from character age, setting, isolated tropes, or word count alone.
+
+### 3. Build the intake record through dialogue
 
 Extract what the sources establish, then interview for missing or ambiguous information. Ask one topic or a compact group of closely related questions at a time. Briefly explain why a difficult question matters when that helps the author answer.
 
-Cover only the applicable areas:
+Show the manuscript-derived profile, then ask the author to confirm, correct, or discuss it. Cover only the remaining applicable areas:
 
 - project identity and completion state;
 - category, genre, word count, language, and target market;
@@ -55,11 +71,12 @@ Cover only the applicable areas:
 
 Permit `unknown`, `not applicable`, and `decide with me`. Offer reasoned options when the author is unsure, but do not silently select a consequential answer.
 
-### 3. Confirm before drafting
+### 4. Confirm before drafting
 
 Present a compact intake summary containing:
 
 - confirmed facts;
+- manuscript-derived positioning and its query implications;
 - consequential inferences;
 - unresolved items;
 - proposed positioning;
@@ -67,18 +84,21 @@ Present a compact intake summary containing:
 
 Ask the author to correct or approve the summary. Do not block on minor optional fields, but label omissions in the package manifest.
 
-### 4. Generate the package
+### 5. Generate the package
 
 Create the applicable artifacts defined in [references/package-spec.md](references/package-spec.md). Always create a master query letter, synopsis, author biography, book-positioning sheet, submission checklist, and package manifest. Create a series overview and agent-tailored variants only when applicable.
 
 Keep master materials independent of any single agent. Put agent-specific personalization and formatting in separately named variants.
 
-### 5. Validate
+Shape the query from the confirmed positioning profile: foreground the dominant story engine, use an appropriate amount of worldbuilding, align the pitch's register with the prose essence without imitating the novel, and select metadata and comparisons for the actual readership.
+
+### 6. Validate
 
 Check:
 
 - every story claim against the manuscript or confirmed intake;
 - title, category, genre, word count, and series language across all files;
+- that category, genre, target readership, prose essence, story type, and query emphasis remain supported by the novel;
 - that the query foregrounds character, conflict, choice, and stakes rather than explaining the whole world;
 - that the synopsis includes the ending and major causal turns;
 - that biography claims are relevant and supported;

@@ -33,6 +33,7 @@ Record:
 - confirmed target market;
 - artifact list;
 - evidence basis: manuscript, author-confirmed, or inferred;
+- manuscript-derived positioning status: confirmed, provisional, or disputed;
 - unresolved placeholders or open items;
 - readiness: `ready`, `ready-with-open-items`, or `not-ready`;
 - validation summary.
@@ -50,6 +51,8 @@ Keep the letter concise, normally around one page. Use a professional salutation
 - useful comparable works and what the combination signals;
 - a concise relevant biography;
 - a professional closing.
+
+Let the confirmed positioning determine what the letter foregrounds. The pitch should express the dominant story engine, address the intended readership, use only the worldbuilding needed to understand the conflict, and carry a restrained tonal correspondence with the novel's prose essence. Do not turn a quiet interior novel into an action pitch or an accessible commercial novel into an abstract literary statement.
 
 The order may vary with the book. Avoid rhetorical questions, praise of the manuscript, invented market claims, theme lists, exhaustive worldbuilding, and synopsis-like coverage.
 
@@ -82,17 +85,20 @@ Prioritize relevant credits, expertise, connection to the material, and previous
 Record:
 
 - title;
-- category and genre;
+- category and genre with manuscript evidence;
 - word count;
 - logline;
 - short pitch;
-- audience;
-- tone and prose characteristics;
+- target and crossover readership with manuscript evidence;
+- prose essence with manuscript evidence;
+- dominant story type or narrative engine with manuscript evidence;
+- tone with manuscript evidence;
 - themes;
 - differentiating promise;
 - comparable works with a specific function and limitation for each;
 - series classification;
-- potential positioning risks or open decisions.
+- potential positioning risks or open decisions;
+- confidence, credible alternatives, and query implications for each consequential classification.
 
 Treat word-count conventions and market trends as guidance, not proof of quality. Browse current reliable sources when a recommendation depends on changing market conditions.
 
@@ -123,6 +129,7 @@ The master checklist covers:
 
 For a named agent, replace general guidance with verified requirements and record:
 
+- author-supplied agent, agency, or submission-guidelines URL, when available;
 - official source URL;
 - date accessed;
 - open status;
