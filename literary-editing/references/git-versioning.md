@@ -1,73 +1,88 @@
-# Git Versioning
+# Dual-Repository Git Versioning
 
 ## Contents
 
 1. Repository selection
-2. Baseline setup
-3. Review binding
-4. Approved application
-5. Recovery and milestones
-6. Git-unavailable fallback
+2. Source baseline
+3. Workspace baseline
+4. Review binding
+5. Approved application
+6. Source synchronization
+7. Recovery and milestones
+8. Artifact-workspace alternative
 
-Use Git as the manuscript version system. Keep one checked-out chapter tree; do not create `v001`, `v002`, or equivalent draft copies.
+Read [workspace-and-source.md](workspace-and-source.md) first. Use this reference when the operating mode is `dual-repository-git`.
 
 ## Repository selection
 
-Resolve the nearest repository root before running `git init`.
+Use two independent local repositories:
 
-- Reuse a repository only when its intended scope includes the manuscript project.
-- Do not create a nested repository accidentally.
-- If a parent repository exists but its intended scope is unclear, ask the user.
-- If no repository exists, initialize one at the manuscript project root.
-- Keep the repository local by default. Never add a remote or push manuscript content without explicit authorization.
-- Warn when a cloud-synced root could be edited concurrently on several machines. Do not let synchronization replace Git history.
+- the **source repository** contains the author-controlled source draft;
+- the **workspace repository** contains normalized chapters and all editorial state.
 
-Verify that Git author identity is available before the first commit. If it is missing, ask for repository-local `user.name` and `user.email`; do not invent them.
+Resolve the nearest repository root for each location before running `git init`. Never nest either repository inside the other. Reuse an existing repository only when its intended scope includes that location. If a parent repository's scope is unclear, ask before using it.
 
-## Baseline setup
+Keep both repositories local by default. Never add a remote or push manuscript content without explicit authorization. Warn when either root is cloud-synced or may be edited concurrently.
 
-Create `.gitignore` before the baseline commit. Ignore only disposable material, such as office lock files, extraction scratch files, caches, and reproducible exports. Track normalized chapters, the manifest, project state, shared editorial records, verdicts, proposals, approvals, and application reports.
+Verify Git author identity in both repositories before their first commits. If identity is missing, ask for repository-local `user.name` and `user.email`; do not invent them.
 
-Inspect status before staging. Never run `git add -A`, `git add .`, automatic stash, destructive reset, checkout-based restoration, or history rewriting. Stage explicit in-scope paths only. Leave unrelated user changes untouched.
+## Source baseline
 
-If unrelated changes overlap the required manuscript paths, stop and ask the user to resolve or authorize a checkpoint. Do not absorb them into an editorial commit.
+Inspect the source repository before staging. Preserve unrelated user changes. Never use broad staging, automatic stash, destructive reset, checkout-based restoration, or history rewriting.
 
-After exact-once manuscript verification:
+Stage only the identified source draft and an appropriate source `.gitignore` when needed. Create a baseline commit such as:
 
-1. Stage the verified chapter set, manifest, initial brief, shared records, state, and agreed source record.
-2. Commit with `chore(manuscript): establish normalized baseline` or an equivalent clear message.
-3. Tag the commit `manuscript-baseline` in a dedicated book repository. If that tag already exists or the repository contains several books, use a stable work-specific tag and record it.
-4. Save the full commit SHA and tag in the manifest and project state.
-5. Confirm that tracked manuscript paths are clean.
+```text
+chore(source): establish manuscript baseline
+```
 
-Large DOCX and PDF files are binary. Retain the received artifact and checksum, but use normalized Markdown for meaningful diffs. Track the binary only when repository policy and size make that appropriate.
+Tag it `source-manuscript-baseline`, or use a stable work-specific tag when the repository contains several works. The source baseline preserves the received draft through history; it does not make the source working file permanently immutable after approval.
+
+## Workspace baseline
+
+Create the invariant workspace layout and normalize the source before staging. Stage only verified normalized chapters, provenance records, manifest, brief, shared records, and project state. Create a baseline commit such as:
+
+```text
+chore(workspace): establish editorial baseline
+```
+
+Tag it `editorial-workspace-baseline`, or use a work-specific tag when necessary.
+
+A commit cannot contain its own SHA. After both baseline commits exist, write their full SHAs and tags to `source/source-record.md`, `source/manuscript-manifest.md`, and `editorial/project-state.md`, then create a separate workspace metadata commit. Do not amend either baseline.
+
+Confirm that tracked source-draft paths and workspace manuscript paths are clean before review.
 
 ## Bind reviews and proposals
 
-At the start of a job, save `git rev-parse HEAD` as `reviewed_commit`. The verdict and every proposal must reference it.
+At the start of a job, record:
 
-Do not change `manuscript/` while reviewing. Durable files under `editorial/` may be saved and committed separately; their commit does not change the manuscript base.
+- workspace repository root and full workspace review commit;
+- reviewed workspace manuscript paths;
+- source repository root, tracked source draft path, and source import commit;
+- any source-to-workspace conversion or extraction identity.
+
+Do not change source or workspace manuscript paths during review. Durable files under `editorial/` may be committed separately; preserve the original workspace manuscript review commit in the job records.
 
 Before applying approval, verify:
 
-1. the recorded reviewed commit exists;
-2. `git diff --quiet <reviewed_commit> -- manuscript/` reports no manuscript changes;
-3. tracked and untracked files under the target manuscript scope contain no unreviewed work;
-4. each proposal’s exact current text still matches its recorded location;
+1. both recorded commits exist;
+2. workspace manuscript paths have not changed since the review commit;
+3. tracked and untracked files under the target workspace scope contain no unreviewed work;
+4. each proposal's exact current text still matches;
 5. accepted proposals do not overlap incompatibly.
 
-If manuscript paths changed, compare the affected scope. Preserve the old report, mark invalid proposals `stale`, and regenerate only what needs review. Never silently rebase wording.
+If the workspace manuscript changed, preserve the old report, compare the affected scope, and mark invalid proposals `stale`. Never silently rebase wording.
 
-## Commit approved application
+## Commit approved workspace application
 
 After approval records are saved:
 
-1. Apply only accepted or accepted-with-modification proposal IDs.
-2. Update style and continuity records only for approved decisions.
-3. Inspect the manuscript diff against `reviewed_commit`.
-4. Verify that every changed span maps to approval and no rejected, deferred, or pending proposal appears.
-5. Stage explicit changed manuscript and editorial record paths.
-6. Commit one coherent approved batch.
+1. apply only accepted or accepted-with-modification proposal IDs to the workspace manuscript;
+2. update style and continuity records only for approved decisions;
+3. inspect the workspace manuscript diff against the review commit;
+4. verify that every changed span maps to approval;
+5. stage explicit changed paths;
+6. commit one coherent approved workspace batch.
 
 Use a message such as:
 
@@ -75,27 +90,31 @@ Use a message such as:
 line-edit(ch04): apply LE-004, LE-006, LE-009
 ```
 
-Do not amend a previous commit. Record the resulting full SHA in the application report and project state.
+Record the resulting full workspace SHA before synchronizing the source.
+
+## Synchronize and commit the source
+
+Treat source synchronization as a separate controlled operation:
+
+1. verify the source repository is still at the recorded import commit or determine that only nonconflicting unrelated paths changed;
+2. verify the tracked source draft and format;
+3. transform only the approved workspace changes into the source format;
+4. compare the updated source with the approved workspace manuscript;
+5. verify no unapproved text, paragraph boundary, chapter order, or formatting change entered the source;
+6. stage only the source draft paths;
+7. create a separate source commit identifying the service, scope, proposal IDs, and workspace result commit;
+8. record the resulting source SHA in project state and the application report.
+
+If the source changed incompatibly or conversion cannot be verified, do not write or commit it. Preserve the workspace commit, generate a verified updated-source export, and mark the job `source-sync-pending`.
 
 ## Recovery and milestones
 
-Use normal forward history. If an accepted edit must later be reversed, create a new approved corrective commit; do not erase the original decision.
+Use forward history in both repositories. If an accepted edit must later be reversed, create approved corrective commits; do not erase the original decisions.
 
-Tag only meaningful milestones, such as a completed developmental revision, manuscript-wide line edit, manuscript-wide copyedit, or final proof. Verify the relevant completion gate before tagging.
+Tag only meaningful milestones after verifying both workspace completion and source synchronization. On resume, inspect both repository roots, commits, statuses, baselines, active job identities, approval state, and the last application report.
 
-On resume, inspect the repository root, HEAD, status, manifest baseline, current job base, proposal statuses, and last application report. When saved state and chat conflict, trust verified files, commits, and recorded approvals.
+When saved state and chat conflict, trust verified files, commits, fingerprints, and recorded approvals.
 
-## Git-unavailable fallback
+## Artifact-workspace alternative
 
-If the Git executable is unavailable, repository initialization fails, the baseline commit cannot be created, or Git cannot safely protect the manuscript:
-
-1. Read and follow [task-artifact-fallback.md](task-artifact-fallback.md).
-2. Stop writing generated outputs into the manuscript project.
-3. Resolve the environment-provided task artifact or Outputs destination without inventing or guessing a path.
-4. Record the failure stage and diagnostic evidence in the task artifact area without repeatedly retrying destructive or broad alternatives.
-5. Redirect every generated setup and review output there, including any normalized review copy needed to assess the requested scope.
-6. Identify the reviewed artifact precisely with path, size, modification time, and checksum when feasible, and enter `verdict-score-only` mode.
-7. Create only the diagnostic, artifact manifest, normalized review copy when necessary, verdict, score, and score revisions.
-8. Do not produce project-local editorial state, proposal diffs, decision tables, approvals, application reports, revised manuscripts, alternate project draft folders, or Git-bound completion claims.
-
-If Git later becomes available, return to the original or verified source, establish and verify a clean baseline, and start a new review bound to that commit before creating proposals. Treat fallback task artifacts as reference evidence only; do not retroactively attach their verdict, approvals, or implied edit authority to a commit.
+If Git is unavailable or either repository cannot be created safely, use `artifact-workspace` instead of a degraded Git workflow. Follow [workspace-and-source.md](workspace-and-source.md): keep the same workspace structure, use fingerprints and preserved revisions, run the complete verdict-and-approval lifecycle, never modify the source location, and generate a verified updated-source export for manual application.

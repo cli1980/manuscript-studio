@@ -1,41 +1,52 @@
 ---
 name: literary-editing
-description: Review and edit book-length literary manuscripts through professional assessment, developmental review, line editing, copyediting, specialist review, proofreading, and final QA. Use when Codex needs to initialize a fiction, memoir, or narrative nonfiction editing project; route a whole manuscript or selected chapters to the right service; produce verdicts with scoped 1-5 editorial-acceptance scores; revise scores after author clarification without requiring manuscript changes; propose diffs without changing the draft; run first-class paragraph-break checks during line editing; present and quick-check editable proposal decision tables; apply only explicitly approved proposals; preserve voice and editorial state; manage approved revisions through local Git; redirect no-Git setup outputs to task artifacts; or fall back safely when table writing is unavailable.
+description: Review and edit book-length literary manuscripts through professional assessment, developmental review, line editing, copyediting, specialist review, proofreading, and final QA. Use when Codex needs to initialize or resume an editorial project with separate source and workspace locations; select dual-repository Git or artifact-workspace operation; route a whole manuscript or selected chapters to the right service; produce verdicts and scoped 1-5 editorial-acceptance scores; propose diffs without changing the source; quick-check editable decision tables; apply only explicitly approved proposals; preserve voice and editorial state; commit approved workspace and source updates when Git is available; or produce a verified updated-source export for manual application when Git is unavailable.
 ---
 
 # Literary Editing
 
-Route each request to the appropriate professional editorial service. Review first, produce a verdict, and keep the manuscript unchanged until the user explicitly approves identified proposals.
+Route each request to the appropriate professional editorial service. Keep the source and workspace separate, review first, and change nothing until the user explicitly approves identified proposals.
 
 ## Governing Contract
 
 Follow these rules in every service:
 
 1. Treat the author or authorized user as the creative decision-maker.
-2. Preserve the received source artifact. Normalize extraction errors only when the artifact makes the intended text objectively clear.
-3. Use one canonical Markdown chapter set under local Git rather than duplicated draft directories when Git is available.
-4. Bind every verdict and proposal to the exact reviewed commit SHA. If Git is unavailable or setup fails, use the verdict-and-score-only fallback below.
-5. Do not edit manuscript text while reviewing, diagnosing, writing a verdict, or generating proposals.
-6. Apply only proposal IDs the user explicitly accepts or modifies. General approval, discussion, questions, or “continue” do not authorize edits.
-7. Permit partial approval. Leave rejected, deferred, and pending proposals unapplied.
-8. Revalidate approved proposals against the reviewed commit and current text. Mark invalid proposals `stale`; never guess how to rebase them.
-9. Create a new commit for each approved edit batch. Do not amend, rewrite, reset, or otherwise alter earlier manuscript history.
-10. Keep each service within scope. Flag other editorial levels separately instead of silently performing them.
-11. Do not claim whole-book completion from chapter passes without the required manuscript-wide synthesis or consistency check.
-12. Give every verdict an editorial-acceptance score from 1 to 5, scoped to the requested service and reviewed material. Do not present it as a publication, sales, or market forecast.
-13. Treat an editable decision table as a review interface, not manuscript-change authorization. A quick check validates decisions only; application still requires a separate explicit user instruction.
-14. If Git is unusable during project setup, stop writing generated outputs into the manuscript project. Redirect all permitted fallback outputs to the current task's artifact area and remain `verdict-score-only`.
-15. Treat paragraph breaks as a first-class line-edit dimension. Presume existing paragraphing is intentional until reader-effect and manuscript-pattern evidence supports a change. Review boundary placement separately from wording, and make every proposed boundary change an explicit approval-controlled operation.
+2. Treat the source location and workspace as separate managed locations. Never use the source location as the workspace.
+3. Preserve the received source baseline. Normalize extraction errors only when the source makes the intended text objectively clear.
+4. Use the same workspace structure in every environment. Select `dual-repository-git` or `artifact-workspace` during setup.
+5. In Git mode, use two separate local repositories: one for the workspace and one for the source draft. Never nest them.
+6. Bind every verdict and proposal to the exact workspace review identity and the source identity from which it was imported: commit SHAs in Git mode or durable fingerprints in artifact mode.
+7. Do not edit manuscript text while reviewing, diagnosing, writing a verdict, or generating proposals.
+8. Apply only proposal IDs the user explicitly accepts or modifies. General approval, discussion, questions, or "continue" do not authorize edits.
+9. Permit partial approval. Leave rejected, deferred, and pending proposals unapplied.
+10. Revalidate approved proposals against the recorded review identity and exact current text. Mark invalid proposals `stale`; never guess how to rebase them.
+11. In Git mode, commit each approved workspace batch, then update and commit the source draft separately after source revalidation.
+12. In artifact mode, never modify the source location. Create a verified updated-source export and ask the user to apply it manually.
+13. Keep each service within scope. Flag other editorial levels separately instead of silently performing them.
+14. Do not claim whole-book completion from chapter passes without the required manuscript-wide synthesis or consistency check.
+15. Give every verdict an editorial-acceptance score from 1 to 5, scoped to the requested service and reviewed material. Do not present it as a publication, sales, or market forecast.
+16. Treat an editable decision table as a review interface, not manuscript-change authorization. A quick check validates decisions only; application still requires a separate explicit user instruction.
+17. Treat paragraph breaks as a first-class line-edit dimension. Presume existing paragraphing is intentional until reader-effect and manuscript-pattern evidence supports a change. Make every boundary change an explicit approval-controlled operation.
 
 ## Initialize or Resume the Project
 
-For a new project, an unsplit artifact, or missing normalized chapters, manifest, editorial state, or local Git, read [references/manuscript-intake.md](references/manuscript-intake.md), [references/git-versioning.md](references/git-versioning.md), and [references/task-artifact-fallback.md](references/task-artifact-fallback.md) in full. Complete initialization before editorial review when Git works. If Git is unavailable or setup fails, enter `verdict-score-only` mode and redirect all generated setup and review outputs to the task artifact area. Do not create project-local proposals, apply edits, or modify the manuscript.
+For every new project, read [references/workspace-and-source.md](references/workspace-and-source.md), [references/manuscript-intake.md](references/manuscript-intake.md), and [references/git-versioning.md](references/git-versioning.md) in full.
 
-For an existing project, read [references/editorial-state.md](references/editorial-state.md) in full. Verify the repository root, current commit, manuscript paths, active job, verdicts, proposals, approvals, and shared records before resuming.
+First identify:
+
+- the author-controlled source location and exact draft;
+- a distinct workspace destination;
+- whether the environment supports two safe local Git repositories;
+- the requested service and scope.
+
+Create the invariant workspace structure in either a local workspace repository or the environment-provided task artifact area. Import or normalize the source into `manuscript/chapters/` without editorial changes. Record source and workspace identities in the manifest and project state.
+
+For an existing project, read [references/editorial-state.md](references/editorial-state.md) in full. Verify operating mode, both location identities, current review base, manuscript paths, active job, verdicts, proposals, approvals, exports, source-sync state, and shared records before resuming.
 
 If the necessary scope cannot be found, ask the user to provide it. A synopsis or sample cannot support a conclusive whole-manuscript verdict.
 
-## Route the User’s Intent
+## Route the User's Intent
 
 Infer the service when the prompt is clear. Ask only when ambiguity would materially change the level, scope, authority, or deliverable. Do not force every stage.
 
@@ -47,7 +58,7 @@ Infer the service when the prompt is clear. Ask only when ambiguity would materi
 | Correct grammar, usage, punctuation, spelling, factual consistency, and house style | Copyedit review | Chapter or batch; global pass for whole-book completion |
 | Evaluate representation, authenticity, permissions, factual claims, or legal-risk signals | Specialist review | Scope depends on the issue |
 | Check a final formatted artifact | Proofreading | Formatted proof; whole publication for completion |
-| “Edit my novel” with no usable level | Manuscript assessment | Complete manuscript |
+| "Edit my novel" with no usable level | Manuscript assessment | Complete manuscript |
 
 Read only the selected service reference:
 
@@ -77,7 +88,7 @@ Use [references/editorial-state.md](references/editorial-state.md) for exact sch
 
 ### 1. Freeze the review input
 
-Record the job ID, service, scope, reviewed commit SHA, manuscript paths, brief, shared records, and limitations. In `verdict-score-only` mode, record a stable artifact fingerprint or precise file identity instead of a commit SHA and persist it only in the task artifact area. Keep manuscript paths unchanged during review.
+Record the job ID, operating mode, service, scope, workspace review identity, source identity, manuscript paths, brief, shared records, and limitations. Keep both source and workspace manuscript paths unchanged during review.
 
 ### 2. Analyze without editing
 
@@ -85,48 +96,48 @@ Build an evidence ledger. Distinguish objective defects, supported concerns, def
 
 ### 3. Save and present the verdict
 
-Include service and scope, reviewed SHA or fallback artifact identity, readiness, overall verdict, editorial-acceptance score, score rationale, strengths, prioritized evidenced findings, next actions, and proposal status. Use `ready`, `ready-with-reservations`, `revision-needed`, `not-ready-for-requested-stage`, `provisional`, or `blocked`.
+Include service and scope, both review identities, readiness, overall verdict, editorial-acceptance score, score rationale, strengths, prioritized evidenced findings, next actions, and proposal status. Use `ready`, `ready-with-reservations`, `revision-needed`, `not-ready-for-requested-stage`, `provisional`, or `blocked`.
 
-In `verdict-score-only` mode, save every generated verdict, score revision, diagnostic, manifest, or normalized review artifact to the task artifact area described in [references/task-artifact-fallback.md](references/task-artifact-fallback.md), never to the manuscript project.
-
-The score may change after editorial conversation clarifies intent, context, audience, or an apparent inconsistency. A manuscript edit is not required. Preserve the earlier score, issue a revised score with its reason and conversation basis, and state whether the manuscript content changed. Clarification may improve, reduce, or leave the score unchanged; never raise it merely to reward agreement.
+The score may change after editorial conversation clarifies intent, context, audience, or an apparent inconsistency. Preserve the earlier score, issue a revised score with its reason and conversation basis, and state whether the manuscript content changed.
 
 ### 4. Save proposals when applicable
 
-For line editing, copyediting, and proofreading, produce source-ordered before/after proposals. For developmental work, produce recommendation records rather than rewritten prose by default. Give each proposal a stable ID, reviewed SHA, exact location and current text, proposed operation or replacement, rationale, effect, dependencies, and status.
+For line editing, copyediting, and proofreading, produce source-ordered before/after proposals. For developmental work, produce recommendation records rather than rewritten prose by default. Give each proposal a stable ID, review identity, exact location and current text, proposed operation or replacement, rationale, effect, dependencies, and status.
 
-The proposal file is a reviewable diff, not an applied edit. Keep manuscript files unchanged.
+The proposal file is a reviewable diff, not an applied edit. Keep the source and workspace manuscript unchanged.
 
-When proposals require author disposition, read [references/decision-tables.md](references/decision-tables.md) in full. Create a compact editable `decision-table.md` when the project is writable, unless the user prefers direct ID responses. Keep detailed before/after text in the proposal ledger.
-
-Skip this and all later intervention steps in `verdict-score-only` mode.
+When proposals require author disposition, read [references/decision-tables.md](references/decision-tables.md) in full. Create a compact editable `decision-table.md` unless the user prefers direct ID responses. Keep detailed before/after text in the proposal ledger. Immediately after creating the table, ask whether the user wants to review it now through an interactive, proposal-by-proposal dialogue or skip the dialogue for later.
 
 ### 5. Stop at the approval gate
 
 Present the verdict before asking whether to apply proposals. Accept all, selected IDs, modified wording, rejection, or deferral.
 
-If the decision-table path is used, quick-check the edited table for allowed values, complete modification wording, dependencies, conflicts, and stale text. Update its agent-check fields when writable. Quick-checking, editing, or discussing the table does not authorize manuscript changes. Require a separate explicit apply instruction, then persist the selected dispositions to `approvals.md` before applying anything.
+If the decision-table path is used, quick-check the table for allowed values, complete modification wording, dependencies, conflicts, and stale text. Quick-checking, editing, or discussing the table does not authorize manuscript changes. Require a separate explicit apply instruction, then persist the selected dispositions to `approvals.md` before applying anything.
 
-If table creation or update fails because of permissions, sandboxing, or format restrictions, use the chat or structured-block fallback in [references/decision-tables.md](references/decision-tables.md). Do not apply when approval provenance itself cannot be saved.
-
-### 6. Revalidate and apply
+### 6. Revalidate and apply to the workspace
 
 Only after explicit approval:
 
-1. confirm the proposal’s reviewed SHA;
-2. confirm no manuscript path changed since that commit;
+1. confirm the proposal's workspace and source review identities;
+2. confirm the reviewed workspace manuscript has not changed;
 3. confirm the exact current text still exists;
 4. detect overlaps and dependencies;
 5. mark invalid proposals `stale`;
-6. apply only accepted or accepted-with-modification proposals;
+6. apply only accepted or accepted-with-modification proposals to a new workspace revision;
 7. update shared records only for approved decisions;
-8. commit the approved batch with its approval and application records.
+8. verify the approved-only diff and manuscript integrity.
 
 If implementation exposes a new creative choice, stop and create a new proposal.
 
-### 7. Verify
+### 7. Deliver according to operating mode
 
-Compare the resulting commit with the reviewed commit. Verify that every manuscript change maps to approval, no unapproved proposal was applied, and no text or paragraph boundary was lost, duplicated, reordered, or changed without approval. Record the resulting SHA and cascade tasks.
+In `dual-repository-git` mode, commit the workspace batch, revalidate the source repository, apply only the same approved changes to the source draft, verify equivalence, and create a separate source commit. If source synchronization cannot complete safely, preserve the workspace commit and produce a manual-update export.
+
+In `artifact-workspace` mode, preserve the earlier workspace revision, generate a complete verified updated source under `exports/<job-id>/`, and ask the user to apply it manually. Never modify the source location.
+
+### 8. Verify and report
+
+Verify that every change maps to approval, no unapproved proposal was applied, and no text or paragraph boundary was lost, duplicated, reordered, or changed without approval. Record the resulting workspace identity, source commit or manual-update status, export identity when applicable, and cascade tasks.
 
 ## Scope and Completion Rules
 
@@ -137,6 +148,7 @@ Compare the resulting commit with the reviewed commit. Verify that every manuscr
 - Permit proof batches, but require the complete formatted publication and final global check for completion.
 - Limit specialist conclusions to the supplied and qualified scope.
 - Treat major upstream changes as invalidating affected downstream verdicts and proposals.
+- Distinguish workspace intervention completion from source synchronization completion.
 
 ## Operating Rules
 

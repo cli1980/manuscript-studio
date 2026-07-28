@@ -1,46 +1,34 @@
 # Manuscript Intake and Project Initialization
 
-Use this workflow before the first editorial review or when required project artifacts are missing.
+Use this workflow before the first editorial review or whenever the source record, normalized chapters, manifest, workspace state, or operating mode is missing.
 
-Read [task-artifact-fallback.md](task-artifact-fallback.md) before persistent setup. Perform safe Git preflight before creating any generated project files. If Git cannot support a safe baseline, keep user-supplied inputs untouched and redirect every generated setup and review output to the environment-provided task artifact area.
+Read [workspace-and-source.md](workspace-and-source.md) before creating durable files. Keep the author-controlled source and editorial workspace separate throughout setup.
 
-## Locate and qualify the manuscript
+## Identify the two locations
 
-Search available project files, attachments, and connected sources by title, author, chapter heading, and likely filename. Confirm the work identity, responsible user, intended draft, file type, completeness for the requested service, chapter order, and in-scope book components.
+Resolve and record:
 
-If the required artifact cannot be found, ask the user to provide it. Do not infer missing manuscript content or issue a conclusive whole-book verdict from a synopsis or sample.
+- the source location and exact source draft;
+- the workspace destination;
+- work identity, responsible user, version, file type, and requested scope;
+- whether the source is complete for the requested service;
+- whether either location already belongs to a repository;
+- whether the two locations are physically separate and not nested.
 
-## Inspect extraction quality
+Never initialize the workspace inside the source location. Do not relocate, overwrite, or rename the source merely to simplify setup.
 
-Check whether extraction preserves every paragraph in order, punctuation, capitalization, italics, dialogue layout, intentional spacing, scene breaks, notes, chapter headings, and non-text anchors. Identify OCR errors, missing pages, duplicated text, encoding problems, and ambiguous boundaries.
+## Select the operating mode
 
-Resolve objective extraction corruption against the received artifact. Report uncertain cases rather than silently normalizing them.
+Run the preflight in [workspace-and-source.md](workspace-and-source.md).
 
-## Normalize without editing
+Use `dual-repository-git` only when Git can safely manage the workspace and source as two separate local repositories. Otherwise use `artifact-workspace` and resolve the environment-provided task artifact or Outputs destination as the workspace. Do not invent an artifact path.
 
-In task-artifact fallback, perform any necessary extraction and normalization only inside the task artifact area; do not create `manuscript/chapters/` in the project.
-
-After Git preflight succeeds, if the manuscript is not already a verified chapter set:
-
-1. Use the appropriate document or PDF workflow to extract it.
-2. Identify real chapter boundaries from headings and structure, not arbitrary length.
-3. Save one UTF-8 Markdown file per chapter under `manuscript/chapters/`.
-4. Use stable sortable filenames.
-5. Preserve exact wording, paragraphing, punctuation, order, and intentional irregularities.
-6. Preserve scene and section breaks using the project convention.
-7. Compare the ordered chapter files with the received artifact.
-8. Verify that their bodies reproduce the complete manuscript exactly once.
-
-Normalization may fix extraction errors only when the artifact makes the intended characters or layout objectively clear. It must not improve grammar, spelling, style, continuity, or story.
-
-## Establish the project layout
-
-After Git preflight succeeds, use an existing convention when present. Otherwise create:
+Create the same workspace structure in either mode:
 
 ```text
-project/
+workspace/
 |-- source/
-|   |-- received-manuscript.<ext>
+|   |-- source-record.md
 |   `-- manuscript-manifest.md
 |-- manuscript/
 |   `-- chapters/
@@ -53,28 +41,61 @@ project/
 `-- exports/
 ```
 
-Keep the received artifact unchanged. Do not create version-numbered copies of the normalized chapter tree.
+The workspace `source/` directory contains provenance records, not the live source draft.
 
-## Write the manifest and brief
+## Inspect extraction quality
 
-In Git-managed setup, record in `source/manuscript-manifest.md`:
+Check whether extraction preserves every paragraph in order, punctuation, capitalization, italics, dialogue layout, intentional spacing, scene breaks, notes, chapter headings, and non-text anchors. Identify OCR errors, missing pages, duplicated text, encoding problems, and ambiguous boundaries.
+
+Resolve objective extraction corruption against the source. Report uncertain cases rather than silently normalizing them.
+
+## Import and normalize without editing
+
+If the source is not already a verified chapter set:
+
+1. extract it with the appropriate document or PDF workflow;
+2. identify real chapter boundaries from headings and structure, not arbitrary length;
+3. save one UTF-8 Markdown file per chapter under `manuscript/chapters/`;
+4. use stable sortable filenames;
+5. preserve exact wording, paragraphing, punctuation, order, and intentional irregularities;
+6. preserve scene and section breaks using the project convention;
+7. compare the ordered chapter files with the source;
+8. verify that their bodies reproduce the complete manuscript exactly once.
+
+Normalization may fix extraction errors only when the source makes the intended characters or layout objectively clear. It must not improve grammar, spelling, style, continuity, or story.
+
+## Write provenance and project records
+
+Record in `source/source-record.md`:
+
+- source location or attachment identity;
+- source draft path and format;
+- source repository root and commit in Git mode;
+- size, modification time, and checksum when feasible;
+- import date and method;
+- whether a workspace reference snapshot exists;
+- permission and source-update constraints.
+
+Record in `source/manuscript-manifest.md`:
 
 - work, author, and manuscript identity;
-- received artifact path, type, and checksum when feasible;
-- normalized chapter filenames in order;
-- chapter and total word counts;
+- ordered normalized chapter filenames and counts;
+- source identity from which they were imported;
 - completeness and extraction limitations;
-- intended Git root;
-- baseline commit SHA and tag after setup, or Git-failure status and artifact fingerprint in fallback mode.
+- operating mode and workspace identity;
+- source and workspace baselines in Git mode;
+- source and workspace fingerprints in artifact mode.
 
 Record known values in `editorial/editorial-brief.md`: audience, genre, goals, concerns, service, scope, language variety, style references, intervention level, protected features, target medium, exclusions, and constraints. Mark unknowns instead of inventing them.
 
-Create empty style and continuity records using `style-and-continuity.md`. Do not treat observations as approved decisions.
+Create empty style and continuity records using [style-and-continuity.md](style-and-continuity.md). Do not treat observations as approved decisions.
 
-## Hand off to Git
+## Establish baselines
 
-After exact-once verification, complete [git-versioning.md](git-versioning.md). Normally, do not begin editorial review until the baseline commit exists, the manifest records its full SHA, and tracked manuscript paths are clean. If Git is unavailable or setup fails, follow [task-artifact-fallback.md](task-artifact-fallback.md): stop project-local output, redirect all generated setup and review artifacts to the task artifact area, enter `verdict-score-only` mode, and create no proposals or manuscript changes.
+In `dual-repository-git` mode, follow [git-versioning.md](git-versioning.md) and create separate source and workspace baseline commits. Because a commit cannot contain its own SHA, first commit the baseline content, then record the resulting SHAs in a small metadata commit in the workspace. Do not rewrite the baseline commit.
+
+In `artifact-workspace` mode, fingerprint the source and normalized workspace chapters, assign a stable workspace revision ID, and preserve the initial artifact tree before review. Artifact mode supports verdicts, proposals, approvals, workspace revisions, and exports, but never direct source modification.
 
 ## Resume an existing project
 
-Verify the manifest against the received artifact and chapter set, confirm the Git root and baseline, inspect active job state, preserve established filenames and approvals, and resume from the recorded next action. Do not regenerate settled artifacts without a demonstrated integrity problem.
+Verify the source record against the current source, confirm the workspace mode and identity, inspect active job state, preserve established filenames and approvals, and resume from the recorded next action. If the source changed independently, preserve prior reports, import a new workspace revision, and mark affected proposals stale. Do not regenerate settled artifacts without a demonstrated integrity problem.

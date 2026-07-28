@@ -14,7 +14,7 @@ Identify the requested specialist lens and its completion scope:
 
 State the available evidence, the reviewer's limitations, and what qualified human expertise may still be required. A model-generated review is not legal advice and must not claim lived experience, community authority, or professional credentials it does not possess.
 
-Bind the review to the Git commit SHA and exact scope. Whole-book claims for permissions, recurring representation, or systemic factual consistency require the complete manuscript.
+Bind the review to the workspace review identity, source import identity, and exact scope. Whole-book claims for permissions, recurring representation, or systemic factual consistency require the complete manuscript.
 
 ## Review method
 
@@ -47,6 +47,6 @@ Create proposal IDs only when a bounded textual alternative is responsible and u
 
 ## Approval and completion
 
-Do not change the manuscript until the author approves exact proposal IDs. Revalidate the reviewed commit and current text, apply only accepted proposals, and commit the approved batch.
+Do not change the manuscript until the author approves exact proposal IDs. Revalidate both review identities and current text, apply only accepted proposals, and deliver the approved batch according to the operating mode.
 
 Mark the review complete only for its named lens and declared scope. A specialist verdict does not certify legal clearance, factual perfection, or universal cultural acceptance.

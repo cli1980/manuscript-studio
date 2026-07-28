@@ -6,7 +6,7 @@ Use this workflow for final error detection in a formatted proof after substanti
 
 Proofreading requires a stable, paginated or otherwise formatted proof such as PDF, print-ready pages, or a production-layout document. If only editable manuscript text is available, do not label the work proofreading; route it to copyediting or explicitly label it a limited surface-error review.
 
-Record the proof version, reviewed Git commit or production identifier, page count, and approved manuscript version used for comparison. Confirm whether this is the first proof or a correction round.
+Record the proof version, workspace review identity, source or production identity, page count, and approved manuscript version used for comparison. Confirm whether this is the first proof or a correction round.
 
 ## Review method
 
@@ -31,7 +31,7 @@ Do not modify the proof or source manuscript during review.
 
 ## Approval and application
 
-The author or production owner may approve individual IDs or a named proof batch. Revalidate the proof version and location before applying. Apply only approved corrections, record what changed, and create a new version or Git commit without overwriting the reviewed proof.
+The author or production owner may approve individual IDs or a named proof batch. Revalidate the proof version and location before applying. Apply only approved corrections, record what changed, and create a new workspace revision. Update the source only through the selected operating mode; never overwrite the reviewed proof.
 
 ## Completion
 

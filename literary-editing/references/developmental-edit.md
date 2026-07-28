@@ -6,7 +6,7 @@ Use this workflow for story architecture, argument or narrative structure, chara
 
 A final developmental verdict requires the complete manuscript in reading order. Chapter-level work may gather evidence or test a local revision, but it remains `provisional` until the whole manuscript and its dependencies have been reviewed.
 
-Confirm the reviewed Git commit SHA, manuscript manifest, project brief, and any prior assessment. If approved structural changes are already underway, identify the revision baseline and do not mix incompatible versions.
+Confirm the workspace review identity, source import identity, manuscript manifest, project brief, and any prior assessment. If approved structural changes are already underway, identify the revision baseline and do not mix incompatible versions.
 
 ## Review method
 
@@ -41,7 +41,7 @@ Developmental recommendations are not sentence-level diffs by default. Determini
 
 ## Approval and application
 
-The author may approve, reject, or defer recommendations independently. Before applying an approved deterministic operation, revalidate its reviewed commit SHA, source location, and dependencies. Apply only the accepted operation, update the continuity records, and commit it as a distinct approved batch.
+The author may approve, reject, or defer recommendations independently. Before applying an approved deterministic operation, revalidate both review identities, the workspace location, and dependencies. Apply only the accepted operation, update the continuity records, and deliver it according to the operating mode.
 
 After substantial author revision, mark affected downstream line-edit, copyedit, and proofing results stale. Resume from the new Git commit rather than carrying old locations forward by assumption.
 

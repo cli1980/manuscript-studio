@@ -37,7 +37,7 @@ Use a stable entity or thread ID, the asserted fact, source location, status, an
 During verdict work, add observations and proposed conventions without converting them to approved canon. After the author approves and an application batch succeeds:
 
 1. update affected entries to `approved` or `superseded`;
-2. record the applying Git commit and proposal IDs;
+2. record the applying workspace commit or revision, source commit or export identity, and proposal IDs;
 3. propagate consequences to dependent records;
 4. mark conflicting or location-sensitive verdicts stale when necessary.
 

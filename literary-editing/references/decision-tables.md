@@ -10,7 +10,7 @@ When proposals require author disposition and the project is writable, create:
 editorial/reports/<job-id>/decision-table.md
 ```
 
-Bind it to the same job ID and reviewed commit as `proposals.md`. Keep rows in proposal order.
+Bind it to the same job ID, workspace review identity, and source import identity as `proposals.md`. Keep rows in proposal order.
 
 Use:
 
@@ -18,7 +18,8 @@ Use:
 # Decision Table: <service and scope>
 
 - Job: <job-id>
-- Reviewed commit: <full SHA>
+- Workspace review identity: <commit or fingerprinted revision>
+- Source import identity: <commit or fingerprint>
 - Proposal ledger: <path>
 - Quick-check status: unchecked
 
@@ -51,11 +52,15 @@ Keep comments short enough for a Markdown cell. When exact modified wording is l
 
 Put `See LE-004 modification block` in that row's comment cell. Do not place the complete before/after proposal in the table.
 
+## Offer interactive review
+
+Immediately after creating the decision table, ask whether the user wants to go through it now or skip the dialogue for later. If the user chooses interactive review, present one unresolved proposal at a time with its current text, proposed change, rationale or effect, and allowed decisions; record each answer before continuing. If the user skips, preserve the unresolved table and stop at the approval gate.
+
 ## Quick check
 
 When the user asks to quick-check, validate the decision table without changing the manuscript:
 
-1. confirm the job ID, reviewed commit, and proposal-ledger path;
+1. confirm the job ID, both review identities, and proposal-ledger path;
 2. confirm that every expected proposal ID appears exactly once and no unknown ID appears;
 3. accept only the allowed decision values;
 4. require deterministic wording or an exact operation for `accept-with-modification`;
@@ -88,4 +93,4 @@ LE-002 | decision= | comment=
 6. if project files are writable, persist selected dispositions to `approvals.md` only after the user explicitly instructs application;
 7. if approval provenance cannot be written at all, remain validation-only and do not modify the manuscript.
 
-Record the fallback and its cause in project state or the eventual approval record. A failed table write does not force `verdict-score-only` mode when the Git-managed manuscript and required approval/application records remain writable.
+Record the fallback and its cause in project state or the eventual approval record. A failed table write does not change the operating mode when durable approval and application records remain writable.

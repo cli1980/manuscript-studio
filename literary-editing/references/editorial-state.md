@@ -4,57 +4,80 @@
 
 1. Durable layout
 2. Project state
-3. Verdict and score schema
-4. Clarification and score revision
+3. Review identity
+4. Verdict and score schema
 5. Proposal and approval schemas
-6. Editable decision tables
-7. Application and recovery
-8. Completion gates
+6. Decision tables
+7. Application and source delivery
+8. Recovery and completion gates
 
-Persist state so a review can stop, resume, and prove which changes were authorized.
+Persist state so a review can stop, resume, and prove which changes were authorized. Use the same schemas in `dual-repository-git` and `artifact-workspace` modes.
 
 ## Durable layout
 
 Use:
 
 ```text
-editorial/
-|-- editorial-brief.md
-|-- style-sheet.md
-|-- continuity-concordance.md
-|-- project-state.md
-`-- reports/
+workspace/
+|-- source/
+|   |-- source-record.md
+|   `-- manuscript-manifest.md
+|-- manuscript/
+|   `-- chapters/
+|-- editorial/
+|   |-- editorial-brief.md
+|   |-- style-sheet.md
+|   |-- continuity-concordance.md
+|   |-- project-state.md
+|   `-- reports/
+|       `-- <job-id>/
+|           |-- verdict.md
+|           |-- proposals.md
+|           |-- decision-table.md
+|           |-- approvals.md
+|           `-- application-report.md
+`-- exports/
     `-- <job-id>/
-        |-- verdict.md
-        |-- proposals.md
-        |-- decision-table.md
-        |-- approvals.md
-        `-- application-report.md
 ```
 
-Create a stable job ID from service, scope, and sequence, for example `line-ch04-001`. Do not reuse an ID for a different reviewed commit or scope.
-
-This project-local layout applies only in `git-managed` mode. If Git is unusable during setup, follow [task-artifact-fallback.md](task-artifact-fallback.md), store every generated output in the task artifact area, and create no project-local editorial state.
+Create a stable job ID from service, scope, and sequence, for example `line-ch04-001`. Do not reuse an ID for a different review identity or scope.
 
 ## Project state
 
 Record:
 
-- repository root and baseline tag/SHA;
-- operating mode: `git-managed` or `verdict-score-only`;
-- current manuscript commit SHA;
+- operating mode: `dual-repository-git` or `artifact-workspace`;
+- source location identity and update permissions;
+- workspace location identity;
+- source repository root, baseline, import commit, and tracked draft paths in Git mode;
+- workspace repository root, baseline, and current commit in Git mode;
+- source and workspace fingerprints and workspace revision IDs in artifact mode;
 - active job ID, service, and scope;
-- phase: `intake`, `normalizing`, `ready`, `reviewing`, `verdict-presented`, `awaiting-approval`, `applying`, `verifying`, `completed`, `paused`, or `blocked`;
-- reviewed commit SHA and manuscript paths;
-- fallback artifact identity or fingerprint when no reviewed commit exists;
-- verdict, proposal, and decision-table paths;
-- decision-table quick-check status or fallback mode when used;
+- phase: `intake`, `normalizing`, `ready`, `reviewing`, `verdict-presented`, `awaiting-approval`, `applying-workspace`, `verifying-workspace`, `syncing-source`, `awaiting-manual-source-update`, `completed`, `paused`, or `blocked`;
+- reviewed source and workspace identities;
+- manuscript paths;
+- verdict, proposal, decision-table, approval, report, and export paths;
+- decision-table quick-check status;
 - current proposal batch and unresolved query;
-- resulting commit SHA when applied;
-- next action;
-- stale downstream jobs and cascade tasks.
+- resulting workspace identity;
+- resulting source commit, `source-sync-pending`, or manual-update status;
+- next action, stale downstream jobs, and cascade tasks.
 
-Update state before each approval request and after every applied batch.
+Update state before each approval request, after every workspace application, and after source synchronization or export delivery.
+
+## Review identity
+
+Use one schema with mode-specific values:
+
+```markdown
+- Operating mode: dual-repository-git | artifact-workspace
+- Workspace review identity: <full commit SHA | revision ID and fingerprint>
+- Source import identity: <full commit SHA | artifact identity and fingerprint>
+- Workspace manuscript paths: <paths>
+- Source draft path or identity: <path or attachment identity>
+```
+
+Every verdict and proposal must carry both identities. In artifact mode, include enough size, modification-time, checksum, and chapter-checksum information to detect changes. Do not substitute a chat message for durable identity.
 
 ## Verdict schema
 
@@ -64,8 +87,9 @@ Save `verdict.md` before presenting it. Include:
 # Verdict: <service and scope>
 
 - Job: <job-id>
-- Reviewed commit: <full SHA>
-- Reviewed artifact: <file identity or fingerprint; use only when Git is unavailable>
+- Operating mode: dual-repository-git | artifact-workspace
+- Workspace review identity: <commit or fingerprinted revision>
+- Source import identity: <commit or fingerprint>
 - Readiness: ready | ready-with-limitations | provisional | blocked
 - Overall verdict: ready | ready-with-reservations | revision-needed | not-ready-for-requested-stage | provisional | blocked
 - Editorial-acceptance score: 1 | 2 | 3 | 4 | 5
@@ -80,21 +104,19 @@ Save `verdict.md` before presenting it. Include:
 ## Recommended next actions
 ```
 
-Omit whichever of `Reviewed commit` or `Reviewed artifact` does not apply.
-
 Interpret the score only within the declared service, scope, and readiness:
 
-- `1 — not accepted`: fundamental problems or insufficient evidence prevent acceptance at this editorial level.
-- `2 — major revision`: substantial work is needed before acceptance.
-- `3 — conditional acceptance`: the manuscript is viable, with material issues or decisions still unresolved.
-- `4 — accepted with limited reservations`: the manuscript substantially meets the requested editorial standard, with bounded remaining work.
-- `5 — accepted`: the reviewed scope meets the requested editorial standard without material reservations.
+- `1 - not accepted`: fundamental problems or insufficient evidence prevent acceptance at this editorial level.
+- `2 - major revision`: substantial work is needed before acceptance.
+- `3 - conditional acceptance`: the manuscript is viable, with material issues or decisions unresolved.
+- `4 - accepted with limited reservations`: the manuscript substantially meets the requested editorial standard, with bounded remaining work.
+- `5 - accepted`: the reviewed scope meets the requested editorial standard without material reservations.
 
-Give each finding a stable ID, location, evidence, effect, priority, and classification. Use `required`, `recommended`, `optional`, or `query` as editorial priority. Derive the acceptance score from the verdict as a whole; do not average finding counts or imply marketability.
+Give each finding a stable ID, location, evidence, effect, priority, and classification. Use `required`, `recommended`, `optional`, or `query`. Do not average finding counts or imply marketability.
 
 ## Clarification and score revision
 
-The author may clarify intent, context, audience, factual background, or the purpose of a defensible choice. Reassess only findings affected by that clarification. Manuscript change is not required for a score revision.
+The author may clarify intent, context, audience, factual background, or a defensible choice. Reassess only affected findings. Manuscript change is not required.
 
 Preserve the prior score and append:
 
@@ -109,18 +131,19 @@ Preserve the prior score and append:
 - Rationale: <why the score changed or remained>
 ```
 
-Clarification may improve, reduce, or leave the score unchanged. Do not treat author agreement as evidence, erase an unresolved textual effect, or require a change solely to justify a higher score.
+Do not treat agreement as evidence or raise a score merely to reward agreement.
 
 ## Proposal schema
 
 Save proposals in source order. For every textual change record:
 
 ```markdown
-## LE-001 — <short label>
+## LE-001 - <short label>
 
 - Status: pending
 - Priority: required | recommended | optional | query
-- Reviewed commit: <full SHA>
+- Workspace review identity: <commit or fingerprinted revision>
+- Source import identity: <commit or fingerprint>
 - Location: <chapter file + paragraph/anchor>
 - Current: <exact text>
 - Proposed: <exact replacement, insertion, deletion, or move>
@@ -129,23 +152,17 @@ Save proposals in source order. For every textual change record:
 - Dependencies: <IDs or none>
 ```
 
-The exact before/after records constitute the proposed diff. Keep the manuscript unchanged. If alternatives create materially different effects, record them under one query rather than pretending they are equivalent edits.
+The exact before/after records constitute the proposed diff. Keep both the workspace manuscript and source unchanged during review.
 
-For a `paragraph-break` proposal, additionally record `Classification`, `Operation`, `Left anchor`, `Right anchor`, `Current boundary state`, `Proposed boundary state`, whether wording is unchanged, `Reader-effect evidence`, and `Manuscript-pattern evidence`. Allowed change classifications are `clarity`, `attribution`, `narrative-shift`, `pacing`, `emphasis`, `unity`, and `consistency`. Record `intentional-exception` only as a retained assessment finding, not a change proposal. Never rely on invisible whitespace alone to define the approved operation.
+For a `paragraph-break` proposal, additionally record classification, operation, left and right anchors, current and proposed boundary states, whether wording is unchanged, reader-effect evidence, and manuscript-pattern evidence. Never rely on invisible whitespace alone.
 
-Allowed statuses are `pending`, `accepted`, `accepted-with-modification`, `rejected`, `deferred`, `withdrawn`, `stale`, `applied`, and `verified`.
+Allowed statuses are `pending`, `accepted`, `accepted-with-modification`, `rejected`, `deferred`, `withdrawn`, `stale`, `applied-workspace`, `applied-source`, `exported`, and `verified`.
 
-## Editable decision tables
+## Decision tables and approvals
 
-Read [decision-tables.md](decision-tables.md) in full when proposals need user disposition. Use `decision-table.md` as an editable checklist linked to the authoritative proposal ledger. The table may collect `accept`, `accept-with-modification`, `reject`, `defer`, or blank decisions plus comments.
+Read [decision-tables.md](decision-tables.md) in full when proposals need user disposition. A quick check validates IDs, values, modified wording, dependencies, overlaps, and staleness. It does not authorize changes or replace `approvals.md`.
 
-A quick check validates IDs, values, modified wording, dependencies, overlaps, and staleness. It does not authorize manuscript changes or replace `approvals.md`. Require a later explicit apply instruction and convert only the selected, valid rows into approval records.
-
-If the table cannot be written, use the defined chat or structured-block fallback. Record the fallback cause. Do not apply if the durable approval record cannot be written.
-
-## Approval schema
-
-Record the user’s disposition before application:
+Record the user's disposition before application:
 
 ```markdown
 ## <proposal ID>
@@ -156,32 +173,39 @@ Record the user’s disposition before application:
 - Recorded at: <timestamp or session marker>
 ```
 
-Discussion, questions, “continue,” approval of a verdict, or approval of a general direction are not proposal approval. Partial approval is valid. Do not force the user to decide unrelated proposals as one all-or-nothing block.
+Discussion, questions, "continue," approval of a verdict, or approval of a general direction are not proposal approval. Partial approval is valid.
 
-An edited or quick-checked decision table is not, by itself, an application instruction. When the user explicitly instructs application of validated rows, translate those decisions into this approval schema before revalidation.
+## Application and source delivery
 
-## Application and recovery
+Before workspace application, revalidate both review identities, exact current text, dependencies, and overlaps. Mark invalid records `stale`.
 
-Before application, revalidate the reviewed SHA, manuscript path diff, exact current text, dependencies, and overlaps. Mark invalid records `stale` and return them for review.
+After workspace application, save `application-report.md` with:
 
-After application, save `application-report.md` with:
-
-- reviewed and resulting SHAs;
+- source and workspace review identities;
+- resulting workspace commit or revision identity;
 - applied proposal IDs and approved wording;
 - rejected, deferred, pending, stale, and withdrawn IDs left unapplied;
 - style or continuity updates;
-- approved-only diff verification;
-- integrity verification, including an approved-only paragraph-boundary comparison for line edits;
+- approved-only diff and integrity verification;
+- operating-mode delivery result;
+- source commit and verification in Git mode, or export path and manual-update status in artifact mode;
 - cascade tasks and invalidated jobs.
 
-On resume, reread project state, the active job’s verdict, proposals, approvals, the relevant shared records, and Git status. Reconstruct from durable state when chat conflicts with files. Never reopen a settled item unless the user explicitly revises it or a later approved change invalidates it.
+In Git mode, workspace application and source synchronization are separate phases. A job may be `source-sync-pending` after the workspace commit succeeds.
 
-## Completion gates
+In artifact mode, create a complete verified updated source under `exports/<job-id>/`, preserve the earlier workspace revision, and set `awaiting-manual-source-update`. Never claim the source changed until the user confirms manual application.
 
-A review completes when the required scope was read, the verdict and acceptance score were saved or delivered, applicable proposals were saved, and no manuscript text changed. Approval is not required.
+## Recovery and completion gates
 
-In `verdict-score-only` mode, persist the diagnostic, artifact manifest, any necessary normalized review copy, verdict, score, and score revisions only in the task artifact area. Do not create project-local editorial state, proposals, decision tables, approval records, application reports, revised manuscripts, or alternate draft folders. If no task-artifact facility is available, write no generated editorial files into the project and deliver the permitted result in chat with the persistence limitation stated. Intervention cannot begin until Git is available, a clean baseline exists, and the manuscript is reviewed again against that commit.
+On resume, reread project state, source record, manifest, active verdict, proposals, approvals, relevant shared records, export state, and both repository statuses or artifact fingerprints. Reconstruct from durable state when chat conflicts with files.
 
-An intervention completes when every manuscript change has approval, the correct base was used, a new commit exists, the approved-only diff and text integrity were verified, shared state was updated, and the result was delivered.
+A review completes when the required scope was read, verdict and score were saved, applicable proposals were saved, and neither workspace manuscript nor source changed.
 
-Whole-book completion additionally requires every component exactly once and in order, the service-specific global pass, consistent shared records, no blocking unresolved item, and a final verdict bound to the exact assembled manuscript commit.
+A workspace intervention completes when every workspace change has approval, the correct review base was used, a new workspace commit or preserved artifact revision exists, and the approved-only diff and integrity were verified.
+
+Source delivery completes when either:
+
+- Git mode: the approved source update is verified and committed; or
+- artifact mode: a verified updated-source export is delivered and the workflow clearly states that the user must update the source manually.
+
+Whole-book completion additionally requires every component exactly once and in order, the service-specific global pass, consistent shared records, no blocking unresolved item, and a final verdict bound to the exact assembled workspace and source identities. Do not equate source-delivery completion with user confirmation of manual source replacement.

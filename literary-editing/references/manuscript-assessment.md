@@ -6,7 +6,7 @@ Use this workflow when the author wants an editorial diagnosis, readiness assess
 
 A final assessment requires the complete manuscript in reading order. If only a sample, synopsis, or selected chapters are available, label the result `provisional` and state which whole-book questions remain unanswered.
 
-Confirm the reviewed Git commit SHA and manuscript paths before reading. Do not edit the manuscript and do not create sentence-level change proposals during assessment.
+Confirm the workspace review identity, source import identity, and manuscript paths before reading. Do not edit the manuscript and do not create sentence-level change proposals during assessment.
 
 ## Review method
 

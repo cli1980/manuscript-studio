@@ -6,7 +6,7 @@ Use this workflow for correctness, consistency, internal continuity, and editori
 
 Copyediting may proceed by chapter or controlled batch. A whole-book completion claim requires a final global pass across the complete manuscript, style sheet, and continuity concordance.
 
-Bind the review to the Git commit SHA and exact manuscript paths. Load the current approved style and continuity records from `style-and-continuity.md`. If structural revision is still active, return `not-ready` or sharply limit the scope.
+Bind the review to the workspace review identity, source import identity, and exact manuscript paths. Load the current approved style and continuity records from `style-and-continuity.md`. If structural revision is still active, return `not-ready` or sharply limit the scope.
 
 ## Editorial lens
 
@@ -32,7 +32,7 @@ Do not edit manuscript files during review.
 
 ## Approval and application
 
-Accept approval at proposal, range, or named-batch granularity. Revalidate both the Git commit SHA and exact current text. Apply only accepted IDs, update approved style and continuity records, write the application report, and create a distinct Git commit.
+Accept approval at proposal, range, or named-batch granularity. Revalidate both review identities and the exact current text. Apply only accepted IDs, update approved style and continuity records, write the application report, and deliver the result according to the operating mode.
 
 If an approved change exposes a new issue, record a new proposal rather than expanding the approved change silently.
 

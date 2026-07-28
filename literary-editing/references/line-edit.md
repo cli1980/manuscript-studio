@@ -6,7 +6,7 @@ Use this workflow to improve prose at the sentence and paragraph level while pre
 
 A line edit may be performed on a chapter, scene, or coherent passage when enough surrounding context is available. Label local work `chapter-complete` or `batch-complete`; reserve `whole-book-complete` for a final cross-manuscript pass.
 
-Confirm that major structural decisions are sufficiently stable. Bind the review to the Git commit SHA and exact manuscript paths. Read the entire selected unit once for effect before proposing sentence changes.
+Confirm that major structural decisions are sufficiently stable. Bind the review to the workspace review identity, source import identity, and exact manuscript paths. Read the entire selected unit once for effect before proposing sentence changes.
 
 ## Editorial lens
 
@@ -83,12 +83,12 @@ Do not alter manuscript files while producing the verdict or proposal diff.
 
 The author may approve individual IDs, ranges, or a clearly identified batch. Partial approval is valid. When the author wants an editable checklist, use [decision-tables.md](decision-tables.md), quick-check the completed table without editing the manuscript, and require a separate explicit apply instruction. Use its chat or structured-block fallback if the table cannot be written.
 
-Revalidate the reviewed commit SHA and exact current text before applying. For paragraph-break proposals, also revalidate both anchors and the recorded boundary state; if any changed, mark the proposal stale and regenerate it.
+Revalidate both review identities and the exact current text before applying. For paragraph-break proposals, also revalidate both anchors and the recorded boundary state; if any changed, mark the proposal stale and regenerate it.
 
-Apply only approved proposal IDs, update any affected style or continuity records, write an application report, and create a distinct Git commit. Do not silently include nearby cleanup.
+Apply only approved proposal IDs, update any affected style or continuity records, write an application report, and deliver the result according to the operating mode. Do not silently include nearby cleanup.
 
 ## Completion
 
-Before completing a line-edit unit, compare its paragraph-boundary map with the reviewed commit. Verify that every inserted, removed, or moved break maps to an approved proposal and that no other boundary changed.
+Before completing a line-edit unit, compare its paragraph-boundary map with the recorded workspace review identity. Verify that every inserted, removed, or moved break maps to an approved proposal and that no other boundary changed.
 
 Work in manageable units. After all intended units are processed, perform a whole-book consistency pass for voice drift, repeated mannerisms, character differentiation, paragraphing drift, and cross-chapter effects. This pass should confirm coherence, not reopen every optional stylistic preference indefinitely.

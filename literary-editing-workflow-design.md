@@ -14,8 +14,10 @@ The workflow must:
 5. Analyze first and modify nothing while producing the editorial verdict.
 6. Represent proposed textual changes as a stable, reviewable diff.
 7. Apply only changes the user explicitly approves.
-8. Preserve the original manuscript, approved decisions, workflow state, and provenance of every applied change through a project-local Git history.
-9. Attach a scoped 1–5 editorial-acceptance score to every verdict, with revision history when author clarification changes the editorial understanding.
+8. Separate the author-controlled source location from the editorial workspace and preserve provenance across both.
+9. Use the same workspace structure whether it is a local Git repository or an environment-provided artifact workspace.
+10. When Git is available, manage workspace and source as two separate local repositories; otherwise never modify the source and deliver a verified updated-source export for manual application.
+11. Attach a scoped 1-5 editorial-acceptance score to every verdict, with revision history when author clarification changes the editorial evaluation.
 
 The workflow should follow professional editorial sequencing without requiring every project to use the full sequence.
 
@@ -51,10 +53,11 @@ It is not a mandatory execution path. A user may request any applicable service 
 
 When several editorial levels are requested together, perform higher-level diagnosis first. Do not spend time polishing sentences that a proposed structural revision would remove or substantially rewrite.
 
-### 2.5 Original preservation and Git binding
+### 2.5 Separate source and workspace
 
-Never edit the received source artifact. After normalization, use one canonical chapter set under Git rather than duplicating complete draft folders. Every verdict and proposal must identify the exact reviewed commit. If the manuscript changes before approval or application, revalidate or regenerate affected proposals against the new commit. If Git is unavailable or setup fails, redirect all generated outputs away from the project and into the current task artifact area, switch to verdict-and-score-only work, and do not create proposals or apply edits.
+The source location is the author-controlled draft. The workspace is the editorial working environment. Never use the source location itself as the workspace. Preserve the source baseline and record how each workspace revision derives from it.
 
+Use one invariant workspace layout in both modes. In `dual-repository-git` mode, manage the workspace and source draft as two separate, non-nested local repositories. In `artifact-workspace` mode, use task/output artifacts as the workspace, identify inputs with fingerprints, and never modify the source location. After approval, create a verified updated-source export for the user to apply manually.
 ### 2.6 Evidence over prescription
 
 Ground verdicts in manuscript evidence, authorial intent, intended audience, genre expectations, and the editorial brief. Treat story models and craft frameworks as optional diagnostic lenses, not universal rules.
@@ -107,44 +110,33 @@ If the manuscript is not chapter-separated:
 
 Normalization may correct extraction errors only when the source artifact makes the intended text objectively clear. It must not correct the author's prose.
 
-### 3.4 Create the manuscript manifest
+### 3.4 Create the source record and manuscript manifest
 
-Create a manuscript manifest containing:
+Create `source/source-record.md` inside the workspace containing:
+
+- source location or attachment identity;
+- source draft path and format;
+- source repository root and commit in Git mode;
+- size, modification time, and checksum when feasible;
+- import date, method, and update constraints.
+
+Create `source/manuscript-manifest.md` containing:
 
 - work title and manuscript identifier;
-- source artifact path;
-- source artifact checksum when feasible;
-- normalized chapter list in order;
-- word counts;
-- completeness status;
-- extraction or formatting limitations;
-- intended Git repository root;
-- baseline commit and tag, once created.
+- ordered normalized chapter list and word counts;
+- completeness and extraction limitations;
+- operating mode and workspace identity;
+- source identity from which the workspace was imported;
+- source and workspace baselines in Git mode;
+- source and workspace fingerprints in artifact mode.
 
-### 3.5 Initialize or reuse local Git
+### 3.5 Select the operating mode and establish baselines
 
-Begin Git setup only after the received manuscript has been normalized, split into verified chapter files, and recorded in the manifest.
+Run preflight before creating durable state. Resolve a source location and a distinct workspace destination. Confirm whether Git can safely manage two separate local repositories, whether author identity is available in both, whether either location already belongs to a repository, and whether unrelated changes would prevent safe setup.
 
-1. Resolve whether the manuscript project is already inside a Git repository.
-2. If an appropriate project repository already exists, reuse it. Do not create a nested repository.
-3. If a parent repository exists but its intended scope is unclear, ask before adding the manuscript project to it or creating a separate repository.
-4. If no repository exists, initialize one at the manuscript project root.
-5. Keep the repository local by default. Do not add a remote or push manuscript content unless the user explicitly requests it.
-6. Create a project `.gitignore` before the baseline commit. Ignore temporary extraction files, editor or office lock files, generated caches, and disposable exports. Keep normalized chapters and durable editorial records tracked.
-7. Verify that Git author identity is available. If a commit cannot be created because identity is missing, ask the user for the local repository identity rather than inventing one.
-8. Inspect the working tree. Never stage unrelated pre-existing files or changes, and never use a broad staging command that could capture them.
-9. Stage only the verified normalized chapters, manuscript manifest, agreed source artifact or its checksum record, and initial durable editorial files.
-10. Create the baseline commit with a clear message such as `chore(manuscript): establish normalized baseline`.
-11. Tag that commit `manuscript-baseline`.
-12. Record the full baseline commit SHA and tag in the manuscript manifest and project state.
-13. Confirm that the tracked manuscript tree is clean before beginning editorial review.
+Use `dual-repository-git` only when both repositories can be managed safely. Initialize or reuse one repository for the source draft and another for the invariant workspace. Never nest them. Establish a source baseline commit, import and verify the normalized manuscript, then establish a workspace baseline commit. Because a commit cannot contain its own SHA, record both baseline SHAs in a later workspace metadata commit rather than amending either baseline.
 
-The baseline commit is the immutable reference point. The checked-out manuscript files remain the single current draft. Later approved edits create new commits rather than new copies of the full chapter tree.
-
-If the supplied source is a large binary DOCX or PDF, retain it as the received source of record but do not rely on Git to provide meaningful textual diffs. Use its checksum and the normalized Markdown chapters to verify provenance. Track the binary only when project policy and repository size make that appropriate.
-
-If Git is unavailable, initialization fails, or no safe baseline commit can be created, stop writing generated files into the manuscript project. Resolve the environment-provided task artifact or Outputs destination without inventing a path and redirect every generated setup and review output there. Continue only in `verdict-score-only` mode. Permitted task artifacts are limited to the diagnostic, artifact manifest, any normalized review copy needed for assessment, the scoped verdict, acceptance score, and score revisions. Do not produce project-local editorial state, proposal diffs, decision tables, approval records, application reports, revised manuscripts, alternate project draft folders, or Git-bound completion claims. If no task-artifact facility exists, write no generated editorial files into the project and return the permitted result in chat with the persistence limitation stated. If Git later works, establish a clean baseline and start a new commit-bound review before proposing edits; treat fallback artifacts as reference evidence only.
-
+Otherwise use `artifact-workspace`. Resolve the environment-provided task artifact or Outputs destination without inventing a path, create the same workspace layout there, and fingerprint the source plus normalized chapters. Artifact mode supports the complete review, proposal, approval, workspace-application, and verification lifecycle. It never authorizes writes to the source location. After approval, preserve a new workspace revision and generate a complete verified updated-source export for manual application.
 ## 4. Intent and Service Routing
 
 ### 4.1 Build the editorial request
@@ -319,13 +311,15 @@ Record:
 
 - job identifier;
 - service and scope;
-- reviewed Git commit SHA;
+- operating mode;
+- workspace review identity;
+- source import identity;
 - chapter or page range;
 - editorial brief;
 - style and continuity resources used;
 - known limitations.
 
-Do not change the reviewed manuscript paths while the review is in progress. If durable review artifacts are committed during the review, preserve the original reviewed commit SHA as the manuscript base.
+Do not change the source or reviewed workspace manuscript paths while review is in progress. Preserve the original workspace and source review identities even when durable editorial artifacts create later revisions.
 
 ### Phase B: Analyze without editing
 
@@ -345,7 +339,7 @@ Do not write changes into the manuscript during analysis.
 Every verdict must contain:
 
 1. **Service and scope**
-2. **Git commit reviewed, or fallback artifact identity**
+2. **Workspace review identity and source import identity**
 3. **Readiness and limitations**
 4. **Overall verdict**
 5. **Editorial-acceptance score from 1 to 5 and rationale**
@@ -368,9 +362,7 @@ These labels summarize the evidence. The separate acceptance score means: 1 not 
 
 ### Phase D: Produce proposals when the service supports them
 
-Skip Phase D and every intervention phase in `verdict-score-only` mode.
-
-Use stable proposal identifiers, source locations, the reviewed Git commit SHA, and exact commit-bound text.
+Use stable proposal identifiers, source locations, both review identities, and exact identity-bound text in either operating mode.
 
 Each textual proposal records:
 
@@ -418,7 +410,7 @@ Questions, discussion, “continue,” or approval of the general direction do n
 
 Partial approval is valid. Apply only proposal IDs explicitly accepted or accepted with user-specified modifications. Pending and deferred proposals remain unapplied.
 
-When a writable project supports it, create a compact `decision-table.md` linked to the authoritative proposal ledger. Let the user mark each row `accept`, `accept-with-modification`, `reject`, `defer`, or leave it blank, with a comment or modification reference. Keep long exact wording in keyed modification blocks below the table rather than crowding cells.
+When a writable project supports it, create a compact `decision-table.md` linked to the authoritative proposal ledger. Let the user mark each row `accept`, `accept-with-modification`, `reject`, `defer`, or leave it blank, with a comment or modification reference. Keep long exact wording in keyed modification blocks below the table rather than crowding cells. Immediately after creating the table, ask whether the user wants to review it now through an interactive, proposal-by-proposal dialogue or skip the dialogue for later.
 
 On a “quick check,” validate IDs, allowed values, exact modified wording, dependencies, overlaps, and stale text; annotate the table when writable and return a concise status summary. A quick check, table edit, or request to review the table does not authorize manuscript changes. Require a separate explicit apply instruction, then translate the selected valid rows into durable approval records.
 
@@ -428,43 +420,26 @@ If permissions, sandboxing, or format restrictions prevent table creation or upd
 
 Before applying a proposal:
 
-1. verify that the proposal identifies the reviewed commit SHA;
-2. verify that manuscript paths have not changed since that commit, even if editorial reports have been committed separately;
-3. verify that the exact current text still exists at the recorded location;
-4. confirm that the tracked manuscript working tree is clean before application;
-5. check whether another approved proposal changes the same span;
-6. resolve proposal dependencies in a safe order;
-7. mark conflicting or invalidated proposals `stale`;
-8. return stale proposals for review instead of guessing.
+1. verify both recorded review identities;
+2. verify that workspace manuscript paths have not changed since review;
+3. verify that the exact current text still exists;
+4. check overlaps and dependencies;
+5. mark conflicting or invalidated proposals `stale`;
+6. return stale proposals for review instead of guessing.
 
-### Phase G: Apply approved changes
+### Phase G: Apply and verify the workspace revision
 
-Apply approved changes to the single checked-out manuscript tree. Never alter the received source artifact or rewrite the baseline commit.
+Apply only explicitly accepted proposals, accepted user modifications, and mechanical consequences that create no new creative choice. If implementation exposes a new meaningful choice, stop and create a new proposal.
 
-Apply only:
+Create a new workspace revision in either mode. In Git mode, commit the approved batch. In artifact mode, preserve the prior revision and assign the new revision a durable identity. Verify that every workspace change maps to approval and that no text or paragraph boundary was lost, duplicated, reordered, or altered without authorization.
 
-- explicitly accepted proposals;
-- user-specified modifications to accepted proposals;
-- mechanical consequences strictly required to implement an approved proposal, when those consequences do not create a new creative choice.
+### Phase H: Deliver the source result
 
-If implementation exposes a new meaningful choice, stop and create a new proposal. Stage only the approved manuscript changes and their approval/application records. Create one commit for the approved batch with a message that identifies the service, scope, and proposal IDs. Do not amend or rewrite earlier commits.
+In `dual-repository-git` mode, revalidate the source repository, translate only the approved workspace changes into the source format, verify equivalence, and create a separate source commit. If safe synchronization fails, preserve the workspace commit, mark `source-sync-pending`, and create a manual-update export.
 
-### Phase H: Verify and report
+In `artifact-workspace` mode, never modify the source location. Generate a complete verified updated source under `exports/<job-id>/`, preserve prior revisions, ask the user to apply it manually, and mark `awaiting-manual-source-update`.
 
-After application:
-
-1. compare the new manuscript commit with the reviewed commit;
-2. verify that every applied change maps to an approval record;
-3. verify that rejected, deferred, and pending proposals were not applied;
-4. check for missing, duplicated, reordered, or corrupted text and for paragraph-boundary changes without approved proposal IDs;
-5. update the style sheet and continuity record only for approved decisions;
-6. identify cascade tasks created by the applied changes;
-7. record the resulting commit SHA in the application report;
-8. tag only meaningful editorial milestones, not every small batch;
-9. present the application report and resulting commit to the user.
-
-The application report is not a new editorial pass. Any newly discovered optional improvement becomes a new review job.
-
+The application report records both review identities, the resulting workspace identity, the source commit or export identity, manual-update status when applicable, approved-only verification, and cascade tasks. It is not a new editorial pass.
 ## 7. Proposal Types by Editorial Service
 
 | Service | Verdict | Exact text diff | Other proposal form |
@@ -481,16 +456,14 @@ The application report is not a new editorial pass. Any newly discovered optiona
 
 ## 8. Shared Editorial State
 
-### 8.1 Durable project artifacts
+### 8.1 Durable workspace artifacts
 
-Recommended project layout:
+Use the same workspace layout in both operating modes:
 
 ```text
-project/
-|-- .git/
-|-- .gitignore
+workspace/
 |-- source/
-|   |-- received-manuscript.docx
+|   |-- source-record.md
 |   `-- manuscript-manifest.md
 |-- manuscript/
 |   `-- chapters/
@@ -507,10 +480,10 @@ project/
 |           |-- approvals.md
 |           `-- application-report.md
 `-- exports/
+    `-- <job-id>/
 ```
 
-Adapt names to an established project convention rather than creating duplicates. This layout becomes valid only after safe Git preflight succeeds. When Git setup cannot support a baseline, keep the manuscript project untouched by generated outputs and route the complete permitted fallback bundle to the current task artifact area.
-
+The workspace `source/` directory contains provenance records, not the live source draft. In Git mode this tree is a local workspace repository separate from the source repository. In artifact mode it lives under the environment-provided task/output artifact destination.
 ### 8.2 Editorial brief
 
 Record:
@@ -556,16 +529,13 @@ Distinguish manuscript facts, editor inferences, proposed changes, and user-appr
 
 For each review job, record:
 
-- service and scope;
-- reviewed Git commit SHA;
-- phase;
-- verdict status;
-- proposal set and statuses;
-- decision-table path, quick-check status, or fallback mode when used;
-- approval records;
-- applied output commit SHA;
-- verification result;
-- next action.
+- operating mode, service, and scope;
+- workspace review identity and source import identity;
+- phase, verdict, proposal, and approval state;
+- decision-table and quick-check status;
+- resulting workspace identity;
+- source commit, `source-sync-pending`, or manual-update export status;
+- verification result and next action.
 
 Suggested phases:
 
@@ -575,12 +545,13 @@ Suggested phases:
 - `reviewing`
 - `verdict-presented`
 - `awaiting-approval`
-- `applying`
-- `verifying`
+- `applying-workspace`
+- `verifying-workspace`
+- `syncing-source`
+- `awaiting-manual-source-update`
 - `completed`
 - `paused`
 - `blocked`
-
 ## 9. Cross-Stage Dependency Rules
 
 ### 9.1 Upstream changes
@@ -598,7 +569,7 @@ Create cascade tasks and mark affected downstream proposals or verdicts stale. D
 
 Line editing and copyediting may proceed chapter by chapter when:
 
-- the current manuscript commit SHA is recorded;
+- the current workspace manuscript identity is recorded;
 - relevant preceding chapters and continuity records are available;
 - each chapter receives its own verdict and proposal set;
 - shared decisions are added to the style sheet;
@@ -633,25 +604,23 @@ If the user revises the manuscript while a verdict or proposal set is pending:
 A review job is complete when:
 
 - the required scope has been read;
-- the verdict, editorial-acceptance score, and evidence are saved;
-- all expected proposal artifacts are saved, except in `verdict-score-only` mode, where every permitted generated output is stored in the task artifact area and no project-local editorial output is created;
-- no manuscript text has been changed;
-- the user has received the verdict and proposal status.
+- both review identities are recorded;
+- the verdict, score, evidence, and applicable proposals are saved;
+- neither workspace manuscript nor source changed during review;
+- the user received the verdict and proposal status.
 
 Approval is not required to complete a review.
 
-### 10.2 Intervention completion
+### 10.2 Intervention and source-delivery completion
 
-An intervention job is complete when:
+Workspace intervention is complete when every workspace change has approval, the correct review base was used, a new commit or preserved artifact revision exists, the approved-only diff is verified, and shared state is updated.
 
-- every applied change has an explicit approval record;
-- the application targets the correct reviewed commit;
-- a new approved-change commit has been created;
-- the approved-only diff has been verified;
-- shared editorial state has been updated;
-- cascade tasks have been recorded;
-- the user has received the application report and revised artifact.
+Source delivery is complete when either:
 
+- Git mode: the approved source update is verified and committed separately; or
+- artifact mode: a verified updated-source export is delivered with a clear instruction that the user must apply it manually.
+
+Keep `source-sync-pending` and `awaiting-manual-source-update` distinct from workspace intervention completion.
 ### 10.3 Whole-novel completion
 
 Do not claim that the novel has completed a service merely because every chapter was processed separately. Also verify:
@@ -660,7 +629,7 @@ Do not claim that the novel has completed a service merely because every chapter
 - shared style and continuity decisions are consistent;
 - cross-chapter references, chronology, arcs, and transitions have been reviewed at the level relevant to the service;
 - no chapter-level proposal or approval remains unresolved in a way that blocks completion;
-- the final verdict refers to the assembled manuscript at its exact commit SHA.
+- the final verdict refers to the assembled manuscript at its exact workspace and source identities.
 
 ## 11. Skill Packaging Implications
 
@@ -676,6 +645,7 @@ Keep the future `literary-editing/SKILL.md` focused on:
 
 Move detailed procedures into:
 
+- `references/workspace-and-source.md`
 - `references/manuscript-intake.md`
 - `references/manuscript-assessment.md`
 - `references/developmental-edit.md`
@@ -700,9 +670,9 @@ Before implementation, use at least these cases to test the workflow design:
 6. The manuscript changes after a line-edit proposal set is produced but before approval.
 7. A typeset PDF is supplied for proofreading, with a serious plot inconsistency discovered during the proof.
 8. All chapters have been copyedited separately, and the user asks whether the whole novel is complete.
-9. A normalized manuscript project is already inside a Git repository that contains unrelated uncommitted user changes.
-10. Git is unavailable or baseline creation fails; every generated setup and review output is redirected to the task artifact area, and the editorial output stops at verdict and score.
+9. The source draft and proposed workspace are separate local locations, but one contains unrelated uncommitted changes; setup must preserve those changes and avoid nested repositories.
+10. Git is unavailable in a web interface; the complete workspace is created as task artifacts, approved changes create a preserved workspace revision and updated-source export, and the source location remains untouched.
 11. The author clarifies intent after the verdict; the score is reconsidered without requiring a manuscript change.
 12. A line-edit unit contains both an overlong paragraph that may need splitting and short adjacent paragraphs that may need merging; the paragraph-boundary pass must assess every boundary and produce explicit approval-controlled operations.
 
-Success requires correct routing, honest scope labels, no pre-approval edits, exact approval provenance, preservation of the baseline, and appropriate whole-novel completion gates.
+Success requires correct routing, separate source and workspace identities, mode-invariant workspace structure, no pre-approval edits, exact approval provenance, safe dual-repository commits or manual source delivery, and appropriate whole-novel completion gates.
