@@ -20,7 +20,7 @@ This option is for browser-based AI chat services.
 
 1. Create a project in the chat service.
 2. Link or upload your manuscript to that project.
-3. Ask the agent to use `literary-editing`, `literary-translation`, or `literary-agent-querying`. If the agent does not already recognize the skill, give it the repository link and ask it to follow the relevant `SKILL.md`.
+3. Ask the agent to use `quillholic-skills` from GitHub and describe what you want to do. If the agent does not recognize the project, give it the repository link.
 
 The agent will use project files and chat output artifacts as its workspace. Because a web chat may not have Git or direct filesystem access, some version-control features will be unavailable. In that case, the agent will not modify the manuscript source directly: it will return the revised source for you to review and apply manually.
 
