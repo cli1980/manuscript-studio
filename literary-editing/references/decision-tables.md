@@ -54,7 +54,7 @@ Put `See LE-004 modification block` in that row's comment cell. Do not place the
 
 ## Offer interactive review
 
-Immediately after creating the decision table, ask whether the user wants to go through it now or skip the dialogue for later. If the user chooses interactive review, present one unresolved proposal at a time with its current text, proposed change, rationale or effect, and allowed decisions; record each answer before continuing. If the user skips, preserve the unresolved table and stop at the approval gate.
+Immediately after creating the decision table, ask whether the user wants to go through it now or skip the dialogue for later. If the user chooses interactive review, present one unresolved proposal at a time with its current text, proposed change, rationale or effect, and allowed decisions; record each answer before continuing. After the final proposal is answered, quick-check the completed decisions and summarize the result. If one or more accepted or accepted-with-modification rows are valid, explicitly ask whether the user wants to apply those changes now. Do not stop silently, and do not treat the question itself as authorization. If the user skips, preserve the unresolved table and stop at the approval gate.
 
 ## Quick check
 
@@ -73,7 +73,7 @@ When the user asks to quick-check, validate the decision table without changing 
 
 A quick check does not authorize manuscript changes. Do not create `approvals.md`, apply text, or treat “quick-check,” “review this table,” or the user's act of editing the table as an application command.
 
-After a successful quick check, require a separate explicit instruction such as `Apply all rows marked valid` or `Apply valid rows LE-001 through LE-010`. At that point, translate the selected table decisions into `approvals.md`, faithfully preserving comments and exact modified wording, then run normal revalidation and application.
+After a successful quick check, prompt for a separate explicit instruction, for example: `Would you like me to apply all valid accepted rows now?` A clear affirmative response to that prompt may authorize the stated scope; otherwise require an instruction such as `Apply all rows marked valid` or `Apply valid rows LE-001 through LE-010`. At that point, translate the selected table decisions into `approvals.md`, faithfully preserving comments and exact modified wording, then run normal revalidation and application.
 
 ## Fallback when the table cannot be written
 

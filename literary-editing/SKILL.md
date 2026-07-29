@@ -112,7 +112,7 @@ When proposals require author disposition, read [references/decision-tables.md](
 
 Present the verdict before asking whether to apply proposals. Accept all, selected IDs, modified wording, rejection, or deferral.
 
-If the decision-table path is used, quick-check the table for allowed values, complete modification wording, dependencies, conflicts, and stale text. Quick-checking, editing, or discussing the table does not authorize manuscript changes. Require a separate explicit apply instruction, then persist the selected dispositions to `approvals.md` before applying anything.
+If the decision-table path is used, quick-check the table for allowed values, complete modification wording, dependencies, conflicts, and stale text. After an interactive decision dialogue ends and the quick check succeeds, summarize the decisions and explicitly ask whether the user wants to apply the valid accepted changes now. This question is not authorization: wait for a clear affirmative apply instruction. Quick-checking, editing, or discussing the table does not authorize manuscript changes. Persist the selected dispositions to `approvals.md` before applying anything.
 
 ### 6. Revalidate and apply to the workspace
 
