@@ -52,6 +52,7 @@ After every save, reread the checkpoint and verify that:
 - every source paragraph is represented in order;
 - no text is missing or duplicated;
 - no unjustified information, implication, ambiguity, viewpoint, emphasis, or tone change has been introduced.
+- no applicable cultural position, social relation, oral effect, or pinned `(character or narrator, chapter, place)` voice has been flattened, exaggerated, or assigned to the wrong scope.
 
 ## Review State
 
@@ -61,6 +62,7 @@ Maintain `review-state.md` with:
 - a passage-status table covering every mapped passage, using `unstarted`, `provisional`, `reviewing`, or `finalized`;
 - the current passage number and workflow phase;
 - the current checkpoint path and next action;
+- the applicable `voice.md` primary keys and any provisional new or changed `(character or narrator, chapter, place)` entry discovered in the current passage;
 - the fixed Step 3.2 ledger with source locations, exact original-language excerpts, exact problematic English sentences or segments, and issue statuses;
 - the current issue and cursor location;
 - the last completed decision and any unresolved decision;
@@ -93,8 +95,8 @@ After explicit approval, apply only approved edits to the affected checkpoints, 
 
 ## Resume and Recovery
 
-When resuming, read and verify the passage map and its approval status, relevant source passage, checkpoint, `review-state.md`, `chapter-sanity-review.md` when chapter completion has begun, and assembled chapter before responding. If map approval is pending or cannot be verified, resume at the Step 2 human gate; do not extract passages or enter Step 3. If the chapter sanity review is pending, resume at its human gate by presenting the complete current diff and requesting explicit approval; do not deliver the durable chapter or advance.
+When resuming, read and verify `glossary.md`, the applicable `voice.md` entries, the passage map and its approval status, relevant source passage, checkpoint, `review-state.md`, `chapter-sanity-review.md` when chapter completion has begun, and assembled chapter before responding. If map approval is pending or cannot be verified, resume at the Step 2 human gate; do not extract passages or enter Step 3. If the chapter sanity review is pending, resume at its human gate by presenting the complete current diff and requesting explicit approval; do not deliver the durable chapter or advance.
 
 If chat history conflicts with saved state, reconstruct the workflow from the source files, saved checkpoints, and recorded user decisions. Do not skip or reopen settled issues. If a required checkpoint is missing, incomplete, or does not represent the expected full-passage phase, return to the phase that creates it rather than advancing.
 
-The completed chapter under `translated_english/`, normalized source chapters, and `glossary.md` are durable project artifacts. Everything under `.literary-translation-work/` remains temporary internal workflow state.
+The completed chapter under `translated_english/`, normalized source chapters, `glossary.md`, and `voice.md` are durable project artifacts. Everything under `.literary-translation-work/` remains temporary internal workflow state.

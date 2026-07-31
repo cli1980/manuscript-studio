@@ -1,6 +1,6 @@
 ---
 name: literary-translation
-description: Set up and translate literary works chapter by chapter through source discovery and normalization, a living glossary, whole-chapter analysis, systematic passage division with temporary internal passage files, two-path drafting, dialogue-based source-grounded editorial review, and durable completed-chapter output. Use when translating fiction, memoir, narrative nonfiction, poetry-inflected prose, or other literary writing from a source language into natural English, especially for new translation projects, passage-by-passage collaboration, close fidelity review, preservation of voice and reader experience, or continuity with earlier translated chapters.
+description: Set up and translate literary works chapter by chapter through source discovery and normalization, a living glossary and evolving voice record, whole-chapter analysis, systematic passage division with temporary internal passage files, two-path drafting, dialogue-based source-grounded editorial review, and durable completed-chapter output. Use when translating fiction, memoir, narrative nonfiction, poetry-inflected prose, or other literary writing from a source language into natural English, especially for new translation projects, passage-by-passage collaboration, close fidelity review, preservation of voice and reader experience, continuity with earlier translated chapters, or culturally dense writing shaped by dialect, oral storytelling, folklore, socially marked speech, or changing regional and historical registers.
 ---
 
 # Literary Translation
@@ -19,7 +19,7 @@ Use natural English rather than reproducing source-language syntax. Do not add e
 
 Determine the project state before beginning Step 1.
 
-For a new project, or an existing project missing normalized source files, `glossary.md`, or `translated_english/`, read [references/project-setup.md](references/project-setup.md) in full and complete the applicable setup steps.
+For a new project, or an existing project missing normalized source files, `glossary.md`, `voice.md`, or `translated_english/`, read [references/project-setup.md](references/project-setup.md) in full and complete the applicable setup steps.
 
 Read [references/workflow-state.md](references/workflow-state.md) in full before creating, verifying, or resuming an internal chapter workspace, and follow it throughout the chapter workflow.
 
@@ -27,7 +27,9 @@ For an existing active chapter, verify the required internal artifacts, then res
 
 Before starting the full chapter workflow, confirm access to the complete original-language chapter. If it cannot be located, ask the user to provide it. Do not perform whole-chapter analysis, passage division, two-path drafting, or finalization from a translation, summary, or incomplete excerpt in place of the original. An isolated passage may be translated only provisionally, as described under **Establish Chapter Context**.
 
-Treat `glossary.md` as living project state. Record user-approved or corrected terminology there promptly rather than leaving binding decisions only in chat history.
+Treat `glossary.md` and `voice.md` as living project state. Record user-approved or corrected terminology in `glossary.md` and durable voice or cultural-transfer decisions in `voice.md` promptly rather than leaving binding decisions only in chat history. Pin every voice entry to a character or narrator, chapter, and place; preserve earlier entries when the voice later changes.
+
+Initialize both files as ordinary UTF-8 Markdown artifacts during project setup and keep them directly editable by the user. Reread their current on-disk contents when starting or resuming work and before each chapter. Treat direct user edits as binding; preserve user-added content and merge updates locally rather than regenerating or silently overwriting either file.
 
 ## Establish Chapter Context
 
@@ -36,9 +38,13 @@ Obtain:
 - the complete source chapter;
 - prior translated text and established decisions when available;
 - `glossary.md` and its established names and terminology;
+- glossary-defined relational terms and any approved context-dependent or asymmetric renderings;
+- `voice.md` and the profiles pinned to the current character or narrator, chapter, and place;
 - any benchmark translation defining the target English style.
 
 If the user supplies only one isolated passage and no chapter context, translate it provisionally or request the complete chapter before fixing context-sensitive choices.
+
+During discovery, determine whether dialect, oral storytelling, folklore, culturally specific humor, kinship language, ritual language, social hierarchy, code-switching, or changing regional and historical registers materially shape the work. When they do, read [references/cultural-voice-and-dialect.md](references/cultural-voice-and-dialect.md) in full and apply it throughout analysis, drafting, review, and finalization. Do not map a source dialect automatically onto a named target-language dialect.
 
 Consult the immediately preceding completed English chapter when one exists. Consult other source chapters or prior translations only when the current chapter contains a specific continuity dependency, such as established terminology, recurring phrasing, a deliberate echo or motif, character knowledge or voice, chronology, or withheld information. Inspect only enough context to resolve that dependency; do not perform a full cross-chapter review by default. Use previous English translations to preserve continuity, but let the original source control whenever they conflict.
 
@@ -53,6 +59,7 @@ Read the chapter before sustained passage translation. Produce a concise chapter
 5. **Structure and rhythm** — scenes, pacing, tonal turns, parallels, and contrasts.
 6. **Continuity** — established terms, recurring images, repeated wording, and cross-chapter echoes.
 7. **Ambiguities and risks** — withheld information, degrees of certainty, cultural or technical issues, and likely translation distortions.
+8. **Voice and cultural movement** — the applicable character-or-narrator × chapter × place entries from `voice.md`, socially or culturally marked language, oral or folkloric structures, and any change within the chapter.
 
 Keep the brief concise and decision-oriented. Record only chapter-level observations that will affect passage boundaries, wording, voice, continuity, or review. Do not analyze individual sentences or draft translation yet.
 
@@ -88,16 +95,17 @@ Translate the complete passage into readable English while preserving as much of
 - viewpoint and narrative distance;
 - imagery, sensory detail, and meaningful repetition;
 - emotional relations, tone, register, and character voice.
+- culturally and socially marked effects, oral logic, forms of address, folk structures, and deviations from the applicable pinned voice entry when the cultural-voice module is active.
 
 Path A is a diagnostic translation tryout, not the final prose model. Keep it readable, but tolerate limited source-shaped phrasing when it makes omissions, ambiguities, emphasis, or interpretive shifts easier to detect. Do not make it awkward merely to imitate source-language syntax.
 
 #### Path B: Direct Literary Translation
 
-Translate the complete passage directly from the source and chapter context without reusing or referring to Path A's wording. Prioritize natural syntax, idiom, cadence, dialogue, local register, reader effect, and fit with the chapter brief.
+Translate the complete passage directly from the source and chapter context without reusing or referring to Path A's wording. Prioritize natural syntax, idiom, cadence, dialogue, local register, reader effect, and fit with the chapter brief. When the cultural-voice module is active, implement the applicable target-voice strategy from `voice.md` without forcing sameness across different characters or narrators, chapters, or places.
 
 #### Refine Path B
 
-Use Path B as the base text. Audit it against Path A and the source. Revise Path B wherever the audit reveals lost or altered information, implication, ambiguity, imagery, logic, viewpoint, emphasis, or tone.
+Use Path B as the base text. Audit it against Path A and the source. Revise Path B wherever the audit reveals lost or altered information, implication, ambiguity, imagery, logic, viewpoint, emphasis, tone, cultural position, social relation, oral effect, or applicable voice movement.
 
 Do not average the drafts, stitch them together, or replace natural Path B phrasing merely because Path A follows the source surface more closely. Recast each necessary correction within Path B's unified English prose.
 
@@ -136,7 +144,7 @@ Use the source as the sole authority. The chapter brief and established continui
 
 #### Build the Review Ledger
 
-Review the complete source passage and provisional translation once for both source fidelity and English prose. Check meaning, logic, implication, ambiguity, emphasis, viewpoint, tone, revelation, naturalness, idiom, cadence, voice, dialogue, and coherence. Natural English may rearrange syntax, but must not add, remove, explain, intensify, soften, or reorder information in a way that changes the reader's experience.
+Review the complete source passage and provisional translation once for both source fidelity and English prose. Check meaning, logic, implication, ambiguity, emphasis, viewpoint, tone, revelation, naturalness, idiom, cadence, voice, dialogue, and coherence. When the cultural-voice module is active, also check cultural density, social positioning, oral performance, forms of address, folk logic, character differentiation, and the character-or-narrator × chapter × place entry recorded in `voice.md`. Natural English may rearrange syntax, but must not add, remove, explain, intensify, soften, normalize, exoticize, or reorder information in a way that changes the reader's experience.
 
 Correct objective errors directly when only one credible correction exists, including grammar, reference, clear mistranslation or omission, unjustified addition, broken logic, inconsistent terminology, or accidental viewpoint, tense, or certainty shifts. Save those corrections to the provisional checkpoint before freezing the ledger.
 
@@ -196,7 +204,7 @@ When the cursor reaches `passage-end`, including when the ledger was empty:
 3. Read the passage continuously for cadence, transitions, tense, reference, and sound.
 4. Compare it with the source, chapter brief, preceding text, terminology, and approved decisions.
 5. Correct objective errors directly. If a meaningful choice is a qualified late blocker, resolve only that blocker through dialogue and return immediately to finalization. Do not reopen optional wording or conduct a second stylistic review.
-6. Save and assemble the finalized passage, and mark its state `finalized`, according to [references/workflow-state.md](references/workflow-state.md). Update `glossary.md` for terminology or name decisions.
+6. Save and assemble the finalized passage, and mark its state `finalized`, according to [references/workflow-state.md](references/workflow-state.md). Update `glossary.md` for terminology or name decisions and `voice.md` for durable, scoped voice or cultural-transfer decisions. Append a new pinned entry rather than overwriting an earlier character-or-narrator × chapter × place state.
 7. Present the final translation exactly as saved, add a short decision note only when it aids continuity, then stop and wait for the next passage.
 
 ## Complete the Chapter
@@ -225,7 +233,7 @@ If the target already represents the same chapter, update it. If its chapter ide
 
 Reread the saved durable file, verify that it matches the assembled chapter, then present the complete saved translation and make the file available.
 
-If the user asked to translate the full work or to continue, select the next untranslated chapter in source order and return to **Establish Chapter Context**. Carry forward `glossary.md`, relevant decisions, prior completed English chapters, and any benchmark translation. Otherwise, stop after delivering the completed chapter.
+If the user asked to translate the full work or to continue, select the next untranslated chapter in source order and return to **Establish Chapter Context**. Carry forward `glossary.md`, `voice.md`, relevant decisions, prior completed English chapters, and any benchmark translation. Otherwise, stop after delivering the completed chapter.
 
 ## Operating Rules
 
@@ -233,6 +241,7 @@ If the user asked to translate the full work or to continue, select the next unt
 - Preserve focal knowledge; do not introduce judgments unavailable to the viewpoint character.
 - Preserve deliberate repetitions and echoes without forcing identical English where the source meaning changes.
 - Distinguish voices through syntax, register, directness, and rhetorical behavior, not conspicuous quirks.
+- Preserve intentional voice development and code-switching; do not harmonize away changes pinned to character or narrator, chapter, or place.
 - Prefer precise action, image, rhythm, and silence over explanatory emotional language.
 - Make local fixes locally.
 - Treat user-approved wording and qualifications as binding continuity decisions unless the user revises them.
