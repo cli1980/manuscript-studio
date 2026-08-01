@@ -1,24 +1,27 @@
 # Query Package Specification
 
-Write all files beneath an environment-provided task-artifact directory. Do not invent an artifact path and do not write into the manuscript project.
+Write the complete output tree only beneath an environment-provided Codex task-artifact or Outputs destination, whose path or identifier must not be invented. Query outputs are never Git-managed. Do not write into a Git repository, manuscript project, editorial repository, or editorial-process folder. Explicitly designated manuscript and supporting inputs are read-only evidence, never part of the generated package unless a submission requirement and the user specifically request a manuscript artifact.
 
 ## Artifact layout
 
 ```text
 query-package/
-|-- package-manifest.md
-|-- intake-summary.md
-|-- master-query-letter.md
-|-- synopsis.md
-|-- author-bio.md
-|-- book-positioning.md
-|-- agent-shortlist.md
-|-- submission-checklist.md
-|-- series-overview.md                 # when applicable
-`-- tailored/
-    `-- <agent-slug>/
-        |-- query-letter.md
-        `-- submission-checklist.md
+|-- static/
+|   |-- package-manifest.md
+|   |-- intake-summary.md
+|   |-- master-query-letter.md
+|   |-- synopsis.md
+|   |-- author-bio.md
+|   |-- book-positioning.md
+|   |-- agent-shortlist.md
+|   |-- submission-checklist.md
+|   `-- series-overview.md                 # when applicable
+`-- on-demand/
+    `-- tailored-<agent-slug>.zip           # only when explicitly requested
+        `-- tailored/
+            `-- <agent-slug>/
+                |-- query-letter.md
+                `-- submission-checklist.md
 ```
 
 Do not copy the full manuscript into the package unless the user asks and the submission requirements require a separate manuscript artifact.
@@ -30,6 +33,7 @@ Record:
 - book title and source identity;
 - manuscript path or attachment identity without relocating it;
 - manuscript version, modification time, checksum, or Git SHA when available;
+- artifact workspace identity;
 - package creation and revision date;
 - confirmed target market;
 - artifact list;
@@ -39,9 +43,22 @@ Record:
 - readiness: `ready`, `ready-with-open-items`, or `not-ready`;
 - validation summary.
 
+The validation summary must report the number of material atomic claims audited, manuscript-mapped, separately author-confirmed, and unresolved. Any unsupported or overstated material claim forces `not-ready`.
+
 ## Intake summary
 
 Preserve the author-approved facts, positioning, series classification, relevant history, and open items. Record whether author-profile material accompanied the manuscript, which factors were approved for agent matching, and any disclosure boundary. This is package state, not text intended for agents.
+
+Include a manuscript fact ledger for every pitch-critical proposition. Each entry must contain:
+
+- proposed package wording or atomic claim;
+- claim type: `fact`, `character-belief`, `inference`, or `ambiguous`;
+- direct manuscript location, using chapter plus page, line, paragraph, or another stable locator available in the source;
+- confidence and credible alternative interpretation when relevant;
+- author confirmation when consequential inference or intentional ambiguity requires resolution;
+- permitted wording and any qualification or attribution that must be preserved.
+
+The ledger must reconcile chronology, entity identity, aliases, ships, locations, artifacts, institutions, programs, object provenance, causal relationships, motives, knowledge states, revelation timing, final choice, and ending. Narrative adjacency is not evidence of causation. A character statement is not automatically objective truth. Existing pitches, generated summaries, prior package prose, and editorial-process outputs are not manuscript evidence.
 
 ## Master query letter
 
@@ -116,7 +133,7 @@ Create an evidence-backed query order derived from the book-positioning profile.
 - limitations, uncertainties, agency concurrency rules, and prior-submission conflicts;
 - official source URLs, supplementary source URLs when used, and access dates;
 - a separate watchlist for closed, uncertain, or currently ineligible agents;
-- the author's selected tailoring targets, when decided.
+- explicitly requested tailored-letter targets, when any; do not treat shortlist selection or priority ordering as a tailoring request.
 
 Use current official agent or agency pages as the controlling source for eligibility and submission status. Do not rely on search-result snippets or third-party directories as final verification. Do not treat priority order as a prediction of representation, and do not hide weak evidence behind a numerical score.
 
@@ -148,7 +165,7 @@ The master checklist covers:
 - a transfer of the active priority order from `agent-shortlist.md`;
 - a reminder that sending requires separate explicit authorization.
 
-For a named agent, replace general guidance with verified requirements and record:
+When the author explicitly requests a tailored letter for an identified agent, create the corresponding tailored checklist with verified requirements and record:
 
 - author-supplied agent, agency, or submission-guidelines URL, when available;
 - official source URL;
@@ -165,6 +182,12 @@ For a named agent, replace general guidance with verified requirements and recor
 
 ## Tailored variants
 
-Create one folder per named agent. Change only what the verified requirements or genuine personalization justify. Preserve the book's factual pitch, metadata, and positioning across variants.
+Create `query-package/on-demand/tailored-<agent-slug>.zip` only after the author explicitly requests a tailored query letter and identifies that agent. Write the archive to the environment-provided task-artifact or Outputs destination so it is downloadable. Do not create, extract, stage, commit, or otherwise version a tailored folder or archive in any Git repository, and do not change the static package manifest solely to record it. If no downloadable artifact destination is available, state that the ZIP could not be persisted; do not redirect it into a repository or project folder.
+
+Use the approved static query results as the sole source for the tailored letter's story-side content. Derive the pitch, metadata, comparable-title language, biography, and positioning from `static/master-query-letter.md`, `static/book-positioning.md`, `static/author-bio.md`, `static/intake-summary.md`, and confirmed static package state. Do not return to the manuscript to invent a different pitch for the agent, and never use editorial-process outputs.
+
+Acquire current information about the identified agent and agency, using official sources as controlling evidence. Tailor only the salutation, genuine personalization, emphasis or ordering, formatting, and submission details that this agent evidence justifies. Preserve the static package's factual pitch, metadata, comparisons, biography claims, and positioning. If any of those need correction, revise and reconfirm the static package first, then regenerate the tailored letter from it.
 
 Never claim that an agent requested the work, met the author, represents a comparison title, or expressed a preference unless a current reliable source supports it.
+
+Treat every existing on-demand ZIP as invalid after a material correction to the static package from which it was derived. Regenerate it only upon the author's explicit request after the corrected static package passes the atomic-claim audit.

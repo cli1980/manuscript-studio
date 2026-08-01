@@ -46,6 +46,8 @@ Acquire enough information to answer:
 
 Derive these from the manuscript when possible. Ask the author to resolve competing protagonists, concealed premises, or intentionally ambiguous endings when they materially affect the pitch.
 
+Before presenting the answers, reconcile the manuscript's chronology, entities, object provenance, causal links, motives, knowledge states, revelation timing, and ending. Classify each consequential proposition as `fact`, `character-belief`, `inference`, or `ambiguous`. Do not convert adjacency into causation or a character's assertion into objective truth.
+
 ### Round 4: Manuscript-derived reader promise and positioning
 
 Present an evidence-based proposal for the author to confirm or correct:
@@ -146,6 +148,11 @@ Before drafting, show:
 ## Inferences requiring confirmation
 - ...
 
+## Manuscript fact ledger
+| Proposed wording or atomic claim | Type | Manuscript location | Confidence or alternative | Confirmation or required qualification |
+|---|---|---|---|---|
+| ... | fact / character-belief / inference / ambiguous | ... | ... | ... |
+
 ## Open but non-blocking
 - ...
 
@@ -161,4 +168,4 @@ Before drafting, show:
 - Selected tailoring targets:
 ```
 
-Require confirmation for facts that affect rights, debut status, category, series dependency, story outcome, biography, or agent personalization. Allow drafting with clearly marked open items for optional comps, platform links, or agent selection.
+Require separate confirmation for facts that affect rights, debut status, category, series dependency, story outcome, biography, or agent personalization, and for every consequential inference the package would present as settled. Approval of the positioning summary or package direction is not blanket approval of unlisted plot claims. Allow drafting with clearly marked open items for optional comps, platform links, or agent selection, but do not draft story-side package prose until the manuscript fact ledger is approved.

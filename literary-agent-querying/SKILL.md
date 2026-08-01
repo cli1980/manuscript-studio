@@ -1,6 +1,6 @@
 ---
 name: literary-agent-querying
-description: Build complete literary-agent query packages for novels through manuscript-grounded positioning, web research and priority ranking of suitable agents, a guided author interview, package drafting, and agent-specific validation. Use when Codex needs to identify and rank agents for a novel; prepare or revise a fiction query letter, hook, synopsis, author bio, book metadata, comparable-title positioning, series overview, submission checklist, or tailored agent submission; gather missing information through dialogue; adapt the workflow to any fiction genre, prose style, audience, or book length; and save all generated outputs as Codex task artifacts rather than in the manuscript project.
+description: Build complete literary-agent query packages for novels through manuscript-grounded positioning, claim-level evidence control, web research and priority ranking of suitable agents, a guided author interview, package drafting, and agent-specific validation. Use when Codex needs to identify and rank agents for a novel; prepare or revise a fiction query letter, hook, synopsis, author bio, book metadata, comparable-title positioning, series overview, submission checklist, or explicitly requested tailored agent submission; gather missing information through dialogue; adapt the workflow to any fiction genre, prose style, audience, or book length; and deliver static general materials and on-demand agent packages only through Codex task artifacts or Outputs, outside Git control.
 ---
 
 # Literary Agent Querying
@@ -20,9 +20,15 @@ Build a truthful, manuscript-grounded query package through a short guided dialo
 9. Follow each named agent's current official submission requirements exactly. Browse official agency or agent sources when current requirements or market status matter.
 10. Treat agent rankings as evidence-based priorities, not guarantees of fit or representation. Use official agent or agency sources to verify identity, categories, exclusions, submission status, and requirements. Use reputable interviews or deal records only as supplementary fit evidence, and record source dates. Factor relevant, author-approved information into selection and ordering only when it was supplied or acquired with the manuscript at intake. Otherwise omit author-side factors rather than guessing, requesting disclosure solely for ranking, or treating missing credentials, platform, identity, or connections negatively.
 11. Prepare materials only. Do not submit a query, contact an agent, upload a form, or send a message without separate explicit authorization.
-12. Save generated files only to the current Codex task-artifact or Outputs facility. Treat its path or identifier as opaque. Never create query outputs inside the manuscript or book project.
-13. If no task-artifact destination is available, return the package in clearly labeled chat sections and state that persistent artifact writing was unavailable. Do not redirect it into the manuscript project.
-14. Derive category, genre, target readership, prose essence, story type, tone, and reader promise from manuscript evidence. Use author input to confirm or correct the analysis, not as a substitute for reading the novel.
+12. Write all generated outputs only to the environment-provided Codex task-artifact or Outputs facility. Never write, stage, commit, or version query outputs in Git, the manuscript project, an editorial repository, or an editorial-process folder.
+13. Preserve the two output categories defined in [references/package-spec.md](references/package-spec.md): `query-package/static/` for general information and `query-package/on-demand/` for explicitly requested named-agent ZIP packages.
+14. Read manuscript and supporting inputs only from paths or attachments explicitly designated for this querying job. If a designated input is inside an editorial-process output folder, ask for an allowed source copy or attachment instead of reading it. Never use editorial assessments, normalized editorial manuscripts, proposals, style sheets, continuity records, reports, or exports as query evidence.
+15. Treat manuscript sources as read-only evidence. Existing pitches, previous query drafts, model-generated summaries, and package prose are leads to verify, not factual authorities.
+16. If no task-artifact or Outputs destination is available, return the applicable material in clearly labeled chat sections and state that persistent artifact writing was unavailable. Do not redirect it into any Git repository, manuscript project, or editorial-output folder.
+17. Derive category, genre, target readership, prose essence, story type, tone, and reader promise from manuscript evidence. Use author input to confirm or correct the analysis, not as a substitute for reading the novel.
+18. Do not create an agent-tailored query letter unless the author explicitly requests a tailored letter and identifies the target agent. A shortlist entry, priority selection, named-agent discussion, or request for general agent research is not authorization to create one.
+19. Deliver each explicitly requested tailored result as an unversioned downloadable ZIP beneath `query-package/on-demand/`. Preserve the tailored internal layout defined in [references/package-spec.md](references/package-spec.md).
+20. Do not state an inference, character belief, or ambiguity as objective fact. Do not assert causation from narrative adjacency, merge distinct entities or events for compression, or assign knowledge or motives to a character or faction without evidence.
 
 ## Run the Workflow
 
@@ -36,7 +42,10 @@ Identify:
 - requested package scope;
 - target publishing market or territory, when known;
 - named agent and the agent, agency, or submission-guidelines URL supplied by the author, when available;
-- current task-artifact destination.
+- allowed manuscript and supporting-input locations outside editorial-process output folders;
+- current task-artifact or Outputs destination.
+
+Create durable state only beneath the artifact destination. General materials go beneath `query-package/static/`; named-agent results go beneath `query-package/on-demand/` only when explicitly requested. Record the artifact workspace identity in `query-package/static/package-manifest.md`. Do not inspect Git merely because a designated manuscript or editorial repository happens to contain it.
 
 Read [references/questionnaire.md](references/questionnaire.md) in full before interviewing the author. Read [references/package-spec.md](references/package-spec.md) in full before drafting or validating outputs.
 
@@ -74,7 +83,7 @@ Order the eligible agents by:
 
 Use `Priority 1`, `Priority 2`, and `Priority 3` tiers, with an ordered list within each tier. Explain the evidence, fit, limitations, and priority rationale for every agent. Record official source URLs, supplementary sources, and access dates. Keep uncertain or closed-but-promising agents on a separate watchlist rather than mixing them into the active query order.
 
-Treat the shortlist as a research recommendation for author review. Do not generate tailored variants for every candidate automatically; ask the author which shortlisted agents to target.
+Treat the shortlist as a research recommendation for author review. Do not generate or propose tailored variants automatically. Wait for a separate author request that explicitly asks for a tailored letter and identifies the target agent.
 
 ### 4. Build the intake record through dialogue
 
@@ -89,8 +98,8 @@ Show the manuscript-derived profile, then ask the author to confirm, correct, or
 - author biography and relevant connection or credentials for package drafting and tailoring; treat them as ranking inputs only if they were already available at intake or the author explicitly requests reranking;
 - publication, representation, submission, and rights history;
 - standalone or series architecture;
-- named-agent requirements and personalization;
-- shortlist priorities and which agents, if any, the author wants to target first.
+- shortlist priorities;
+- named-agent requirements and personalization only after the author explicitly requests a tailored letter for an identified agent.
 
 Permit `unknown`, `not applicable`, and `decide with me`. Offer reasoned options when the author is unsure, but do not silently select a consequential answer.
 
@@ -104,15 +113,27 @@ Present a compact intake summary containing:
 - unresolved items;
 - proposed positioning;
 - planned artifacts;
-- proposed agent priorities, exclusions, and selected tailoring targets.
+- proposed agent priorities and exclusions;
+- any separately and explicitly requested tailoring target.
 
 Ask the author to correct or approve the summary. Do not block on minor optional fields, but label omissions in the package manifest.
 
+Before requesting approval, build a manuscript fact ledger in `query-package/static/intake-summary.md`. For every pitch-critical claim, record the proposed wording, claim type (`fact`, `character-belief`, `inference`, or `ambiguous`), manuscript location, confidence, and any required author confirmation. At minimum reconcile:
+
+- opening situation, chronology, inciting event, objectives, opposition, stakes, final-act turn, choice, and ending;
+- identities, aliases, ships, locations, artifacts, institutions, and programs that could be confused;
+- object provenance and event sequence;
+- each asserted causal connection;
+- each important motive and each character or faction's knowledge at the relevant time;
+- the timing and scope of major revelations.
+
+Do not draft from memory or from an earlier generated summary. Draft story-side content only from the approved ledger. Author approval of positioning or the package as a whole is not blanket confirmation of an unlisted inference.
+
 ### 6. Generate the package
 
-Create the applicable artifacts defined in [references/package-spec.md](references/package-spec.md). Always create a master query letter, synopsis, author biography, book-positioning sheet, prioritized agent shortlist, submission checklist, and package manifest. Create a series overview and agent-tailored variants only when applicable.
+Create the applicable artifacts defined in [references/package-spec.md](references/package-spec.md). Always create a master query letter, synopsis, author biography, book-positioning sheet, prioritized agent shortlist, submission checklist, and package manifest. Create a series overview when applicable. Create an agent-tailored result only after the author explicitly requests a tailored letter and identifies the target agent.
 
-Keep master materials independent of any single agent. Put agent-specific personalization and formatting in separately named variants.
+Keep static materials independent of any single agent. Derive every story-side element of a tailored letter from the approved static package, especially `static/master-query-letter.md`, `static/book-positioning.md`, `static/author-bio.md`, and confirmed static package state. Add or change only agent-specific salutation, personalization, emphasis, ordering, formatting, and submission details supported by acquired agent evidence. Do not introduce new story facts, metadata, comparisons, biography claims, or positioning directly into a tailored result; revise and reconfirm the static package first when a static-package change is needed.
 
 Shape the query from the confirmed positioning profile: foreground the dominant story engine, use an appropriate amount of worldbuilding, align the pitch's register with the prose essence without imitating the novel, and select metadata and comparisons for the actual readership.
 
@@ -120,7 +141,10 @@ Shape the query from the confirmed positioning profile: foreground the dominant 
 
 Check:
 
-- every story claim against the manuscript or confirmed intake;
+- every story claim through an atomic-claim audit: split each sentence into factual clauses and map every material clause to the fact ledger and its manuscript location;
+- that facts, character beliefs, inferences, and ambiguities retain their evidentiary status and degree of certainty;
+- that no causal relationship rests only on narrative adjacency;
+- that entity identity, chronology, object provenance, motives, knowledge states, revelation timing, and ending remain accurate;
 - title, category, genre, word count, and series language across all files;
 - that category, genre, target readership, prose essence, story type, and query emphasis remain supported by the novel;
 - that the query foregrounds character, conflict, choice, and stakes rather than explaining the whole world;
@@ -133,22 +157,32 @@ Check:
 - that closed, uncertain, or hard-conflict candidates are separated from the active query order;
 - that requested page counts, attachment rules, form fields, and one-agent-per-agency policies are honored;
 - that no placeholder remains hidden in a submission-ready file;
-- that every artifact is in the task-artifact destination and no manuscript-project file changed.
+- that every tailored ZIP corresponds to a separate explicit author request naming its target agent;
+- that each tailored letter derives its story, metadata, comparison, and biography content from the approved static package and differs only where verified agent evidence justifies tailoring;
+- that every general artifact is beneath `query-package/static/` and every tailored result is an unversioned ZIP beneath `query-package/on-demand/`;
+- that no query output entered Git control and no manuscript, editorial repository, or editorial-process output changed;
+- that no editorial-process output was read as evidence.
 
-Mark the package `ready`, `ready-with-open-items`, or `not-ready`, with a short reason.
+Mark the package `not-ready` if any material story clause lacks manuscript support or separately recorded author confirmation. Polished prose, internal consistency, and general author approval cannot override this failure. Otherwise mark it `ready` or `ready-with-open-items`, with a short reason.
 
 ## Revision and Tailoring
 
 When the author requests revisions, preserve the confirmed intake unless the author changes it. Regenerate only affected artifacts and update the manifest.
 
-For a named agent:
+Any correction to the fact ledger, master pitch, synopsis, metadata, biography, comparisons, or positioning invalidates every on-demand package derived from the superseded static package. Regenerate a named-agent ZIP only after the corrected static package has passed validation and been reconfirmed.
+
+Only after the author explicitly requests a tailored letter and identifies the agent:
 
 1. verify that the agent is currently open to the book's category;
 2. use official guidelines as the controlling source;
-3. record the source URL and access date in the tailored checklist;
-4. personalize only with a genuine, specific reason;
-5. omit personalization when no credible connection exists;
-6. never imply referral, acquaintance, request, or enthusiasm that is not documented.
+3. use the approved static query package as the sole source for story-side, metadata, comparison, and biography content;
+4. acquire and record current agent evidence, including official source URLs and access dates, in the tailored checklist;
+5. change only what the verified requirements or genuine personalization justify;
+6. package `tailored/<agent-slug>/query-letter.md` and `tailored/<agent-slug>/submission-checklist.md` as `query-package/on-demand/tailored-<agent-slug>.zip` in the task-artifact or Outputs destination;
+7. do not write or extract the tailored result in any Git repository, manuscript project, or editorial-process folder;
+8. omit personalization when no credible connection exists;
+9. never imply referral, acquaintance, request, or enthusiasm that is not documented;
+10. update and reconfirm the static package first if the requested variant exposes a static-package problem, then derive the variant from that revision.
 
 ## Completion Boundary
 
