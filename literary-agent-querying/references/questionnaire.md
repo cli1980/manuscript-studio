@@ -2,6 +2,12 @@
 
 Use this as a routing guide, not a form to dump on the author. First read the complete novel, extract factual answers, and derive a positioning profile. Then ask only for confirmation, correction, missing facts, or consequential choices in short conversational rounds.
 
+## Prerequisite refresh gate
+
+Before starting the rounds, inspect the current conversation and allowed query-package state for established prerequisite information. Show the author a compact list of what is available, when it was approved or sourced, any changed manuscript indicator, and any open items. Ask whether to reuse it, refresh all of it, or refresh named fields only. Pause for the answer unless the current request already states the choice.
+
+Do not make the author repeat established answers after they choose reuse. Do not let reuse preserve time-sensitive agent research; always reverify current agent and agency submission facts for a named-agent package.
+
 ## Interview sequence
 
 ### Round 1: Goal and source
@@ -119,15 +125,21 @@ For each named agent, establish or research:
 
 - the agent, agency, or submission-guidelines URL supplied by the author, when available;
 - official name, agency, and submission channel;
+- direct web-form URL or verified submission email address;
 - open or closed status;
 - represented categories and exclusions;
 - requested query fields, synopsis length, and sample pages;
-- attachment or paste rules;
+- exact website field labels, required status, limits, and the package content mapped to each field;
+- for email, the required recipient, subject line, body order, attachments, filenames, and formats;
+- attachment, upload, or paste rules and accepted file types;
 - simultaneous-submission and one-agent-per-agency rules;
 - response policy;
+- post-submission tracking details;
 - a genuine personalization basis.
 
-Ask the author to paste the link when one is available. Treat a supplied link as the starting point for customization, then confirm that it is current and official. If no link is available, locate the official agent or agency page. If official instructions conflict, identify the conflict and do not guess.
+Ask the author to paste the link or official agent or agency email when one is available. Treat it as the starting point for customization, then confirm that it is current and official. If no link is available, locate the official agent or agency page and direct submission route. Research the steps instead of asking the author to reconstruct them. Ask only for author-held information that cannot be obtained from official sources.
+
+Convert the verified requirements into a numbered submission sequence and a field-or-email mapping before packaging. If official instructions conflict or the direct route cannot be confirmed, identify the exact conflict, mark the named-agent package `not-ready`, and do not guess.
 
 ## Confirmation record
 
@@ -168,4 +180,4 @@ Before drafting, show:
 - Selected tailoring targets:
 ```
 
-Require separate confirmation for facts that affect rights, debut status, category, series dependency, story outcome, biography, or agent personalization, and for every consequential inference the package would present as settled. Approval of the positioning summary or package direction is not blanket approval of unlisted plot claims. Allow drafting with clearly marked open items for optional comps, platform links, or agent selection, but do not draft story-side package prose until the manuscript fact ledger is approved.
+Require separate confirmation for facts that affect rights, debut status, category, series dependency, story outcome, biography, or agent personalization, and for every consequential inference the package would present as settled. Approval of the positioning summary or package direction is not blanket approval of unlisted plot claims. Allow drafting with clearly marked open items for optional comps, platform links, or agent selection, but do not draft story-side package prose until the manuscript fact ledger is approved. Once the ledger is approved, it supports both the general package and any requirements-driven agent-specific synopsis; do not add a separate synopsis-approval round.

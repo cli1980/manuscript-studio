@@ -10,7 +10,6 @@ query-package/
 |   |-- package-manifest.md
 |   |-- intake-summary.md
 |   |-- master-query-letter.md
-|   |-- synopsis.md
 |   |-- author-bio.md
 |   |-- book-positioning.md
 |   |-- agent-shortlist.md
@@ -21,7 +20,8 @@ query-package/
         `-- tailored/
             `-- <agent-slug>/
                 |-- query-letter.md
-                `-- submission-checklist.md
+                |-- synopsis.md                       # only when required or explicitly requested
+                `-- submission-instructions.md        # required for every named-agent package
 ```
 
 Do not copy the full manuscript into the package unless the user asks and the submission requirements require a separate manuscript artifact.
@@ -35,6 +35,7 @@ Record:
 - manuscript version, modification time, checksum, or Git SHA when available;
 - artifact workspace identity;
 - package creation and revision date;
+- prerequisite refresh decision, decision date, fields reused, and fields refreshed;
 - confirmed target market;
 - artifact list;
 - evidence basis: manuscript, author-confirmed, or inferred;
@@ -43,7 +44,7 @@ Record:
 - readiness: `ready`, `ready-with-open-items`, or `not-ready`;
 - validation summary.
 
-The validation summary must report the number of material atomic claims audited, manuscript-mapped, separately author-confirmed, and unresolved. Any unsupported or overstated material claim forces `not-ready`.
+The validation summary must report the number of material atomic claims audited, manuscript-mapped, separately author-confirmed, and unresolved. Any unsupported or overstated material claim forces `not-ready`. A required agent-specific synopsis that is missing, noncompliant, or unsupported also forces `not-ready`.
 
 ## Intake summary
 
@@ -78,7 +79,7 @@ Use visible tokens such as `[AGENT NAME]` only in a file explicitly labeled draf
 
 ## Synopsis
 
-Default to a clear 1-2-page single-spaced synopsis unless the user or agent specifies otherwise. Include:
+Create a synopsis only inside an explicitly requested named-agent package when the target agent's verified guidelines require one or the author explicitly requests one. Follow the agent's specified length and format; when neither supplies a specification, default to a clear 1-2-page single-spaced synopsis. Include:
 
 - protagonist and initial situation;
 - inciting disruption;
@@ -88,6 +89,8 @@ Default to a clear 1-2-page single-spaced synopsis unless the user or agent spec
 - ending and material resolution.
 
 Use present tense and identify major characters clearly. Preserve the manuscript's actual causality. Do not conceal twists or end on a teaser.
+
+Generate the synopsis from the approved manuscript fact ledger and confirmed positioning, then audit every material atomic claim against the ledger and manuscript. Do not require separate author approval: the ledger is the approved source of truth. If drafting reveals an unsupported claim, consequential inference, or unresolved ambiguity, correct the ledger and obtain any confirmation required for that underlying entry before regenerating and revalidating the synopsis.
 
 ## Author biography
 
@@ -152,12 +155,12 @@ Create only when applicable. Include:
 
 Keep the master query focused on Book One. Do not attach the series overview to submissions unless requested.
 
-## Submission checklist
+## Submission checklist and named-agent instructions
 
 The master checklist covers:
 
 - manuscript completion and formatting;
-- query, synopsis, biography, and sample readiness;
+- query, biography, and sample readiness, plus whether a synopsis must be generated for each target agent;
 - title, genre, word-count, and series consistency;
 - publication and submission-history disclosure;
 - file naming and contact details;
@@ -165,7 +168,9 @@ The master checklist covers:
 - a transfer of the active priority order from `agent-shortlist.md`;
 - a reminder that sending requires separate explicit authorization.
 
-When the author explicitly requests a tailored letter for an identified agent, create the corresponding tailored checklist with verified requirements and record:
+For every explicitly requested named-agent package, create `tailored/<agent-slug>/submission-instructions.md`. It must be a standalone operating guide, not a research summary or generic checklist. The author should be able to use it without reopening the agency pages or asking what to do next.
+
+Begin with `Submit here`, then record:
 
 - author-supplied agent, agency, or submission-guidelines URL, when available;
 - official source URL;
@@ -173,6 +178,7 @@ When the author explicitly requests a tailored letter for an identified agent, c
 - open status;
 - fit and exclusions;
 - exact form or email requirements;
+- required synopsis length, format, and paste-or-attachment rule, or confirmation that no synopsis is requested;
 - page or chapter quantity;
 - attachment or paste rules;
 - agency concurrency rule;
@@ -180,14 +186,44 @@ When the author explicitly requests a tailored letter for an identified agent, c
 - personalization evidence;
 - unresolved conflicts.
 
+Follow with `Prepare these materials`, `Submission steps`, `Final check`, and `After submitting`. Use numbered steps containing one action each. Include filenames and formats for every upload, exact text-source mapping for every pasted item, and where applicable the requested sample-page or chapter boundary. Do not make the author infer whether an artifact should be pasted, attached, uploaded, or omitted.
+
+For a website or online form, include:
+
+- the direct form URL, not only the agency homepage;
+- any account, login, browser, or file-size prerequisite stated by the official source;
+- a field-by-field table with the visible field label, required or optional status, length or format limit, and the exact package file, section, or author-supplied value to enter;
+- the upload order and accepted file types;
+- the exact final review and submit actions.
+
+For email, include:
+
+- the verified recipient address;
+- the exact or recommended subject line;
+- the body assembly order, including where the salutation, query letter, synopsis, sample, and closing belong;
+- every attachment filename, format, and naming convention;
+- which materials must be pasted and which attached;
+- the exact final review and send actions.
+
+For both channels, include:
+
+- agency concurrency, simultaneous-submission, referral, and prior-submission constraints that affect this submission;
+- the stated response window or no-response policy;
+- the tracking entry the author should record after sending;
+- a reminder that the package has not been submitted and sending requires a separate explicit action.
+
+Use a current official agent or agency page or form as the controlling source. An official submission email received from the agent or agency may control when the author supplies it; record the sender, recipient, date, subject, and relevant instructions. If sources conflict or the direct route cannot be verified, describe the conflict or missing item precisely, mark the guide and package `not-ready`, and do not invent a resolution.
+
 ## Tailored variants
 
 Create `query-package/on-demand/tailored-<agent-slug>.zip` only after the author explicitly requests a tailored query letter and identifies that agent. Write the archive to the environment-provided task-artifact or Outputs destination so it is downloadable. Do not create, extract, stage, commit, or otherwise version a tailored folder or archive in any Git repository, and do not change the static package manifest solely to record it. If no downloadable artifact destination is available, state that the ZIP could not be persisted; do not redirect it into a repository or project folder.
 
+Always include `tailored/<agent-slug>/submission-instructions.md`. Validate that its direct route and numbered actions match the current official evidence and every file actually present in the ZIP. Do not mark a named-agent package ready when the guide is absent, generic, stale, internally inconsistent, or unable to tell the author exactly how to submit.
+
 Use the approved static query results as the sole source for the tailored letter's story-side content. Derive the pitch, metadata, comparable-title language, biography, and positioning from `static/master-query-letter.md`, `static/book-positioning.md`, `static/author-bio.md`, `static/intake-summary.md`, and confirmed static package state. Do not return to the manuscript to invent a different pitch for the agent, and never use editorial-process outputs.
 
-Acquire current information about the identified agent and agency, using official sources as controlling evidence. Tailor only the salutation, genuine personalization, emphasis or ordering, formatting, and submission details that this agent evidence justifies. Preserve the static package's factual pitch, metadata, comparisons, biography claims, and positioning. If any of those need correction, revise and reconfirm the static package first, then regenerate the tailored letter from it.
+Acquire current information about the identified agent and agency, using official sources as controlling evidence. Tailor only the salutation, genuine personalization, emphasis or ordering, formatting, and submission details that this agent evidence justifies. Preserve the static package's factual pitch, metadata, comparisons, biography claims, and positioning. If the agent requires a synopsis, generate it inside the tailored package from the approved fact ledger and match the verified requirements. If any static fact or positioning needs correction, revise and reconfirm the affected static state first, then regenerate the tailored materials from it.
 
 Never claim that an agent requested the work, met the author, represents a comparison title, or expressed a preference unless a current reliable source supports it.
 
-Treat every existing on-demand ZIP as invalid after a material correction to the static package from which it was derived. Regenerate it only upon the author's explicit request after the corrected static package passes the atomic-claim audit.
+Treat every existing on-demand ZIP as invalid after a material correction to the static package from which it was derived. Regenerate the ZIP only upon the author's explicit request after the corrected static package passes the atomic-claim audit. A revised agent-specific synopsis must pass a new claim audit but requires no separate author approval.
