@@ -51,7 +51,7 @@ Translates literary works chapter by chapter using source analysis, a living glo
 
 ### `literary-agent-querying`
 
-Reads and positions a novel, researches and prioritizes suitable literary agents, conducts a focused author interview, and prepares query letters, synopses, biographies, submission checklists, and agent-specific materials. Agent recommendations are verified against current requirements, and author information is considered only when it is available and approved for matching.
+Reads and positions a novel, builds a synopsis-complete story ledger, researches and prioritizes suitable literary agents, and prepares reusable query materials. Existing approved artifacts are reused by default. Only an explicit request to build a package for a specific agent creates an on-demand ZIP, including a synopsis only when that agent's verified guidelines request one.
 
 ## The idea behind the project
 
