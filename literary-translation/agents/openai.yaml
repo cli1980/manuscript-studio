@@ -3,9 +3,4 @@ interface:
   short_description: Translate literary chapters with source fidelity
   default_prompt: Use $literary-translation to translate this chapter passage by passage.
 policy:
-  products:
-  - chatgpt
-  - codex
-  - api
-  - atlas
   allow_implicit_invocation: true

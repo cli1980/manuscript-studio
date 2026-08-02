@@ -1,0 +1,36 @@
+{
+  "name": "quillholic-literary-suite",
+  "version": "0.1.0",
+  "description": "Manuscript-grounded literary editing, translation, and agent-query workflows.",
+  "author": {
+    "name": "Lin Shaw",
+    "url": "https://github.com/cli1980"
+  },
+  "homepage": "https://github.com/cli1980/quillholic-skills",
+  "repository": "https://github.com/cli1980/quillholic-skills",
+  "license": "MIT",
+  "keywords": [
+    "literary-editing",
+    "literary-translation",
+    "literary-agents",
+    "manuscripts",
+    "query-letters"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Quillholic Literary Suite",
+    "shortDescription": "Edit, translate, and query literary manuscripts.",
+    "longDescription": "Professional manuscript-grounded workflows for literary editing, Chinese-English literary translation, agent research, and submission-ready query packages.",
+    "developerName": "Lin Shaw",
+    "category": "Productivity",
+    "capabilities": [
+      "Write"
+    ],
+    "websiteURL": "https://github.com/cli1980/quillholic-skills",
+    "defaultPrompt": [
+      "Assess and edit my literary manuscript.",
+      "Translate this literary manuscript.",
+      "Build a literary-agent query package."
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "quillholic",
+  "interface": {
+    "displayName": "Quillholic"
+  },
+  "plugins": [
+    {
+      "name": "quillholic-literary-suite",
+      "source": {
+        "source": "local",
+        "path": "./plugins/quillholic-literary-suite"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+interface:
+  display_name: Literary Translation
+  short_description: Translate literary chapters with source fidelity
+  default_prompt: Use $literary-translation to translate this chapter passage by passage.
+policy:
+  allow_implicit_invocation: true

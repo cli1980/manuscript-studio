@@ -1,0 +1,4 @@
+interface:
+  display_name: "Literary Editing"
+  short_description: "Two-location, approval-gated manuscript editing"
+  default_prompt: "Use $literary-editing to set up separate source and workspace locations, assess my manuscript, and manage approved revisions safely."

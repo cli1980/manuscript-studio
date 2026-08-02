@@ -4,6 +4,19 @@
 
 The project is designed to keep authors and translators focused on ideas, voice, and story instead of repeatedly searching dictionaries and thesauruses, debating commas and colons, revisiting grammar books, or hunting for typos. It provides structured, reviewable workflows that help AI agents streamline the path from manuscript development through translation, editing, and querying—without taking creative authority away from the author.
 
+## Install as a ChatGPT and Codex plugin
+
+The three skills are also packaged as the skills-only
+`quillholic-literary-suite` plugin. Add this GitHub repository as a
+marketplace:
+
+```text
+codex plugin marketplace add cli1980/quillholic-skills --ref main
+```
+
+Then open the Plugins Directory in ChatGPT Work or Codex, select the
+`Quillholic` marketplace, and install `quillholic-literary-suite`. Start a
+new conversation after installation.
 ## Getting started
 
 No installation is required. You can ask an AI agent to use a skill by name, or point it to the project:

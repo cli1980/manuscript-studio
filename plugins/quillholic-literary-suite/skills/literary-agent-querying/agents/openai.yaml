@@ -1,0 +1,4 @@
+interface:
+  display_name: "Literary Agent Querying"
+  short_description: "Research agents and build literary query packages"
+  default_prompt: "Use $literary-agent-querying to build or refresh my manuscript-grounded static query package, research suitable agents, or reuse approved artifacts to build a package for a specific agent."
