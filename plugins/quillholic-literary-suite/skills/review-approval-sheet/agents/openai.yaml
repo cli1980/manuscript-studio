@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Approval Sheet"
+  short_description: "Review approval items through an interactive UI"
+  default_prompt: "Use $review-approval-sheet to validate and present this approval sheet as an interactive review."

@@ -9,6 +9,7 @@ Store chapter workflow state under:
 ```text
 .literary-translation-work/<work>/<chapter>/
 ├── passage-map.md
+├── passage-map-review.json
 ├── source-passages/
 │   ├── passage-01.md
 │   └── passage-02.md
@@ -16,7 +17,9 @@ Store chapter workflow state under:
 │   ├── passage-01.md
 │   └── passage-02.md
 ├── review-state.md
+├── issue-review.json
 ├── chapter-sanity-review.md
+├── chapter-sanity-review.json
 └── assembled/
     └── chapter.md
 ```
@@ -33,7 +36,7 @@ Save `passage-map.md` in the chapter working folder. For every passage, record:
 - its opening and closing source words;
 - the structural reason for the boundary.
 
-Also record the map's approval status as `pending` or `approved`. While approval is pending, the map is a proposal: do not create or update `source-passages/`, initialize passage checkpoints, or begin Step 3. If the user negotiates any boundary, redo Step 2, replace the pending proposal with the complete revised map, and request explicit approval again. Record `approved` only after the user approves the current complete map.
+Also record the map's approval status as `pending` or `approved`. Maintain synchronized `passage-map-review.json` interaction state with stable `PM###` passage-unit and closing-boundary IDs, including one map item for a single-passage chapter, the complete map identity, and a separate final-closure gate. The Markdown map is authoritative; the JSON is the review interface. While approval is pending, do not create or update `source-passages/`, initialize passage checkpoints, or begin Step 3. If the user negotiates any boundary, parse the response against the current revision, redo Step 2, replace the pending proposal and interface with the complete revised map, invalidate affected approvals and closure, and request review again. Record `approved` only after every current map item is resolved and the user separately confirms final closure of the complete map.
 
 Save each extracted source passage under `source-passages/`. Each file must contain:
 
@@ -64,6 +67,7 @@ Maintain `review-state.md` with:
 - the current checkpoint path and next action;
 - the applicable `voice.md` primary keys and any provisional new or changed `(character or narrator, chapter, place)` entry discovered in the current passage;
 - the fixed Step 3.2 ledger with source locations, exact original-language excerpts, exact problematic English sentences or segments, and issue statuses;
+- the optional synchronized `issue-review.json` revision and status when the shared interactive interface is used;
 - the current issue and cursor location;
 - the last completed decision and any unresolved decision;
 - any late blocker and why it qualifies.
@@ -89,9 +93,9 @@ Maintain `chapter-sanity-review.md` for the completion gate. Record:
 - unresolved user feedback and the next action;
 - the user's explicit approval of the complete current diff.
 
-Set the status to `pending` before presenting the diff. Do not apply proposed edits, write or overwrite the durable chapter file, declare completion, or advance to another chapter while it is pending. If the user negotiates any item, redo the sanity check as needed, replace the prior proposal with the complete revised diff, and request explicit approval again. Rebuilding or otherwise changing the assembled chapter invalidates any earlier approval unless the change consists only of applying the exact approved diff.
+When edits exist, maintain synchronized `chapter-sanity-review.json` interface state with stable `SC###` edit IDs, the assembled-chapter identity, item dispositions, revision, and separate final closure. The Markdown diff remains authoritative. Set the status to `pending` before presenting the diff. Do not apply proposed edits, write or overwrite the durable chapter file, declare completion, or advance while any item or final closure remains pending. If the user negotiates any item, parse against the saved revision, redo the sanity check as needed, replace the prior complete diff and synchronized interface, and request review again. Rebuilding or otherwise changing the assembled chapter invalidates any earlier approval unless the change consists only of applying the exact approved diff.
 
-After explicit approval, apply only approved edits to the affected checkpoints, rebuild the assembled chapter, verify it, and mark the matching sanity review `approved`. If verification identifies another necessary edit, set the gate back to `pending` and present a new complete diff. Durable chapter output requires an `approved` sanity review matching the assembled chapter.
+After parsed final closure—or direct explicit approval when the saved diff contains no edits—apply only accepted edits to the affected checkpoints, rebuild the assembled chapter, verify it, and mark the matching sanity review `approved`. If verification identifies another necessary edit, set the gate back to `pending` and present a new complete diff and interface. Durable chapter output requires an `approved` sanity review matching the assembled chapter.
 
 ## Resume and Recovery
 

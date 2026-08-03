@@ -4,13 +4,16 @@ Use an editable decision table to make proposal review efficient without weakeni
 
 ## Durable artifact
 
-When proposals require author disposition and the project is writable, create:
+When proposals require author disposition and the project is writable, create two synchronized review files:
 
 ```text
 editorial/reports/<job-id>/decision-table.md
+editorial/reports/<job-id>/decision-table.json
 ```
 
-Bind it to the same job ID, workspace review identity, and source import identity as `proposals.md`. Keep rows in proposal order.
+`decision-table.md` is the authoritative compact editorial disposition record. `decision-table.json` is the revision-bound interface state consumed by the shared renderer and parser. Bind both to the same job ID, workspace review identity, source import identity, proposal-ledger identity, and interface revision. Keep rows in proposal order and synchronize IDs, statuses, user responses, and quick-check results after every submission. Never let the interface JSON silently override the proposal ledger or Markdown table.
+
+Read the sibling [review-approval-sheet skill](../../review-approval-sheet/SKILL.md) in full before creating or processing the JSON. Use its editing adapter: `accept`, `accept with modification`, `reject`, `defer`, and `revise proposal`. A modification or revision requires a note; `revise proposal` reopens the item and is not acceptance.
 
 Use:
 
@@ -52,9 +55,13 @@ Keep comments short enough for a Markdown cell. When exact modified wording is l
 
 Put `See LE-004 modification block` in that row's comment cell. Do not place the complete before/after proposal in the table.
 
-## Offer interactive review
+## Interactive review
 
-Immediately after creating the decision table, ask whether the user wants to go through it now or skip the dialogue for later. If the user chooses interactive review, present one unresolved proposal at a time with its current text, proposed change, rationale or effect, and allowed decisions; record each answer before continuing. After the final proposal is answered, quick-check the completed decisions and summarize the result. If one or more accepted or accepted-with-modification rows are valid, explicitly ask whether the user wants to apply those changes now. Do not stop silently, and do not treat the question itself as authorization. If the user skips, preserve the unresolved table and stop at the approval gate.
+Map each proposal to one shared-interface item. Put the short description in `summary`; put exact current text, proposed text or operation, rationale, effect, priority, dependencies, and source location in labeled `details`. Validate the JSON, then render the interactive sheet by default. It may show all proposals with compact navigation and submit any explicitly decided subset; unresolved items remain pending.
+
+Parse the returned revision-bound envelope before changing records. Apply this editing skill's dependency, overlap, identity, and staleness rules; then update the Markdown table, JSON state, and quick-check fields and increment the interface revision. A request to revise a proposal changes the proposal ledger, reopens that proposal and affected dependents, and requires a new disposition. It does not accept the replacement.
+
+After the final proposal is answered, quick-check the completed decisions and summarize the result. If one or more accepted or accepted-with-modification rows are valid, explicitly ask whether the user wants to apply those changes now. Do not stop silently, and do not treat the question itself as authorization. If the user asks to postpone review, preserve the unresolved files and stop at the approval gate.
 
 ## Quick check
 
@@ -71,16 +78,16 @@ When the user asks to quick-check, validate the decision table without changing 
 9. update `Agent check` for each row and the table's quick-check status when writable;
 10. return a concise count of valid, undecided, needs-input, stale, and conflicting rows.
 
-A quick check does not authorize manuscript changes. Do not create `approvals.md`, apply text, or treat “quick-check,” “review this table,” or the user's act of editing the table as an application command.
+A quick check does not authorize manuscript changes. Do not create `approvals.md`, apply text, or treat “quick-check,” “review this table,” an interactive-sheet submission, or the user's act of editing the table as an application command.
 
 After a successful quick check, prompt for a separate explicit instruction, for example: `Would you like me to apply all valid accepted rows now?` A clear affirmative response to that prompt may authorize the stated scope; otherwise require an instruction such as `Apply all rows marked valid` or `Apply valid rows LE-001 through LE-010`. At that point, translate the selected table decisions into `approvals.md`, faithfully preserving comments and exact modified wording, then run normal revalidation and application.
 
 ## Fallback when the table cannot be written
 
-If filesystem permissions, sandboxing, format limitations, or the working environment prevent creation or update of `decision-table.md`:
+If filesystem permissions, sandboxing, format limitations, missing shared-skill support, or the working environment prevent creation or update of either review interface:
 
 1. do not weaken or skip the approval gate;
-2. present the same compact rows in chat when a Markdown table remains usable;
+2. prefer the remaining durable interface; otherwise present the same compact rows in chat when a Markdown table remains usable;
 3. otherwise provide a copyable structured block:
 
 ```text

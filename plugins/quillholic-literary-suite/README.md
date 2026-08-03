@@ -7,6 +7,7 @@ An installable skills-only plugin for ChatGPT Work and Codex.
 - Literary Editing
 - Literary Translation
 - Literary Agent Querying
+- Review Approval Sheet
 
 The plugin does not include an MCP server or request access to external
 services. Each skill operates on files, attachments, project workspaces, or
@@ -27,4 +28,5 @@ new conversation after installation so the bundled skills are available.
 ## Use
 
 Invoke the plugin or a bundled skill explicitly, or ask directly for literary
-editing, literary translation, agent research, or a query package.
+editing, literary translation, agent research, a query package, or an
+interactive approval review.

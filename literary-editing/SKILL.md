@@ -1,6 +1,6 @@
 ---
 name: literary-editing
-description: Review and edit book-length literary manuscripts through professional assessment, developmental review, line editing, copyediting, specialist review, proofreading, and final QA. Use when Codex needs to initialize or resume an editorial project with separate source and workspace locations; select dual-repository Git or artifact-workspace operation; route a whole manuscript or selected chapters to the right service; produce verdicts and scoped 1-5 editorial-acceptance scores; propose diffs without changing the source; quick-check editable decision tables; apply only explicitly approved proposals; preserve voice and editorial state; commit approved workspace and source updates when Git is available; or produce a verified updated-source export for manual application when Git is unavailable.
+description: Review and edit book-length literary manuscripts through professional assessment, developmental review, line editing, copyediting, specialist review, proofreading, and final QA. Use when Codex needs to initialize or resume an editorial project with separate source and workspace locations; select dual-repository Git or artifact-workspace operation; route a whole manuscript or selected chapters to the right service; produce verdicts and scoped 1-5 editorial-acceptance scores; propose diffs without changing the source; present or quick-check interactive approval sheets and editable decision tables; apply only explicitly approved proposals; preserve voice and editorial state; commit approved workspace and source updates when Git is available; or produce a verified updated-source export for manual application when Git is unavailable.
 ---
 
 # Literary Editing
@@ -26,7 +26,7 @@ Follow these rules in every service:
 13. Keep each service within scope. Flag other editorial levels separately instead of silently performing them.
 14. Do not claim whole-book completion from chapter passes without the required manuscript-wide synthesis or consistency check.
 15. Give every verdict an editorial-acceptance score from 1 to 5, scoped to the requested service and reviewed material. Do not present it as a publication, sales, or market forecast.
-16. Treat an editable decision table as a review interface, not manuscript-change authorization. A quick check validates decisions only; application still requires a separate explicit user instruction.
+16. Treat the interactive approval sheet and editable decision table as synchronized review interfaces, not manuscript-change authorization. The proposal ledger remains authoritative, quick-checking validates decisions only, and application still requires a separate explicit user instruction.
 17. Treat paragraph breaks as a first-class line-edit dimension. Presume existing paragraphing is intentional until reader-effect and manuscript-pattern evidence supports a change. Make every boundary change an explicit approval-controlled operation.
 
 ## Initialize or Resume the Project
@@ -106,13 +106,13 @@ For line editing, copyediting, and proofreading, produce source-ordered before/a
 
 The proposal file is a reviewable diff, not an applied edit. Keep the source and workspace manuscript unchanged.
 
-When proposals require author disposition, read [references/decision-tables.md](references/decision-tables.md) in full. Create a compact editable `decision-table.md` unless the user prefers direct ID responses. Keep detailed before/after text in the proposal ledger. Immediately after creating the table, ask whether the user wants to review it now through an interactive, proposal-by-proposal dialogue or skip the dialogue for later.
+When proposals require author disposition, read [references/decision-tables.md](references/decision-tables.md) and the sibling [review-approval-sheet skill](../review-approval-sheet/SKILL.md) in full. Create the authoritative compact `decision-table.md` and synchronized `decision-table.json` interface state. Keep detailed before/after text in the proposal ledger. Validate and render the shared interactive approval sheet by default; accept direct ID responses or Markdown editing when the user prefers them or interactive rendering is unavailable.
 
 ### 5. Stop at the approval gate
 
 Present the verdict before asking whether to apply proposals. Accept all, selected IDs, modified wording, rejection, or deferral.
 
-If the decision-table path is used, quick-check the table for allowed values, complete modification wording, dependencies, conflicts, and stale text. After an interactive decision dialogue ends and the quick check succeeds, summarize the decisions and explicitly ask whether the user wants to apply the valid accepted changes now. This question is not authorization: wait for a clear affirmative apply instruction. Quick-checking, editing, or discussing the table does not authorize manuscript changes. Persist the selected dispositions to `approvals.md` before applying anything.
+Parse interactive responses against the saved JSON revision, apply the editorial decision semantics to the authoritative decision table, synchronize both review files, and quick-check allowed values, complete modification wording, dependencies, conflicts, and stale text. After review ends and the quick check succeeds, summarize the decisions and explicitly ask whether the user wants to apply the valid accepted changes now. This question is not authorization: wait for a clear affirmative apply instruction. Submitting, quick-checking, editing, or discussing either interface does not authorize manuscript changes. Persist the selected dispositions to `approvals.md` only after the separate apply instruction and before applying anything.
 
 ### 6. Revalidate and apply to the workspace
 

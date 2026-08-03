@@ -410,11 +410,11 @@ Questions, discussion, “continue,” or approval of the general direction do n
 
 Partial approval is valid. Apply only proposal IDs explicitly accepted or accepted with user-specified modifications. Pending and deferred proposals remain unapplied.
 
-When a writable project supports it, create a compact `decision-table.md` linked to the authoritative proposal ledger. Let the user mark each row `accept`, `accept-with-modification`, `reject`, `defer`, or leave it blank, with a comment or modification reference. Keep long exact wording in keyed modification blocks below the table rather than crowding cells. Immediately after creating the table, ask whether the user wants to review it now through an interactive, proposal-by-proposal dialogue or skip the dialogue for later.
+When a writable project supports it, create an authoritative compact `decision-table.md` linked to the proposal ledger and a synchronized revision-bound `decision-table.json` for the shared interactive approval-sheet interface. Let the user submit any explicitly decided subset as `accept`, `accept-with-modification`, `reject`, `defer`, or `revise proposal`, with required exact wording for modifications and revisions. Keep long wording in keyed modification blocks rather than crowding Markdown cells. Validate and render the interactive sheet by default; direct ID responses or Markdown editing remain fallbacks.
 
-On a “quick check,” validate IDs, allowed values, exact modified wording, dependencies, overlaps, and stale text; annotate the table when writable and return a concise status summary. A quick check, table edit, or request to review the table does not authorize manuscript changes. Require a separate explicit apply instruction, then translate the selected valid rows into durable approval records.
+Parse interactive responses against the saved JSON revision, update and synchronize the review records, then on a “quick check” validate IDs, allowed values, exact modified wording, dependencies, overlaps, and stale text. Annotate the records when writable and return a concise status summary. A submission, quick check, table edit, or request to review does not authorize manuscript changes. Require a separate explicit apply instruction, then translate the selected valid rows into durable approval records.
 
-If permissions, sandboxing, or format restrictions prevent table creation or update, present the same rows in chat or as copyable `ID | decision= | comment=` lines and run the same validation. Do not skip the approval gate. If durable approval provenance cannot be written, remain validation-only and do not edit the manuscript.
+If permissions, sandboxing, missing shared-interface support, or format restrictions prevent either interface, prefer the remaining durable interface, then fall back to chat or copyable `ID | decision= | comment=` lines and run the same validation. Do not skip the approval gate. If durable approval provenance cannot be written, remain validation-only and do not edit the manuscript.
 
 ### Phase F: Revalidate approval
 
@@ -477,6 +477,7 @@ workspace/
 |           |-- verdict.md
 |           |-- proposals.md
 |           |-- decision-table.md
+|           |-- decision-table.json
 |           |-- approvals.md
 |           `-- application-report.md
 `-- exports/
@@ -532,7 +533,7 @@ For each review job, record:
 - operating mode, service, and scope;
 - workspace review identity and source import identity;
 - phase, verdict, proposal, and approval state;
-- decision-table and quick-check status;
+- decision-table Markdown/JSON paths, interface revision, synchronization state, and quick-check status;
 - resulting workspace identity;
 - source commit, `source-sync-pending`, or manual-update export status;
 - verification result and next action.

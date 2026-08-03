@@ -34,6 +34,7 @@ workspace/
 |           |-- verdict.md
 |           |-- proposals.md
 |           |-- decision-table.md
+|           |-- decision-table.json
 |           |-- approvals.md
 |           `-- application-report.md
 `-- exports/
@@ -56,8 +57,8 @@ Record:
 - phase: `intake`, `normalizing`, `ready`, `reviewing`, `verdict-presented`, `awaiting-approval`, `applying-workspace`, `verifying-workspace`, `syncing-source`, `awaiting-manual-source-update`, `completed`, `paused`, or `blocked`;
 - reviewed source and workspace identities;
 - manuscript paths;
-- verdict, proposal, decision-table, approval, report, and export paths;
-- decision-table quick-check status;
+- verdict, proposal, decision-table Markdown, decision-table JSON, approval, report, and export paths;
+- decision-table interface revision, synchronization status, and quick-check status;
 - current proposal batch and unresolved query;
 - resulting workspace identity;
 - resulting source commit, `source-sync-pending`, or manual-update status;
@@ -160,7 +161,9 @@ Allowed statuses are `pending`, `accepted`, `accepted-with-modification`, `rejec
 
 ## Decision tables and approvals
 
-Read [decision-tables.md](decision-tables.md) in full when proposals need user disposition. A quick check validates IDs, values, modified wording, dependencies, overlaps, and staleness. It does not authorize changes or replace `approvals.md`.
+Read [decision-tables.md](decision-tables.md) and the sibling [review-approval-sheet skill](../../review-approval-sheet/SKILL.md) in full when proposals need user disposition. Keep `decision-table.md` authoritative for editorial dispositions and `decision-table.json` synchronized as the interactive interface state. Parse responses against the saved interface revision before updating either file. A quick check validates IDs, values, modified wording, dependencies, overlaps, and staleness. It does not authorize changes or replace `approvals.md`.
+
+A submitted modification or proposal revision is not manuscript-change authorization. Application remains a separate explicit instruction, after which the selected valid dispositions are copied to `approvals.md` and revalidated.
 
 Record the user's disposition before application:
 

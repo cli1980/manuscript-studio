@@ -1,6 +1,6 @@
 ---
 name: literary-translation
-description: Set up and translate literary works chapter by chapter through source discovery and normalization, a living glossary and evolving voice record, whole-chapter analysis, systematic passage division with temporary internal passage files, two-path drafting, dialogue-based source-grounded editorial review, and durable completed-chapter output. Use when translating fiction, memoir, narrative nonfiction, poetry-inflected prose, or other literary writing from a source language into natural English, especially for new translation projects, passage-by-passage collaboration, close fidelity review, preservation of voice and reader experience, continuity with earlier translated chapters, or culturally dense writing shaped by dialect, oral storytelling, folklore, socially marked speech, or changing regional and historical registers.
+description: Set up and translate literary works chapter by chapter through source discovery and normalization, a living glossary and evolving voice record, whole-chapter analysis, systematic passage division with interactive boundary approval, two-path drafting, source-grounded editorial review with reusable approval sheets, and durable completed-chapter output. Use when translating fiction, memoir, narrative nonfiction, poetry-inflected prose, or other literary writing from a source language into natural English, especially for new translation projects, passage-by-passage collaboration, close fidelity review, preservation of voice and reader experience, continuity with earlier translated chapters, or culturally dense writing shaped by dialect, oral storytelling, folklore, socially marked speech, or changing regional and historical registers.
 ---
 
 # Literary Translation
@@ -67,9 +67,9 @@ Keep the brief concise and decision-oriented. Record only chapter-level observat
 
 Read [references/passage-division.md](references/passage-division.md) in full before creating the passage map or changing a boundary.
 
-Divide the chapter into the largest coherent units that remain manageable for close translation and review. Present the complete proposed map and explicitly ask the user to approve its passage boundaries. Stop at this human gate; do not extract source passages or begin Step 3 until the user gives explicit approval.
+Divide the chapter into the largest coherent units that remain manageable for close translation and review. Read the sibling [review-approval-sheet skill](../review-approval-sheet/SKILL.md) in full. Persist the complete proposed map in `passage-map.md` and its synchronized revision-bound interface in `passage-map-review.json`, with one stable `PM###` item for each passage unit and its closing boundary, including one item when the complete chapter remains a single passage. Validate and render the interactive sheet, then stop at this human gate; do not extract source passages or begin Step 3 until every map item is resolved and the user separately confirms final closure of the complete current map.
 
-Treat questions, qualifications, counterproposals, and requests to move, merge, or split boundaries as negotiation, not approval. Discuss the concern, then redo Step 2 using the user's feedback: regenerate and present the complete proposed map, mark its approval as pending, and request explicit approval again. Repeat this cycle until the user approves the current complete map. Do not treat silence, “continue,” or approval of only one boundary as approval of the whole map.
+Treat questions, qualifications, counterproposals, and requests to move, merge, or split boundaries as negotiation, not approval. Parse any interactive response against the saved revision, apply the translation domain rules, then redo Step 2 using the user's feedback: regenerate the complete proposed map and interface, increment the revision, invalidate affected boundary approvals and final closure, and present the complete current map again. Repeat until all current boundaries are individually resolved and the separate closure is confirmed. Do not treat silence, “continue,” a correction itself, or approval of only one boundary as approval of the whole map.
 
 ### Prepare the Internal Passage Set
 
@@ -158,7 +158,9 @@ Create a fixed, source-ordered issue ledger only for choices where defensible al
 
 Order issues by first occurrence in the source and set both the workflow phase and current passage status to `reviewing`. If the ledger is empty, mark the cursor `passage-end` and proceed directly to **Finalize the Passage**.
 
-#### Work Through the Ledger Once
+#### Review the Ledger Once
+
+When the fixed ledger contains multiple independent decisions that are understandable from their paired source and English spans, create or update synchronized `issue-review.json` interface state and render the shared approval sheet. Put the exact **Original** and **Current translation**, source effect, problem, alternatives, recommendation, and dependency information in each item's labeled details. The user may submit any explicitly decided subset. Parse it against the saved revision and apply settled decisions in source order. If an issue depends on an earlier answer, requires discussion, or cannot be captured safely as a deterministic option, use the single-issue dialogue below instead. Never batch dependent choices as though they were independent.
 
 Present only the earliest pending issue. Give:
 
@@ -172,7 +174,7 @@ Always show this pair for every editorial decision, including after resuming an 
 
 Do not invent alternatives or request a decision when the source, grammar, established terminology, or a prior binding decision permits only one credible correction.
 
-Accept a selection, qualification, replacement wording, rejection of all options, source correction, defense of the current wording, revision of an earlier decision, question, or “continue” as a valid response. Then:
+Accept a revision-bound interactive disposition, selection, qualification, replacement wording, rejection of all options, source correction, defense of the current wording, revision of an earlier decision, question, or “continue” as a valid response. Then:
 
 1. if the issue remains unresolved, answer the user and repeat the decision request;
 2. if it is settled, apply the decision to the checkpoint and update `glossary.md` when terminology changes;
@@ -221,9 +223,9 @@ When all passages are finalized:
    - Limit possible direct edits to grammar, punctuation, broken cross-passage syntax or references, tense and terminology consistency, missing or duplicated text, and objective content-integrity errors. Do not retranslate, stylistically polish, or alter sound sentences.
    - If a possible edit affects meaning, implication, ambiguity, imagery, characterization, voice, emphasis, repetition, cadence, emotional force, or an approved decision, exclude it from the sanity-check diff and return only the affected passage to Step 3.2. After that passage is finalized again, rebuild the chapter and restart the complete sanity check.
 3. Freeze and persist the complete source-ordered sanity-check diff according to [references/workflow-state.md](references/workflow-state.md). For every proposed edit, give its location, current wording, proposed wording, and reason.
-4. Present the complete diff to the user and explicitly ask for approval. If no edits are proposed, state **No textual changes proposed** and still ask the user to approve completing the chapter. Stop at this human gate: do not apply proposed edits, save or overwrite the durable chapter file, declare the chapter complete, or move to the next chapter while approval is pending.
-5. Treat questions, qualifications, replacement wording, or requests to add, remove, accept, or reject edits as negotiation rather than approval of the complete diff. Resolve the feedback, redo the sanity check as needed, persist and present the complete revised diff, and ask for explicit approval again. Partial approval does not clear the gate.
-6. After explicit approval, apply only the approved edits to both the affected passage checkpoints and the assembled chapter; leave rejected text unchanged. Rebuild and verify the assembled chapter, mark the sanity-check gate `approved`, and make no additional textual change outside the approved diff. If rebuilding reveals a new necessary edit, restart the sanity check and human gate.
+4. When edits are proposed, create or update synchronized `chapter-sanity-review.json` state with one stable `SC###` item per edit, validate and render the shared interactive sheet, and allow item-level acceptance, rejection, modification, or revision. Parse responses against the saved revision, update the complete diff, and keep final closure unavailable until every current item is resolved. If no edits are proposed, state **No textual changes proposed** and ask directly for approval to complete the chapter; an empty interface sheet is unnecessary. Stop at this human gate: do not apply proposed edits, save or overwrite the durable chapter file, declare the chapter complete, or move to the next chapter while approval is pending.
+5. Treat questions, qualifications, replacement wording, or requests to add, remove, accept, reject, or revise edits as negotiation rather than approval of the complete diff. Resolve the feedback, redo the sanity check as needed, persist and present the complete revised diff and synchronized interface, and require separate final closure after all items are resolved. Partial approval does not clear the gate, and a correction or revision is not approval of its replacement.
+6. After parsed final closure, apply only the accepted edits to both the affected passage checkpoints and the assembled chapter; leave rejected text unchanged. Rebuild and verify the assembled chapter, mark the sanity-check gate `approved`, and make no additional textual change outside the approved diff. If rebuilding reveals a new necessary edit, restart the sanity check and human gate.
 
 Save the verified chapter as a durable Markdown file under `translated_english/`. Preserve the project's established filename for that chapter; otherwise derive a stable sortable filename from the source order, chapter number, and English chapter title, for example:
 
