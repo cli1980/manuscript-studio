@@ -1,0 +1,4 @@
+interface:
+  display_name: "Format Manuscript"
+  short_description: "Design and produce polished manuscript editions"
+  default_prompt: "Use $format-manuscript to design and produce a polished Word manuscript with a table of contents."

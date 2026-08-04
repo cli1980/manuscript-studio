@@ -6,7 +6,7 @@ The project is designed to keep authors and translators focused on ideas, voice,
 
 ## Install as a ChatGPT and Codex plugin
 
-The four skills are also packaged as the skills-only
+The five skills are also packaged as the skills-only
 `quillholic-literary-suite` plugin. Add this GitHub repository as a
 marketplace:
 
@@ -65,6 +65,11 @@ Translates literary works chapter by chapter using source analysis, a living glo
 ### `literary-agent-querying`
 
 Reads and positions a novel, builds a synopsis-complete story ledger, researches and prioritizes suitable literary agents, and prepares reusable query materials. Existing approved artifacts are reused by default. Only an explicit request to build a package for a specific agent creates an on-demand ZIP, including a synopsis only when that agent's verified guidelines request one.
+
+### `format-manuscript`
+
+Inspects a project draft, recommends and confirms a reusable genre- and purpose-appropriate formatting specification, then orchestrates production of a polished manuscript edition without changing the prose. Its current primary path produces visually verified Word manuscripts with semantic styles and an accurate table of contents while keeping the specification reusable for future PDF and EPUB adapters.
+
 ### `review-approval-sheet`
 
 Provides a shared interactive review interface for stable-ID approval sheets. It validates revision-bound state, presents compact navigation and item-specific decisions, parses explicit submissions, and preserves each literary skill's own authoritative records, domain rules, and separate action gates.

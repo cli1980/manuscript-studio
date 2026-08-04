@@ -1,7 +1,7 @@
 {
   "name": "quillholic-literary-suite",
-  "version": "0.2.0",
-  "description": "Manuscript-grounded literary workflows with reusable interactive approval sheets.",
+  "version": "0.3.0",
+  "description": "Manuscript-grounded literary workflows for editing, translation, formatting, querying, and approval.",
   "author": {
     "name": "Lin Shaw",
     "url": "https://github.com/cli1980"
@@ -14,14 +14,15 @@
     "literary-translation",
     "literary-agents",
     "manuscripts",
+    "manuscript-formatting",
     "query-letters",
     "approval-workflow"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Quillholic Literary Suite",
-    "shortDescription": "Edit, translate, query, and review literary work.",
-    "longDescription": "Professional manuscript-grounded workflows for literary editing, Chinese-English literary translation, agent research, submission-ready query packages, and reusable revision-bound interactive approvals.",
+    "shortDescription": "Edit, translate, format, query, and review manuscripts.",
+    "longDescription": "Professional manuscript-grounded workflows for literary editing, Chinese-English literary translation, reusable edition formatting, agent research, submission-ready query packages, and revision-bound interactive approvals.",
     "developerName": "Lin Shaw",
     "category": "Productivity",
     "capabilities": [
@@ -31,6 +32,7 @@
     "defaultPrompt": [
       "Assess and edit my literary manuscript.",
       "Translate this literary manuscript.",
+      "Format my manuscript as a polished Word edition with a table of contents.",
       "Build a literary-agent query package.",
       "Review an approval sheet interactively."
     ]

@@ -41,6 +41,16 @@ Use the shared interface for passage maps, chapter sanity diffs, and multiple in
 - Define `accept`, `reject`, and `defer` as resolve; `accept with modification` requires exact wording.
 - Preserve the translation workflow's complete-diff approval semantics.
 
+## Manuscript formatting
+
+- Bind the sheet to manuscript identity, format-specification revision, edition profile, and intended output format.
+- Use one `FM###` item per consequential design group, not one item per numeric token.
+- Show the recommendation, manuscript or convention evidence, meaningful alternatives, and downstream effects.
+- Define `approve` as resolve, `modify` as resolve with exact instructions, and `revise recommendation` as reopen with a note.
+- Put the edition classification and intended-use confirmation inside an `FM` item when it is not already confirmed.
+- On review-continuation requests, render the newest saved revision instead of switching to serial chat prompts; after a disposition, increment the revision and render only remaining or reopened items.
+- Let formatting update the authoritative specification, invalidate dependent outputs, and require separate final closure before generation.
+
 ## Other domains
 
 Use stable IDs, atomic summaries, labeled details, explicit commands, and revision bindings. Define whether each decision resolves the item or reopens domain work. Never use the shared layer to invent application authority.

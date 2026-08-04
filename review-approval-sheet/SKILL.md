@@ -1,6 +1,6 @@
 ---
 name: review-approval-sheet
-description: Validate, render, and process revision-bound approval sheets through a reusable interactive review interface with explicit per-item decisions, required notes, batch submission, reopened-item handling, and separate final closure. Use when another workflow has many proposals, claims, translation choices, passage boundaries, diffs, or other stable-ID items that require human disposition; when Markdown editing is cumbersome; or when Codex must re-present corrected, invalidated, stale, or unresolved approval items without weakening the originating workflow's authority rules.
+description: Validate, render, present inline, and process revision-bound approval sheets through a reusable interactive review interface with explicit per-item decisions, required notes, batch submission, reopened-item handling, and separate final closure. Use when another workflow has many proposals, claims, translation choices, passage boundaries, diffs, or other stable-ID items that require human disposition; when Markdown editing is cumbersome; or when Codex must re-present corrected, invalidated, stale, or unresolved approval items without weakening the originating workflow's authority rules.
 ---
 
 # Review Approval Sheet
@@ -17,6 +17,7 @@ Provide a common human-review surface without taking ownership of domain meaning
 6. Treat decisions whose effect is `reopen` as feedback requiring domain propagation, never as approval of the resulting replacement.
 7. Do not apply manuscript, translation, ledger, query-package, or source changes. Return validated dispositions to the originating skill.
 8. Keep final closure separate. Offer it only from a newly rendered sheet whose saved domain state contains no unresolved items.
+9. Present every successfully rendered fragment as an inline Codex visualization. A filesystem path or Markdown link does not count as presenting the review interface.
 
 ## Workflow
 
@@ -48,6 +49,14 @@ Use the generated fragment as-is. Do not hand-recreate the interface, edit its e
 
 The renderer supports arbitrary review order, batch submission, item-specific decisions, note requirements, identity binding, reopened-item views, and a distinct final-closure view.
 
+Immediately present the generated fragment in the same response with this directive on its own line:
+
+```text
+::codex-inline-vis{file="<basename>.html"}
+```
+
+Place the fragment in the active thread visualization directory and use only its basename in the directive. Do not use a Markdown link as the normal presentation path. When the user asks to review, continue, go through the list, or show remaining items, validate and rerender the latest saved revision and emit the inline directive in that response.
+
 ### 4. Parse returned dispositions
 
 Save or isolate the user's returned payload, then run:
@@ -64,13 +73,15 @@ Give the validated receipt to the originating skill. That skill must persist the
 
 Render only resulting unresolved items when incremental follow-up is valid. Never make the user re-review unaffected resolved items.
 
+Present every new revision inline using the same directive contract; do not merely report that a replacement HTML file exists.
+
 ### 6. Handle final closure
 
 After the originating skill saves every item as resolved in a new revision, render that revision again. When `gate.closure_required` is true and `gate.final_closure` is `pending`, the renderer presents final closure instead of item controls. The originating skill alone may pass its gate.
 
 ## Fallback
 
-When inline HTML cannot be displayed, present a readable table or copyable lines using the same IDs, decisions, notes, identity, and revision. Run the same parser on the response. Interface limitations never weaken the gate.
+Use a text fallback only when the inline visualization surface is unavailable or the inline directive fails. Present a readable table or copyable lines using the same IDs, decisions, notes, identity, and revision. A link to a local HTML file by itself is not a fallback because it does not expose the interaction in conversation. Run the same parser on the response. Interface limitations never weaken the gate.
 
 ## Validation
 
