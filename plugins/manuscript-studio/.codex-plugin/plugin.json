@@ -1,13 +1,13 @@
 {
-  "name": "quillholic-literary-suite",
+  "name": "manuscript-studio",
   "version": "0.3.0",
   "description": "Manuscript-grounded literary workflows for editing, translation, formatting, querying, and approval.",
   "author": {
     "name": "Lin Shaw",
     "url": "https://github.com/cli1980"
   },
-  "homepage": "https://github.com/cli1980/quillholic-skills",
-  "repository": "https://github.com/cli1980/quillholic-skills",
+  "homepage": "https://github.com/cli1980/manuscript-studio",
+  "repository": "https://github.com/cli1980/manuscript-studio",
   "license": "MIT",
   "keywords": [
     "literary-editing",
@@ -20,7 +20,7 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Quillholic Literary Suite",
+    "displayName": "Manuscript Studio",
     "shortDescription": "Edit, translate, format, query, and review manuscripts.",
     "longDescription": "Professional manuscript-grounded workflows for literary editing, Chinese-English literary translation, reusable edition formatting, agent research, submission-ready query packages, and revision-bound interactive approvals.",
     "developerName": "Lin Shaw",
@@ -28,7 +28,7 @@
     "capabilities": [
       "Write"
     ],
-    "websiteURL": "https://github.com/cli1980/quillholic-skills",
+    "websiteURL": "https://github.com/cli1980/manuscript-studio",
     "defaultPrompt": [
       "Assess and edit my literary manuscript.",
       "Translate this literary manuscript.",

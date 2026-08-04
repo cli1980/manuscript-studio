@@ -1,28 +1,32 @@
-# quillholic-skills
+# Manuscript Studio
 
-`quillholic-skills` is a collection of independent AI-agent skills for literary writing, translation, editing, and publication preparation.
+**Manuscript Studio** is a collection of independent AI-agent skills for literary writing, translation, editing, and publication preparation.
 
 The project is designed to keep authors and translators focused on ideas, voice, and story instead of repeatedly searching dictionaries and thesauruses, debating commas and colons, revisiting grammar books, or hunting for typos. It provides structured, reviewable workflows that help AI agents streamline the path from manuscript development through translation, editing, and querying—without taking creative authority away from the author.
 
 ## Install as a ChatGPT and Codex plugin
 
 The five skills are also packaged as the skills-only
-`quillholic-literary-suite` plugin. Add this GitHub repository as a
+`manuscript-studio` plugin. Add this GitHub repository as a
 marketplace:
 
 ```text
-codex plugin marketplace add cli1980/quillholic-skills --ref main
+codex plugin marketplace add cli1980/manuscript-studio --ref main
 ```
 
 Then open the Plugins Directory in ChatGPT Work or Codex, select the
-`Quillholic` marketplace, and install `quillholic-literary-suite`. Start a
+`Manuscript Studio` marketplace, and install `manuscript-studio`. Start a
 new conversation after installation.
+
+Existing installations do not automatically migrate because the marketplace
+and plugin IDs changed. Uninstall `quillholic-literary-suite`, add the renamed
+marketplace if necessary, and install `manuscript-studio`.
 ## Getting started
 
 No installation is required. You can ask an AI agent to use a skill by name, or point it to the project:
 
 ```text
-https://github.com/cli1980/quillholic-skills
+https://github.com/cli1980/manuscript-studio
 ```
 
 Choose the working style that matches your AI environment.
@@ -33,7 +37,7 @@ This option is for browser-based AI chat services.
 
 1. Create a project in the chat service.
 2. Link or upload your manuscript to that project.
-3. Ask the agent to use `quillholic-skills` from GitHub and describe what you want to do. If the agent does not recognize the project, give it the repository link.
+3. Ask the agent to use **Manuscript Studio** from GitHub and describe what you want to do. If the agent does not recognize the project, give it the repository link.
 
 The agent will use project files and chat output artifacts as its workspace. Because a web chat may not have Git or direct filesystem access, some version-control features will be unavailable. In that case, the agent will not modify the manuscript source directly: it will return the revised source for you to review and apply manually.
 

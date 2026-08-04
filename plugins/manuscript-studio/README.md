@@ -1,4 +1,4 @@
-# Quillholic Literary Suite
+# Manuscript Studio
 
 An installable skills-only plugin for ChatGPT Work and Codex.
 
@@ -19,12 +19,15 @@ Codex artifacts made available by the active product surface.
 Add the repository marketplace:
 
 ```text
-codex plugin marketplace add cli1980/quillholic-skills --ref main
+codex plugin marketplace add cli1980/manuscript-studio --ref main
 ```
 
-Then install `quillholic-literary-suite` from the Quillholic marketplace in
+Then install `manuscript-studio` from the Manuscript Studio marketplace in
 the ChatGPT desktop Plugins Directory or the Codex CLI plugin browser. Start a
 new conversation after installation so the bundled skills are available.
+
+If you previously installed `quillholic-literary-suite`, uninstall that plugin
+and install `manuscript-studio`; the new name is a new plugin identity.
 
 ## Use
 

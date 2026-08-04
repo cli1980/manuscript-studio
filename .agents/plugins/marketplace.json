@@ -1,14 +1,14 @@
 {
-  "name": "quillholic",
+  "name": "manuscript-studio",
   "interface": {
-    "displayName": "Quillholic"
+    "displayName": "Manuscript Studio"
   },
   "plugins": [
     {
-      "name": "quillholic-literary-suite",
+      "name": "manuscript-studio",
       "source": {
         "source": "local",
-        "path": "./plugins/quillholic-literary-suite"
+        "path": "./plugins/manuscript-studio"
       },
       "policy": {
         "installation": "AVAILABLE",
