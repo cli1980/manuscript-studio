@@ -19,7 +19,7 @@ query-package/
 |   |-- submission-checklist.md
 |   `-- series-overview.md                 # when applicable
 `-- on-demand/
-    `-- agent-package-<agent-slug>.zip      # only after "build a package for <agent>"
+    `-- agent-package-<agent-slug>.zip      # only after an authorized named-agent complete-package request
         `-- agent-package/
             `-- <agent-slug>/
                 |-- package-manifest.md                # required for every on-demand ZIP
@@ -29,6 +29,12 @@ query-package/
 ```
 
 Do not copy the full manuscript into the package unless the user asks and the submission requirements require a separate manuscript artifact.
+
+## Terminal on-demand deliverables
+
+Treat every on-demand ZIP as a complete, one-time terminal product, not reusable project state. Never inspect, extract, quote, summarize, copy, or revise a prior on-demand output while building static state or another on-demand package. An explicit audit of a named prior package may read it only for that audit; its contents remain forbidden as evidence or rebuild input.
+
+For every named-agent build, rebuild, or regeneration, create an empty staging directory outside `query-package/on-demand/`, reproduce every applicable artifact from approved static state, designated manuscript material required for the submission, and current verified agent evidence, validate the new ZIP, then atomically replace the unversioned destination. Never edit an existing ZIP in place. Keep only complete `agent-package-<agent-slug>.zip` files in `query-package/on-demand/`; loose files and staging directories are invalid.
 
 ## Package manifest
 
@@ -40,7 +46,7 @@ Record:
 - structured story-ledger identity, revision, approval status, synopsis readiness, bound manuscript identity, human-review artifact identity, gate status, approval-unit counts, and final closure date;
 - project-root or Codex artifact identity;
 - package creation and revision date;
-- artifact-reuse decision, decision date, full-flow trigger when any, fields reused, and fields refreshed;
+- static-artifact reuse decision, decision date, full-flow trigger when any, fields reused, and fields refreshed; never treat on-demand output as reusable;
 - confirmed target market;
 - artifact list;
 - evidence basis: manuscript, author-confirmed, or inferred;
@@ -77,7 +83,7 @@ Use visible tokens such as `[AGENT NAME]` only in a file explicitly labeled draf
 
 ## Synopsis
 
-Do not create a static synopsis or any synopsis before the author explicitly asks to `build a package for <agent>`. Inside that authorized package, create a synopsis only when the target agent's verified guidelines request one. Follow the agent's specified length, weighting, and format; when the guidelines request a synopsis without specifying those details, default to a clear 1-2-page single-spaced synopsis. Include:
+Do not create a static synopsis or any synopsis before the author explicitly asks to build, rebuild, or regenerate the complete package for a named agent. Inside that authorized package, create a synopsis only when the target agent's verified guidelines request one. Follow the agent's specified length, weighting, and format; when the guidelines request a synopsis without specifying those details, default to a clear 1-2-page single-spaced synopsis. Include:
 
 - protagonist and initial situation;
 - inciting disruption;
@@ -88,7 +94,7 @@ Do not create a static synopsis or any synopsis before the author explicitly ask
 
 Use present tense and identify major characters clearly. Preserve the manuscript's actual causality. Do not conceal twists or end on a teaser.
 
-Generate the synopsis only from a structured story ledger whose evidence audit and human-review gate both passed, then audit every material atomic claim against ledger IDs and recorded locators. Do not reopen the unchanged manuscript or require separate synopsis approval: the individually confirmed ledger is the approved source of truth. If drafting reveals a gap, invalidate the affected review unit and synopsis profile, update and re-present the approval sheet after any targeted ledger refresh, and require final closure again before regenerating.
+Generate the synopsis fresh only from a structured story ledger whose evidence audit and human-review gate both passed, then audit every material atomic claim against ledger IDs and recorded locators. Do not inspect or reuse a prior synopsis or any prior on-demand package. Do not reopen the unchanged manuscript or require separate synopsis approval: the individually confirmed ledger is the approved source of truth. If drafting reveals a gap, invalidate the affected review unit and synopsis profile, update and re-present the approval sheet after any targeted ledger refresh, and require final closure again before regenerating.
 
 ## Author biography
 
@@ -186,6 +192,8 @@ Begin with `Submit here`, then record:
 
 Follow with `Prepare these materials`, `Submission steps`, `Final check`, and `After submitting`. Use numbered steps containing one action each. Include filenames and formats for every upload, exact text-source mapping for every pasted item, and the requested sample-page or chapter boundary. Demonstrate the precise placement of the sample: name the web field or upload slot, or identify where it is appended in the email body relative to the query letter, synopsis, and closing. Do not make the author infer whether an artifact should be appended, pasted, attached, uploaded, or omitted.
 
+For page-count samples, render the designated source in the submission format and treat the requested page count as a hard maximum. Use `scripts/sample_boundary.py` to align extracted text to the physical cutoff. If the cutoff intersects a paragraph, roll back to the preceding complete paragraph; never extend past the page limit and never retain a partial sentence or paragraph. Include the generated `sample-boundary.json` in the ZIP, and state the requested pages, physical cutoff, rollback decision, effective end locator, and passing validation in both the manifest and instructions.
+
 For a website or online form, include:
 
 - the direct form URL, not only the agency homepage;
@@ -216,27 +224,28 @@ Use a current official agent or agency page or form as the controlling source. A
 
 Create `agent-package/<agent-slug>/package-manifest.md` inside every on-demand ZIP. Record:
 
-- the author request as `build a package for <agent>`, the target agent, and agency;
+- the author request to build, rebuild, or regenerate the complete package, the target agent, and agency;
 - package creation and revision date;
 - manuscript source identity and checksum or version;
 - static package identity, static manifest checksum or revision, and approval date;
 - structured story-ledger revision, approval status, synopsis readiness, bound manuscript identity, synchronized human-review Markdown and JSON identities, gate status, approval-unit counts, and final closure date;
 - reused static artifacts and any targeted static correction made before packaging;
+- `Build mode: fresh-reproduction` and `Prior on-demand source: none`;
 - official agent-research sources and access dates;
 - whether the agent requests a synopsis and its verified length, weighting, format, and delivery method;
-- a `Sample material` record containing the verified requirement or `not-requested`, page or chapter quantity, source-manuscript identity and version, exact start and end locators, preserved sequence, delivery mode, filename and format when applicable, exact destination or insertion point, and status;
+- a `Sample material` record containing the verified requirement or `not-requested`, page or chapter quantity, source-manuscript identity and version, exact start and end locators, preserved sequence, delivery mode, filename and format when applicable, exact destination or insertion point, and status; for a page-count sample, also record the physical cutoff, any rollback, the effective complete-paragraph end, and the `sample-boundary.json` result;
 - every file included in the ZIP;
 - unresolved items and conflicts;
 - readiness: `ready`, `ready-with-open-items`, or `not-ready`;
 - validation results, including atomic-claim audit counts for the query letter and synopsis when present.
 
-Do not update the static manifest solely to record an on-demand ZIP. The on-demand manifest provides the provenance link. A missing, stale, unapproved, not-ready, or mismatched story ledger, human-review artifact, open or invalidated human gate, missing final closure, static identity, manuscript identity, required artifact, required sample, sample boundary, or sample-placement instruction forces `not-ready`. A required sample may be `author-supplied` only when its source identity, availability, boundary, and format have been verified.
+Do not update the static manifest solely to record an on-demand ZIP. The on-demand manifest provides the provenance link. A missing, stale, unapproved, not-ready, or mismatched story ledger, human-review artifact, open or invalidated human gate, missing final closure, static identity, manuscript identity, required artifact, required sample, sample boundary, page-limit validation, complete-paragraph ending, or sample-placement instruction forces `not-ready`. A required sample may be `author-supplied` only when its source identity, availability, boundary, and format have been verified.
 
 ## On-demand agent packages
 
-Create `query-package/on-demand/agent-package-<agent-slug>.zip` only after the author explicitly asks to `build a package for <agent>` and identifies that agent. This is the sole on-demand request type. When any static artifacts exist, reuse approved parts and repair only missing or unsafe prerequisites; do not rerun the full flow unless no query-package artifacts exist or the author explicitly forces a refresh. In a writable project workspace, write the downloadable archive beneath `<project-root>/query-package/on-demand/`, creating the folder when needed. Do not inspect or gate on Git, and do not stage or commit the archive unless the user separately asks. When no writable project root exists, create the ZIP as a Codex artifact. If neither destination is available, state that the ZIP could not be persisted and return the package contents in clearly labeled chat sections. Never create or extract the package inside an editorial-process subfolder.
+Create `query-package/on-demand/agent-package-<agent-slug>.zip` only after the author explicitly asks to build, rebuild, or regenerate the complete package for a named agent. This is the sole on-demand request type. Reuse approved static state, but exclude the entire on-demand tree and all prior on-demand artifacts from context. Reverify current agent evidence and reproduce the whole package in empty staging outside `query-package/on-demand/`; never incrementally revise, extract, copy from, or edit a prior package. Validate the new ZIP before atomically replacing the destination. In a writable project workspace, write the downloadable archive beneath `<project-root>/query-package/on-demand/`, creating the folder when needed. Do not inspect or gate on Git, and do not stage or commit the archive unless the user separately asks. When no writable project root exists, create the ZIP as a Codex artifact. If neither destination is available, state that the complete ZIP could not be persisted and stop; never emit the package or its component files into conversation context. Never create or extract the package inside an editorial-process subfolder.
 
-Always include `agent-package/<agent-slug>/package-manifest.md` and `agent-package/<agent-slug>/submission-instructions.md`. Validate that the manifest binds the ZIP to the approved static package and manuscript source and contains the mandatory `Sample material` record. Validate that the instructions' direct route, sample placement, and numbered actions match the current official evidence and every file or author-supplied item actually available. Do not mark an on-demand package ready when either file is absent, generic, stale, internally inconsistent, missing the sample record, or unable to establish provenance and tell the author exactly how to submit.
+Always include `agent-package/<agent-slug>/package-manifest.md`, `agent-package/<agent-slug>/query-letter.md`, `agent-package/<agent-slug>/claim-audit.md`, and `agent-package/<agent-slug>/submission-instructions.md`, plus every synopsis, sample, boundary report, form answer, email body, attachment, or assembly artifact required by the verified submission. Validate that the manifest binds the ZIP to the approved static package and manuscript source and contains the mandatory `Sample material` record. For every page-count sample, require `sample-boundary.json` and reject a sample that exceeds the rendered page limit or ends with a partial sentence or paragraph. Validate that the instructions' direct route, sample placement, and numbered actions match the current official evidence and every file or author-supplied item actually available. Do not mark an on-demand package ready when either file is absent, generic, stale, internally inconsistent, missing the sample record, or unable to establish provenance and tell the author exactly how to submit.
 
 Use the approved static query results as the sole source for the agent-specific query letter's story-side content. Derive story claims from `static/story-ledger.md` and other content from `static/master-query-letter.md`, `static/book-positioning.md`, `static/author-bio.md`, `static/intake-summary.md`, and confirmed static package state. Do not return to the manuscript to invent a different pitch for the agent, and never use editorial-process outputs.
 
@@ -244,4 +253,6 @@ Acquire current information about the identified agent and agency, using officia
 
 Never claim that an agent requested the work, met the author, represents a comparison title, or expressed a preference unless a current reliable source supports it.
 
-Treat every existing on-demand ZIP as invalid after a material correction to the static package or manuscript identity recorded in its manifest. Regenerate the ZIP only after a new explicit `build a package for <agent>` request and after the corrected static package passes the atomic-claim audit. Record the new provenance in the ZIP manifest. A revised agent-specific synopsis must pass a new claim audit but requires no separate author approval.
+Treat every existing on-demand ZIP as a terminal historical product that is never a source for later work. A material correction to static state also makes packages derived from the superseded state unusable. Reproduce a complete ZIP only after a new explicit named-agent build, rebuild, or regeneration request and after the current static package passes validation. Record `Build mode: fresh-reproduction` and `Prior on-demand source: none` in the new manifest. A freshly generated agent-specific synopsis must pass a new claim audit but requires no separate author approval.
+
+Before delivery, run `scripts/validate_on_demand.py --new-zip <staged-zip>` and then `scripts/validate_on_demand.py --root <query-package/on-demand>`. The root check must not open existing ZIPs; it verifies only that no loose output or staging directory is present. Remove staging after atomic placement.

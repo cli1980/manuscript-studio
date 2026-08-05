@@ -1,4 +1,4 @@
 interface:
   display_name: "Literary Agent Querying"
-  short_description: "Build human-confirmed literary query packages"
-  default_prompt: "Use $literary-agent-querying to build or refresh my manuscript-grounded query package, present the story-ledger approval sheet for explicit item-by-item review, research suitable agents, or reuse approved artifacts to build a package for a specific agent."
+  short_description: "Build fresh, human-confirmed query packages"
+  default_prompt: "Use $literary-agent-querying to maintain my approved static query assets or freshly reproduce a complete package for a named agent without reusing prior on-demand output."
