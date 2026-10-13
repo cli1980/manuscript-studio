@@ -634,7 +634,7 @@ Do not claim that the novel has completed a service merely because every chapter
 
 ## 11. Skill Packaging Implications
 
-Keep the future `literary-editing/SKILL.md` focused on:
+Keep `plugins/manuscript-studio/skills/literary-editing/SKILL.md` focused on:
 
 - manuscript initialization;
 - intent routing;

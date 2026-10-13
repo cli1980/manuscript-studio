@@ -6,28 +6,100 @@ The project is designed to keep authors and translators focused on ideas, voice,
 
 ## Install as a ChatGPT and Codex plugin
 
-The five skills are also packaged as the skills-only
-`manuscript-studio` plugin. Add this GitHub repository as a
-marketplace:
+The five skills live in one canonical directory, `plugins/manuscript-studio/skills/`.
+The skills-only `manuscript-studio` plugin uses these files directly; the standalone
+installer copies from the same source. Add this GitHub repository as a marketplace:
 
 ```text
 codex plugin marketplace add cli1980/manuscript-studio --ref main
 ```
 
-Then open the Plugins Directory in ChatGPT Work or Codex, select the
-`Manuscript Studio` marketplace, and install `manuscript-studio`. Start a
-new conversation after installation.
+Then open the Plugins Directory on a supported ChatGPT desktop or Codex surface,
+select the `Manuscript Studio` marketplace, and install `manuscript-studio`.
+Start a new conversation after installation. Local/Git marketplace availability
+varies by product and workspace; adding this marketplace does not by itself
+publish the plugin to the public directory or install it in ChatGPT web.
 
 Existing installations do not automatically migrate because the marketplace
 and plugin IDs changed. Uninstall `quillholic-literary-suite`, add the renamed
 marketplace if necessary, and install `manuscript-studio`.
-## Getting started
 
-No installation is required. You can ask an AI agent to use a skill by name, or point it to the project:
+## Install standalone skills for Codex
+
+Clone or download this repository and use Python 3.10 or newer. No third-party
+Python packages, administrator privileges, or symlinks are required. From the
+repository root, list the skills and preview installation:
 
 ```text
-https://github.com/cli1980/manuscript-studio
+python scripts/install_skills.py --list
+python scripts/install_skills.py --dry-run
 ```
+
+Install all five skills into `~/.agents/skills/`:
+
+```text
+python scripts/install_skills.py
+```
+
+Or install selected skills:
+
+```text
+python scripts/install_skills.py literary-editing literary-agent-querying
+```
+
+Editing, translation, querying, and formatting also install the shared
+`review-approval-sheet` skill to preserve sibling references. Complete skill
+folders are copied, including references, scripts, tests, agent metadata, and
+assets; Python bytecode and cache directories are excluded.
+
+Use `--dest` for another skill directory, such as a manuscript project's
+`.agents/skills/` folder outside this source repository:
+
+```text
+python scripts/install_skills.py --dest "C:/Manuscripts/My Novel/.agents/skills" literary-editing
+```
+
+On Windows, `py -3` can replace `python`. The installer also works from another
+working directory when invoked by its full path. Codex should discover the
+installed skills automatically; restart it if they do not appear. Choose either
+standalone installation or the plugin for the same skills in a given environment
+to avoid duplicate skill entries. This script does not install into ChatGPT web.
+
+### Updates and existing installations
+
+After updating your repository checkout, preview and explicitly authorize an update:
+
+```text
+python scripts/install_skills.py --update --dry-run
+python scripts/install_skills.py --update
+```
+
+Use the same `--dest` and skill selection as the original installation when applicable.
+The installer performs no downloads and does not update Git or agent configuration.
+
+- Reinstalling identical, managed skills is a no-op.
+- Updates require `--update` and a valid `.manuscript-studio-install.json` receipt
+  inside each installed skill. Hashes detect edited, added, or deleted files.
+- Unmanaged or locally modified installations are never overwritten, even with
+  `--update`. Preserve any local work and move the conflicting skill directory
+  outside the discovery directory before reinstalling.
+- Each clean update retains the previous directory in
+  `<destination-parent>/.manuscript-studio-backups/`, outside the skills discovery
+  directory. The installer prints its exact location and does not prune backups.
+- Sources and destinations containing symlinks or Windows reparse points are
+  rejected. Installing into or over this source repository is also rejected.
+- The full selection is preflighted before installation. Replacements are staged
+  and recover the old directory if publishing fails, but a multi-skill install is
+  not one transaction. If interrupted, inspect the installed skills and retained
+  backups before retrying. Remove a stale `.manuscript-studio-install.lock` from
+  the destination only after confirming no installer is running.
+
+## Getting started
+
+For automatic skill discovery, use a supported installation method above. For
+manual instruction-based use, point the agent to a skill's `SKILL.md` under
+`plugins/manuscript-studio/skills/` and make its referenced resources available.
+Reading a GitHub page alone does not install a skill or provide a script runtime.
 
 Choose the working style that matches your AI environment.
 
@@ -37,7 +109,7 @@ This option is for browser-based AI chat services.
 
 1. Create a project in the chat service.
 2. Link or upload your manuscript to that project.
-3. Ask the agent to use **Manuscript Studio** from GitHub and describe what you want to do. If the agent does not recognize the project, give it the repository link.
+3. Select an installed **Manuscript Studio** skill when your product supports it. Otherwise upload the relevant skill instructions and supporting resources, or ask the agent to read them from this repository. Confirm that the required files and execution tools are available before starting a script-backed workflow.
 
 The agent will use project files and chat output artifacts as its workspace. Because a web chat may not have Git or direct filesystem access, some version-control features will be unavailable. In that case, the agent will not modify the manuscript source directly: it will return the revised source for you to review and apply manually.
 
@@ -78,6 +150,27 @@ Inspects a project draft, recommends and confirms a reusable genre- and purpose-
 
 Provides a shared interactive review interface for stable-ID approval sheets. It validates revision-bound state, presents compact navigation and item-specific decisions, parses explicit submissions, and preserves each literary skill's own authoritative records, domain rules, and separate action gates.
 
+## Development and verification
+
+Edit skill content only under `plugins/manuscript-studio/skills/`. The plugin and
+standalone installer use that same directory; do not recreate top-level skill
+copies. When introducing a sibling-skill dependency, update the installer's
+`DEPENDENCIES` mapping and its tests.
+
+Run the dependency-free Python regression suites from the repository root:
+
+```text
+python -B scripts/test_install_skills.py
+python -B plugins/manuscript-studio/skills/literary-agent-querying/scripts/test_sample_boundary.py
+python -B plugins/manuscript-studio/skills/literary-agent-querying/scripts/test_validate_on_demand.py
+python -B plugins/manuscript-studio/skills/review-approval-sheet/scripts/test_approval_review.py
+```
+
+Installer tests use temporary destinations, not your personal skill directory.
+Real symlink tests skip when the OS does not permit link creation; simulated link
+and Windows reparse-point checks still run. To also check the rendered approval
+interface's JavaScript syntax, set `NODE_BINARY` to an available Node.js executable
+before running the approval-review suite.
 
 ## The idea behind the project
 

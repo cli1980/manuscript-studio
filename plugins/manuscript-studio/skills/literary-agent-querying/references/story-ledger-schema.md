@@ -282,14 +282,15 @@ The gate fails while any unit is `pending`, `correction-required`, or `invalidat
 
 ## On-demand synopsis generation
 
-When an agent's verified guidelines request a synopsis:
+When an agent's verified guidelines request a synopsis, generate it only as a fresh component of that agent's complete one-time package. Do not inspect, quote, summarize, or reuse any prior synopsis or other on-demand output.
 
 1. Verify that the ledger is `approved`, synopsis readiness is `ready` or applicable `ready-with-open-items`, the human-review gate is `passed`, the review artifact matches the ledger revision, and the ledger is bound to the unchanged manuscript identity. Do not reopen the raw manuscript.
-2. Select the closest compression profile, then adjust only for the verified length, format, or emphasis.
+2. Start from an empty staged synopsis file and select the closest compression profile, then adjust only for the newly verified length, format, or emphasis.
 3. Draft from selected event, thread, arc, revelation, and resolution IDs. Preserve causal edges, knowledge timing, and required qualifications.
 4. Include the ending and material resolution. Do not manufacture closure for deliberately open series threads.
 5. Split the draft into atomic clauses and map every material clause to ledger IDs.
-6. Remove or rewrite any clause that lacks a ledger source, overstates its claim type, assigns unsupported motive or knowledge, or invents causation.
-7. Record claim-audit counts and ledger revision in the on-demand manifest.
+6. Remove or rewrite any clause that lacks a ledger source, overstates its claim type, violates prohibited wording, leaks an attribute across an ambiguous identity or time boundary, assigns unsupported motive or knowledge, or invents causation.
+7. Record claim-audit counts, ledger revision, `Build mode: fresh-reproduction`, and `Prior on-demand source: none` in the on-demand manifest.
+8. Place the synopsis only inside the complete staged ZIP; never persist or deliver it as a loose on-demand file.
 
 If generation exposes a missing fact or causal connection, stop. Mark the ledger `not-ready` for the affected synopsis profile and request authorization for a targeted ledger refresh from the manuscript or a narrowly scoped author confirmation. Do not silently revisit the manuscript, guess, or seek separate approval of otherwise grounded synopsis prose.

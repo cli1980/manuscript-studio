@@ -1,4 +1,0 @@
-interface:
-  display_name: "Literary Agent Querying"
-  short_description: "Build fresh, human-confirmed query packages"
-  default_prompt: "Use $literary-agent-querying to maintain my approved static query assets or freshly reproduce a complete package for a named agent without reusing prior on-demand output."
