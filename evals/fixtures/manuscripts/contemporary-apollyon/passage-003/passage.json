@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "group_id": "contemporary-apollyon",
+  "passage_id": "contemporary-apollyon-passage-003",
+  "revision": 1,
+  "source_language": "zh",
+  "source_file": "source.zh.txt",
+  "work": {
+    "title": "论一个清洁工是怎么从Apollyon级（伪）手中拯救世界五次的",
+    "title_en": "On how a cleaner saved the world five times from an Apollyon-class (pseudo) entity",
+    "author": "Dr Vodka Skyy"
+  },
+  "context": {
+    "genre": "Contemporary Chinese-original speculative fiction / horror / satire",
+    "background": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  },
+  "provenance": {
+    "usage_rights": "permitted",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "attribution": "论一个清洁工是怎么从Apollyon级（伪）手中拯救世界五次的 / On how a cleaner saved the world five times from an Apollyon-class (pseudo) entity, by Dr Vodka Skyy. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/apollyon and https://scp-int.wikidot.com/apollyon.",
+    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+    "corpus_collection": "contemporary_corpus",
+    "corpus_record_id": "contemporary-003",
+    "source_work_id": "apollyon",
+    "retrieved_date": "2026-10-19",
+    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+    "source_origin": "published Chinese original",
+    "source_url": "https://scp-cn.wiki/apollyon",
+    "author_credit_url": "https://scp-int.wikidot.com/cn-hub",
+    "source_credits": [],
+    "source_snapshot_sha256": "3559036a8719a11954266f641bb1f145b558d9599a5270106a8cfd202db5de8a",
+    "extracted_block_range_exclusive": [
+      30,
+      54
+    ],
+    "corpus_review": {
+      "reviewer": "Codex (AI)",
+      "date": "2026-10-19",
+      "boundary_rationale": "Two consecutive reset-and-solution episodes, ending with the cleaner's assessment of the second solution.",
+      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+    }
+  }
+}

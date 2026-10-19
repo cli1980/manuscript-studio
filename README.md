@@ -179,8 +179,9 @@ issue annotations, with temporary shared-key access. Passages, translations,
 and case metadata are read-only. Cases, shared fixtures, rubrics, and ignored
 run results remain separate from distributed skills. The
 [blind translation-judge runner](evals/README.md#run-the-translation-judge) can
-prepare model inputs or score cases through a configured model API and compare
-the results with human judgments. Dataset export and fine-tuning are not implemented.
+export human-labeled training examples, compare blind model predictions with
+human judgments, or judge new translated outputs without human references.
+Fine-tuning job execution and automatic dataset splitting are not implemented.
 
 Server edits are staged in a temporary workspace. Use **Submit changes** to
 publish judgment records to the original evaluation files; unsubmitted edits are discarded

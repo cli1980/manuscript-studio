@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "group_id": "contemporary-wallisbroken",
+  "passage_id": "contemporary-wallisbroken-passage-037",
+  "revision": 1,
+  "source_language": "zh",
+  "source_file": "source.zh.txt",
+  "work": {
+    "title": "破壁行动",
+    "title_en": "Breaking the wall",
+    "author": "Meltyland Nightmare"
+  },
+  "context": {
+    "genre": "Contemporary Chinese-original speculative fiction / horror / satire",
+    "background": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  },
+  "provenance": {
+    "usage_rights": "permitted",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "attribution": "破壁行动 / Breaking the wall, by Meltyland Nightmare. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/wallisbroken and http://scp-int.wikidot.com/wallisbroken.",
+    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+    "corpus_collection": "contemporary_corpus",
+    "corpus_record_id": "contemporary-037",
+    "source_work_id": "wallisbroken",
+    "retrieved_date": "2026-10-19",
+    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+    "source_origin": "published Chinese original",
+    "source_url": "https://scp-cn.wiki/wallisbroken",
+    "author_credit_url": "https://scp-int.wikidot.com/cn-hub",
+    "source_credits": [
+      "Rating: +64",
+      "著作信息 本文作者为 Meltyland Nightmare 。该作者的更多作品见 首席研究员祖绫的人事页。 Rating: +64"
+    ],
+    "source_snapshot_sha256": "737b65e9603546d134e070924df647402750ef695f749ddd773df6fe00325a61",
+    "extracted_block_range_exclusive": [
+      0,
+      17
+    ],
+    "corpus_review": {
+      "reviewer": "Codex (AI)",
+      "date": "2026-10-19",
+      "boundary_rationale": "The declaration of the operation and its first planning meeting form a complete opening phase.",
+      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+    }
+  }
+}

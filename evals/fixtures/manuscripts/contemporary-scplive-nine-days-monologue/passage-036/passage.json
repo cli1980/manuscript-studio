@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "group_id": "contemporary-scplive-nine-days-monologue",
+  "passage_id": "contemporary-scplive-nine-days-monologue-passage-036",
+  "revision": 1,
+  "source_language": "zh",
+  "source_file": "source.zh.txt",
+  "work": {
+    "title": "SCPLIVE! 九日独白 个人专辑及角色PV",
+    "title_en": "SCPLIVE! Nine Days Monologue - Solo Albums and Character PVs",
+    "author": "InitializerCOX (script); character design by breaddddd; edited and translated by la kanro"
+  },
+  "context": {
+    "genre": "Contemporary Chinese-original speculative fiction / horror / satire",
+    "background": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  },
+  "provenance": {
+    "usage_rights": "permitted",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "attribution": "SCPLIVE! 九日独白 个人专辑及角色PV / SCPLIVE! Nine Days Monologue - Solo Albums and Character PVs, by InitializerCOX (script); character design by breaddddd; edited and translated by la kanro. Translation: la kanro CC BY-SA 3.0. Sources: https://scp-cn.wiki/scplive-nine-days-monologue and https://scp-int.wikidot.com/scplive-nine-days-monologue.",
+    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+    "corpus_collection": "contemporary_corpus",
+    "corpus_record_id": "contemporary-036",
+    "source_work_id": "scplive-nine-days-monologue",
+    "retrieved_date": "2026-10-19",
+    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+    "source_origin": "published Chinese original",
+    "source_url": "https://scp-cn.wiki/scplive-nine-days-monologue",
+    "author_credit_url": "https://scp-int.wikidot.com/cn-hub",
+    "source_credits": [
+      "Rating: +52",
+      "著作信息 感谢名单（按首字母排序） 人物立绘： breaddddd 脚本＆编剧： InitializerCOX 编辑： la kanro CSS： Zihao Huang 出现的人设的作者页面 Ayaka Saibara Bread Comix Eleanor Empira Misaka Scarlet 以及其他为SCPLive！基金会偶像计划！企划做出贡献的成员。 图床： 日分文件站 Rating: +52",
+      "‡ 授权 / 引用 ‡ 隐藏授权 / 引用 请按如下方式引用此页： 列表暂不可用： 此 ListPages 查询尚未由只读迁移站支持。 列表暂不可用： 此 ListPages 查询尚未由只读迁移站支持。 更多详情请参阅 授权指南 。 [[/iftags]]===== 文件名： kanro 图像名： kanro 图像作者： initializerCOX 授权协议： CC BY-SA 3.0 来源链接： http://scpsandboxcn.wikidot.com/girls-frontline/ ===== 文件名： jane-simple.jpg 图像名： ジェイン・シンプル 图像作者： breaddddd 授权协议： CC BY-SA 3.0 来源链接： http://scp-jp-storage.wikidot.com/file:3741648-11-vm7j ===== 文件名： karina-valentinovna-savitskaya.jpg 图像名： カリーナ・ワレンチノヴナ・サビツカヤ 图像作者： breaddddd 授权协议： CC BY-SA 3.0 来源链接： http://scp-jp-storage.wikidot.com/file:3741648-12-ofnk ===== 文件名： misaka.jpg 图像名： ミサカ 图像作者： breaddddd 授权协议： CC BY-SA 3.0 来源链接： http://scp-jp-storage.wikidot.com/file:3741648-13-ayqz ===== 文件名： ayaka-saibara.jpg 图像名： 催馬楽 綾香 图像作者： breaddddd 授权协议： CC BY-SA 3.0 来源链接： http://scp-jp-storage.wikidot.com/file:3741648-13-xa0p ===== 文件名： eleanor-ursula-empira.jpg 图像名： エレノア・アーシュラ・エンパイラ 图像作者： breaddddd 授权协议： CC BY-SA 3.0 来源链接： http://scp-jp-storage.wikidot.com/file:3741648-12-t8yf ===== 文件名： bread.jpg 图像名： ブレッド 图像作者： breaddddd 授权协议： CC BY-SA 3.0 来源链接： http://scp-jp-storage.wikidot.com/file:3741648-13-o2es ===== 文件名： scarlet.jpg 图像名： スカーレット 图像作者： breaddddd 授权协议： CC BY-SA 3.0 来源链接： http://scp-jp-storage.wikidot.com/file:3741648-21-r18o ===== 文件名： comix.jpg 图像名： コミックス 图像作者： breaddddd 授权协议： CC BY-SA 3.0 来源链接： http://scp-jp-storage.wikidot.com/file:3741648-20-n2m2 ===== 文件名： frisch.jpg 图像名： フリッシュ 图像作者： breaddddd 授权协议： CC BY-SA 3.0 来源链接： http://scp-jp-storage.wikidot.com/file:3741648-19-v9lw ===== 文件名： aic-comix-angry.PNG 图像名： AIC 图像作者： breaddddd 授权协议： CC BY-SA 3.0 来源链接： http://scp-wiki-cn.wikidot.com/breaddddd-art-aic#toc14 注： 本文所用文件为 initializerCOX 对原图的裁剪。 ====="
+    ],
+    "source_snapshot_sha256": "af2e6b3bcbf8f0e2636d68795ab54525d396548860b61a15a30839e5661eee16",
+    "extracted_block_range_exclusive": [
+      44,
+      60
+    ],
+    "corpus_review": {
+      "reviewer": "Codex (AI)",
+      "date": "2026-10-19",
+      "boundary_rationale": "The complete fishing trip and its reveal: the catch is a diver.",
+      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+    }
+  }
+}

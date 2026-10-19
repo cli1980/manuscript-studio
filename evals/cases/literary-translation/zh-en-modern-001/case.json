@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "case_id": "zh-en-modern-001",
+  "revision": 1,
+  "status": "placeholder",
+  "task": "literary-translation-quality",
+  "source_language": "zh",
+  "target_language": "en",
+  "source_file": "../../../fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt",
+  "source_metadata_file": "../../../fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json",
+  "source_revision": 1,
+  "translation_file": "translation.en.txt",
+  "group_id": "modern-lu-xun-guxiang",
+  "passage_id": "modern-lu-xun-guxiang-passage-001",
+  "context": {
+    "brief": null
+  },
+  "provenance": {
+    "translation_origin": "user-provided",
+    "usage_rights": "pending"
+  }
+}

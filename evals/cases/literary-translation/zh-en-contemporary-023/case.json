@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "case_id": "zh-en-contemporary-023",
+  "revision": 1,
+  "status": "ready",
+  "task": "literary-translation-quality",
+  "source_language": "zh",
+  "target_language": "en",
+  "source_file": "../../../fixtures/manuscripts/contemporary-spare-no-effort-so-that-you-can-die-easily/passage-023/source.zh.txt",
+  "source_metadata_file": "../../../fixtures/manuscripts/contemporary-spare-no-effort-so-that-you-can-die-easily/passage-023/passage.json",
+  "source_revision": 1,
+  "translation_file": "translation.en.txt",
+  "group_id": "contemporary-spare-no-effort-so-that-you-can-die-easily",
+  "passage_id": "contemporary-spare-no-effort-so-that-you-can-die-easily-passage-023",
+  "rubric_id": "literary-translation-quality-v1",
+  "context": {
+    "brief": null
+  },
+  "provenance": {
+    "usage_rights": "permitted",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "attribution": "你必须十分努力，才能死得毫不费劲 / You Must Work Extremely Hard to Die Without Effort, by DouglasLiu. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/spare-no-effort-so-that-you-can-die-easily and https://scp-int.wikidot.com/spare-no-effort-so-that-you-can-die-easily.",
+    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+    "corpus_collection": "contemporary_corpus",
+    "corpus_record_id": "contemporary-023",
+    "source_work_id": "spare-no-effort-so-that-you-can-die-easily",
+    "retrieved_date": "2026-10-19",
+    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+    "translation_origin": "published English translation",
+    "translator": "Not separately named in the retrieved credit box; see linked English page history and retained credits.",
+    "title_en": "You Must Work Extremely Hard to Die Without Effort",
+    "source_url": "https://scp-int.wikidot.com/spare-no-effort-so-that-you-can-die-easily",
+    "english_history_url": "https://scp-int.wikidot.com/spare-no-effort-so-that-you-can-die-easily/history",
+    "source_credits": [
+      "",
+      "Credits Story: You Must Work Extremely Hard to Die Without Effort Author: DouglasLiu , author page at here Image modifications based on the following pictures, all from Pixabay, Pixabay License: Desert ， Rain ， School ， Rail ， Whisky ， Screen"
+    ],
+    "source_snapshot_sha256": "1045930707bd0a171bdbac9ec6adea6386f18603509c1d36e80b80e23e4dde27",
+    "extracted_block_range_exclusive": [
+      10,
+      22
+    ],
+    "english_word_count": 624,
+    "selection_type": "complete_scene_or_story",
+    "corpus_review": {
+      "reviewer": "Codex (AI)",
+      "date": "2026-10-19",
+      "boundary_rationale": "A complete second-person street vignette, ending with the woman's unheard scream.",
+      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+    }
+  }
+}

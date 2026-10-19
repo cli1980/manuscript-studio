@@ -16,7 +16,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import run_judge as judge
 
-CASE_ID = "zh-en-000001"
+CASE_ID = "zh-en-modern-001"
 REVIEWER = "private-human-label"
 PREDICTION = {
     "overall_score": 3,
@@ -32,7 +32,7 @@ class JudgeTests(unittest.TestCase):
         self.root = Path(self.temporary.name).resolve() / "evals"
         for relative in (
             f"cases/literary-translation/{CASE_ID}",
-            "fixtures/manuscripts/work-001/passage-001", "rubrics",
+            "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001", "rubrics",
             "judges/literary-translation-judge",
         ):
             shutil.copytree(judge.ROOT / relative, self.root / relative)
@@ -40,7 +40,7 @@ class JudgeTests(unittest.TestCase):
         self.history = self.case_root / "judgments.jsonl"
         self.older = {
             "judgment_id": "older", "case_id": CASE_ID, "case_revision": 1,
-            "passage_id": "work-001-passage-001", "source_revision": 1,
+            "passage_id": "modern-lu-xun-guxiang-passage-001", "source_revision": 1,
             "rubric_version": "literary-translation-quality-v1",
             "rater_id": REVIEWER, "status": "complete", "overall_score": 2,
             "dimension_scores": {"fidelity": 1, "english_naturalness": 2, "literary_voice": 3},
@@ -93,7 +93,7 @@ class JudgeTests(unittest.TestCase):
         inputs = json.loads(request["messages"][1]["content"])
         self.assertEqual(set(inputs), {"source_text", "translation_text"})
         self.assertEqual(inputs["source_text"].encode("utf-8"),
-                         (self.root / "fixtures/manuscripts/work-001/passage-001/source.zh.txt").read_bytes())
+                         (self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt").read_bytes())
         self.assertEqual(inputs["translation_text"].encode("utf-8"), (self.case_root / "translation.en.txt").read_bytes())
         for marker in (REVIEWER, "SECRET_HUMAN_REASON", "SECRET_HUMAN_ISSUE", "supersedes_judgment_id"):
             self.assertNotIn(marker, json.dumps(request))
@@ -101,7 +101,7 @@ class JudgeTests(unittest.TestCase):
     def test_prepare_excludes_all_case_context_and_extra_metadata(self):
         for path in (
             self.case_root / "case.json",
-            self.root / "fixtures/manuscripts/work-001/passage-001/passage.json",
+            self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json",
             self.root / "rubrics/literary-translation-quality-v1.json",
         ):
             metadata = json.loads(path.read_text(encoding="utf-8"))
@@ -120,7 +120,7 @@ class JudgeTests(unittest.TestCase):
     def test_case_references_choose_the_texts_without_guessing_filenames(self):
         translation = self.case_root / "candidate-version-2.txt"
         translation.write_text("A separately referenced candidate.", encoding="utf-8")
-        source_root = self.root / "fixtures/manuscripts/work-001/passage-001"
+        source_root = self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001"
         source = source_root / "alternate-source.zh.txt"
         source.write_text("另一个原文段落。", encoding="utf-8")
         source_metadata = json.loads((source_root / "passage.json").read_text(encoding="utf-8"))
@@ -154,6 +154,150 @@ class JudgeTests(unittest.TestCase):
         self.assertTrue((destination / CASE_ID / "request.json").is_file())
         self.assertFalse((destination / CASE_ID / "prediction.json").exists())
         self.assertFalse((destination / "summary.json").exists())
+
+    def make_ready(self):
+        for path in (
+            self.case_root / "case.json",
+            self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json",
+        ):
+            metadata = json.loads(path.read_text(encoding="utf-8"))
+            metadata["provenance"]["usage_rights"] = "permitted"
+            if path.name == "case.json":
+                metadata["status"] = "ready"
+            path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    def test_training_export_uses_human_scores_only_as_assistant_targets(self):
+        self.make_ready()
+        self.latest["rationale"] = None
+        self.write_history([self.older, self.latest])
+        before = self.history.read_bytes()
+        with patch.dict(os.environ, {}, clear=True):
+            with patch.object(judge, "call_model", side_effect=AssertionError("Training export must not call a model")):
+                destination, manifest = judge.run(self.args(
+                    mode="export-training", prepare_only=False, smoke_test=False, model=None,
+                ))
+        self.assertEqual(manifest["status"], "completed")
+        self.assertTrue(manifest["training_eligible"])
+        self.assertFalse(manifest["benchmark_eligible"])
+        rows = [json.loads(line) for line in (destination / "training.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(rows), 1)
+        messages = rows[0]["messages"]
+        self.assertEqual([m["role"] for m in messages], ["system", "user", "assistant"])
+        self.assertEqual(set(json.loads(messages[1]["content"])), {"source_text", "translation_text"})
+        target = json.loads(messages[2]["content"])
+        self.assertEqual(target, {
+            "overall_score": 4, "dimension_scores": self.latest["dimension_scores"], "rationale": None,
+        })
+        self.assertNotIn(REVIEWER, json.dumps(messages))
+        self.assertNotIn("SECRET_HUMAN", json.dumps(messages[:2]))
+        index = json.loads((destination / "training-index.jsonl").read_text(encoding="utf-8"))
+        self.assertEqual(index["human_judgment_id"], "latest")
+        self.assertEqual(index["group_id"], "modern-lu-xun-guxiang")
+        self.assertEqual(self.history.read_bytes(), before)
+        self.assertFalse((destination / CASE_ID / "prediction.json").exists())
+
+    def test_training_export_retains_actual_human_explanation_when_present(self):
+        target = judge.training_target(self.latest)
+        self.assertEqual(target["rationale"], "SECRET_HUMAN_REASON")
+        self.assertEqual(target["overall_score"], self.latest["overall_score"])
+
+    def test_training_export_rejects_missing_dimension_labels(self):
+        self.latest["dimension_scores"]["fidelity"] = None
+        self.write_history([self.older, self.latest])
+        destination, manifest = judge.run(self.args(mode="export-training", prepare_only=False))
+        self.assertEqual(manifest["status"], "failed")
+        self.assertIn("missing human labels", manifest["cases"][0]["error"])
+        self.assertEqual((destination / "training.jsonl").read_text(), "")
+
+    def test_training_export_rejects_current_draft_without_falling_back(self):
+        draft = {**self.latest, "judgment_id": "draft", "supersedes_judgment_id": "latest", "status": "pending"}
+        self.write_history([self.older, self.latest, draft])
+        destination, manifest = judge.run(self.args(mode="export-training", prepare_only=False))
+        self.assertEqual(manifest["status"], "failed")
+        self.assertEqual((destination / "training.jsonl").read_text(), "")
+
+    def test_judge_only_scores_actual_output_without_reading_labels_or_stored_candidate(self):
+        candidate = self.root.parent / "actual translated output.md"
+        candidate.write_text("A new translated passage produced by the translation workflow.", encoding="utf-8")
+        (self.case_root / "translation.en.txt").unlink()
+        self.history.unlink()
+        reads = []
+        read = judge.read_bytes
+        response = {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(PREDICTION)}}]}
+
+        def observed(path, area):
+            reads.append(Path(path).name)
+            self.assertNotEqual(Path(path).name, "judgments.jsonl")
+            self.assertNotEqual(Path(path).name, "translation.en.txt")
+            return read(path, area)
+
+        with patch.dict(os.environ, {"EVAL_TEST_KEY": "fake"}):
+            with patch.object(judge, "call_model", return_value=response) as call:
+                with patch.object(judge, "read_bytes", side_effect=observed):
+                    destination, manifest = judge.run(self.args(
+                        mode="judge", prepare_only=False, reviewer=None, smoke_test=False,
+                        translation_file=candidate,
+                    ))
+        model_input = json.loads(call.call_args.args[0]["messages"][1]["content"])
+        self.assertEqual(model_input["translation_text"], candidate.read_text(encoding="utf-8"))
+        self.assertEqual(set(model_input), {"source_text", "translation_text"})
+        self.assertEqual(manifest["mode"], "judgment")
+        self.assertEqual(manifest["status"], "completed")
+        self.assertFalse(manifest["benchmark_eligible"])
+        self.assertEqual(manifest["cases"][0]["candidate_source"], "external_translation")
+        self.assertFalse((destination / CASE_ID / "comparison.json").exists())
+        summary = json.loads((destination / "summary.json").read_text())
+        self.assertEqual(summary["cases_judged"], 1)
+        self.assertNotIn("metrics", summary)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            judge.print_report(destination, manifest)
+        self.assertIn("LLM score", output.getvalue())
+        self.assertNotIn("Human reference reviewer", output.getvalue())
+        self.assertNotIn("MAE", output.getvalue())
+
+    def test_judge_only_can_prepare_case_candidate_without_human_file(self):
+        self.history.unlink()
+        with patch.object(judge, "call_model", side_effect=AssertionError("Prepare must not call a model")):
+            destination, manifest = judge.run(self.args(
+                mode="judge", reviewer=None, smoke_test=False, model=None,
+            ))
+        self.assertEqual(manifest["status"], "prepared")
+        self.assertEqual(manifest["purpose"], "judge")
+        self.assertTrue((destination / CASE_ID / "request.json").exists())
+
+    def test_judge_mode_rejects_skill_files_as_translation_outputs(self):
+        with self.assertRaisesRegex(judge.EvaluationError, "not skill instructions"):
+            judge.prepare_case(self.root, CASE_ID, purpose="judge",
+                               translation_file=self.root / "judges/literary-translation-judge/SKILL.md")
+
+    def test_mode_boundaries_reject_ambiguous_arguments(self):
+        for arguments in (
+            self.args(mode="judge"),
+            self.args(mode="evaluate", translation_file=self.case_root / "translation.en.txt"),
+            self.args(mode="judge", reviewer=None, case=None, all=True, translation_file=self.case_root / "translation.en.txt"),
+            self.args(mode="export-training", prepare_only=True),
+            self.args(mode="export-training", prepare_only=False, reviewer=None),
+        ):
+            with self.subTest(mode=arguments.mode), self.assertRaises(judge.EvaluationError):
+                judge.run(arguments)
+
+    def test_judge_only_rejects_external_translation_changed_during_scoring(self):
+        candidate = self.root.parent / "candidate.txt"
+        candidate.write_text("Initial candidate.", encoding="utf-8")
+
+        def call(*args):
+            candidate.write_text("Changed candidate.", encoding="utf-8")
+            return {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(PREDICTION)}}]}
+
+        with patch.dict(os.environ, {"EVAL_TEST_KEY": "fake"}):
+            with patch.object(judge, "call_model", side_effect=call):
+                destination, manifest = judge.run(self.args(
+                    mode="judge", reviewer=None, translation_file=candidate, prepare_only=False,
+                ))
+        self.assertEqual(manifest["status"], "failed")
+        self.assertIn("Inputs changed", manifest["cases"][0]["error"])
+        self.assertFalse((destination / CASE_ID / "comparison.json").exists())
 
     def test_current_case_requires_explicit_smoke_mode(self):
         with self.assertRaisesRegex(judge.EvaluationError, "smoke-test"):

@@ -1,4 +1,4 @@
-"""Prepare blind translation-judge requests and compare predictions with human scores."""
+"""Export judge training data, evaluate a judge blindly, or score new translations."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ OUTPUT_SCHEMA = {
             "required": list(DIMENSIONS),
             "additionalProperties": False,
         },
-        "rationale": {"type": "string"},
+        "rationale": {"type": ["string", "null"]},
     },
     "required": ["overall_score", "dimension_scores", "rationale"],
     "additionalProperties": False,
@@ -136,14 +136,15 @@ def rubric_contract(rubric):
     }
 
 
-def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=None):
+def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=None,
+                 purpose="evaluate", translation_file=None):
     case_root = root / "cases/literary-translation" / identifier(case_id)
-    paths, hashes = {}, {}
+    paths, hashes, areas = {}, {}, {}
 
     def read(name, path, area):
         path = guarded(path, area)
         raw = read_bytes(path, area)
-        paths[name], hashes[name] = path, sha(raw)
+        paths[name], hashes[name], areas[name] = path, sha(raw), area
         return raw
 
     case = object_json(read("case", case_root / "case.json", root / "cases/literary-translation"))
@@ -170,16 +171,28 @@ def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=Non
         and case.get("provenance", {}).get("usage_rights") == "permitted"
         and source.get("provenance", {}).get("usage_rights") == "permitted"
     )
-    if not eligible and not smoke_test:
+    if not eligible and not smoke_test and purpose != "judge":
         raise EvaluationError("Case is not benchmark-ready. Use --smoke-test for an explicitly exploratory run.")
     source_path = reference(case_root, case.get("source_file"), root / "fixtures/manuscripts")
     if source_path != reference(source_meta_path.parent, source.get("source_file"), source_meta_path.parent):
         raise EvaluationError("Case and passage reference different source texts.")
-    translation_path = reference(case_root, case.get("translation_file"), case_root)
-    if source_path.suffix != ".txt" or translation_path.suffix != ".txt":
+    if translation_file is None:
+        translation_area = case_root
+        translation_path = reference(case_root, case.get("translation_file"), case_root)
+    else:
+        if purpose != "judge":
+            raise EvaluationError("A translation override is allowed only in judge mode.")
+        translation_path = Path(os.path.abspath(translation_file))
+        translation_area = translation_path.parent
+        if translation_path.name.lower() == "skill.md" or any(
+            translation_path.is_relative_to(area)
+            for area in (ROOT.parent / "plugins", root / "judges", root / "rubrics")
+        ):
+            raise EvaluationError("Provide translated text, not skill instructions or rubric files.")
+    if source_path.suffix != ".txt" or translation_path.suffix.lower() not in {".txt", ".md"}:
         raise EvaluationError("Source and translation must be text files.")
     source_text = read("source", source_path, root / "fixtures/manuscripts").decode("utf-8")
-    translation_text = read("translation", translation_path, case_root).decode("utf-8")
+    translation_text = read("translation", translation_path, translation_area).decode("utf-8")
     if not source_text.strip() or not translation_text.strip():
         raise EvaluationError("Both source and translation must be populated.")
     rubric_id = identifier(case.get("rubric_id") or "literary-translation-quality-v1")
@@ -214,7 +227,9 @@ def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=Non
         request["temperature"] = temperature
     return {
         "case": case, "rubric_id": rubric_id, "request": request, "paths": paths,
-        "input_hashes": hashes, "benchmark_eligible": eligible and not smoke_test,
+        "areas": areas, "input_hashes": hashes,
+        "candidate_source": "external_translation" if translation_file is not None else "case_translation",
+        "benchmark_eligible": eligible and not smoke_test and purpose != "judge",
     }
 
 
@@ -232,8 +247,10 @@ def validate_prediction(value):
         raise EvaluationError("Prediction must score all three translation dimensions.")
     for score in value["dimension_scores"].values():
         validate_score(score)
-    if not isinstance(value["rationale"], str) or not value["rationale"].strip():
-        raise EvaluationError("Prediction must include a nonblank rationale.")
+    if value["rationale"] is not None and (
+        not isinstance(value["rationale"], str) or not value["rationale"].strip()
+    ):
+        raise EvaluationError("Rationale must be nonblank text or null when unavailable.")
     return value
 
 
@@ -286,6 +303,18 @@ def compare(prediction, human):
             "exact_match": None if expected is None else predicted == expected,
         }
     return result
+
+
+def training_target(human):
+    dimensions = human.get("dimension_scores") or {}
+    if any(dimensions.get(name) is None for name in DIMENSIONS):
+        raise EvaluationError("Training export requires all dimension scores; missing human labels are never invented.")
+    target = {
+        "overall_score": human["overall_score"],
+        "dimension_scores": {name: dimensions[name] for name in DIMENSIONS},
+        "rationale": human.get("rationale") or None,
+    }
+    return validate_prediction(target)
 
 
 def aggregate(comparisons):
@@ -357,11 +386,24 @@ def write_json(path, value):
 
 
 def ensure_inputs_unchanged(prepared, root):
-    if any(sha(read_bytes(path, root)) != prepared["input_hashes"][name] for name, path in prepared["paths"].items()):
-        raise EvaluationError("Evaluation inputs changed during the run; comparison was refused.")
+    if any(sha(read_bytes(path, prepared["areas"][name])) != prepared["input_hashes"][name]
+           for name, path in prepared["paths"].items()):
+        raise EvaluationError("Inputs changed during the run; the result cannot be finalized.")
 
 
 def run(args):
+    purpose = getattr(args, "mode", "evaluate")
+    translation_file = getattr(args, "translation_file", None)
+    if purpose not in {"evaluate", "judge", "export-training"}:
+        raise EvaluationError("Unknown runner mode.")
+    if purpose == "export-training" and args.prepare_only:
+        raise EvaluationError("Training export reads human labels; it cannot be combined with --prepare-only.")
+    if purpose == "judge" and args.reviewer:
+        raise EvaluationError("Judge mode does not use human references; omit --reviewer.")
+    if translation_file is not None and (purpose != "judge" or not args.case or len(args.case) != 1):
+        raise EvaluationError("--translation-file requires judge mode and exactly one --case.")
+    if purpose == "export-training" and (not args.reviewer or not args.reviewer.strip()):
+        raise EvaluationError("Training export requires --reviewer to select the human targets.")
     root = guarded(args.data_dir, args.data_dir)
     cases_root = guarded(root / "cases/literary-translation", root)
     case_ids = list(dict.fromkeys(args.case or [
@@ -371,15 +413,18 @@ def run(args):
     if not case_ids:
         raise EvaluationError("No literary-translation cases found.")
     key = None
-    url = endpoint(args.base_url)
-    if not args.prepare_only:
-        if not args.model or not args.reviewer or not args.reviewer.strip():
+    url = endpoint(args.base_url) if purpose != "export-training" else None
+    if not args.prepare_only and purpose != "export-training":
+        if not args.model:
+            raise EvaluationError("Scoring requires --model.")
+        if purpose == "evaluate" and (not args.reviewer or not args.reviewer.strip()):
             raise EvaluationError("Live evaluation requires --model and --reviewer.")
         key = os.environ.get(args.api_key_env)
         if not key:
             raise EvaluationError(f"{args.api_key_env} is not set. Configure a model API key or use --prepare-only.")
     prepared = [prepare_case(root, case_id, model=args.model, smoke_test=args.smoke_test,
-                             temperature=args.temperature) for case_id in case_ids]
+                             temperature=args.temperature, purpose=purpose,
+                             translation_file=translation_file) for case_id in case_ids]
     results = guarded(root / "results", root)
     results.mkdir(exist_ok=True)
     run_id = "judge-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
@@ -387,15 +432,23 @@ def run(args):
     destination.mkdir()
     manifest = {
         "schema_version": 1, "run_id": run_id, "started_at": datetime.now(timezone.utc).isoformat(),
-        "mode": "prepare_only" if args.prepare_only else "model_evaluation",
-        "scope": "smoke_test" if args.smoke_test else "benchmark",
-        "benchmark_eligible": not args.smoke_test and all(p["benchmark_eligible"] for p in prepared),
-        "model": args.model, "api_base_url": args.base_url,
+        "purpose": purpose,
+        "mode": "prepare_only" if args.prepare_only else {
+            "evaluate": "model_evaluation", "judge": "judgment", "export-training": "training_export",
+        }[purpose],
+        "scope": "smoke_test" if args.smoke_test else {
+            "evaluate": "benchmark", "judge": "judgment", "export-training": "training",
+        }[purpose],
+        "benchmark_eligible": purpose == "evaluate" and not args.smoke_test and all(p["benchmark_eligible"] for p in prepared),
+        "training_eligible": False,
+        "model": args.model, "api_base_url": args.base_url if purpose != "export-training" else None,
         "temperature": args.temperature, "reviewer": args.reviewer,
         "human_labels_sent_to_model": False, "cases": [], "status": "running",
     }
     write_json(destination / "run.json", manifest)
     comparisons = []
+    training_rows = []
+    training_index = []
     failures = 0
     for item in prepared:
         case = item["case"]
@@ -407,11 +460,38 @@ def run(args):
             "group_id": case["group_id"], "passage_id": case["passage_id"],
             "source_revision": case["source_revision"], "rubric_id": item["rubric_id"],
             "input_hashes": item["input_hashes"],
+            "candidate_source": item["candidate_source"],
             "request_sha256": sha((case_dir / "request.json").read_bytes()),
             "status": "prepared",
         }
         manifest["cases"].append(record)
-        if not args.prepare_only:
+        if purpose == "export-training":
+            try:
+                ensure_inputs_unchanged(item, root)
+                human, human_hash = human_reference(item, args.reviewer.strip())
+                target = training_target(human)
+                row = {
+                    "messages": [
+                        *item["request"]["messages"],
+                        {"role": "assistant", "content": json.dumps(target, ensure_ascii=False)},
+                    ],
+                }
+                write_json(case_dir / "training-target.json", target)
+                training_rows.append(row)
+                training_index.append({
+                    "line": len(training_rows), "case_id": case["case_id"],
+                    "group_id": case["group_id"], "case_revision": case["revision"],
+                    "source_revision": case["source_revision"], "rubric_id": item["rubric_id"],
+                    "human_judgment_id": human["judgment_id"], "human_judgments_sha256": human_hash,
+                    "input_hashes": item["input_hashes"],
+                })
+                record["human_judgment_id"] = human["judgment_id"]
+                record["status"] = "exported"
+            except (EvaluationError, OSError, UnicodeError) as exc:
+                failures += 1
+                record["status"] = "failed"
+                record["error"] = str(exc)
+        elif not args.prepare_only:
             started = time.monotonic()
             try:
                 response = call_model(item["request"], url, key, args.timeout)
@@ -423,29 +503,45 @@ def run(args):
                 write_json(case_dir / "prediction.json", prediction)
                 record["status"] = "predicted"
                 ensure_inputs_unchanged(item, root)
-                human, human_hash = human_reference(item, args.reviewer.strip())
-                difference = compare(prediction, human)
-                write_json(case_dir / "comparison.json", {
-                    "case_id": case["case_id"], "human_judgment_id": human["judgment_id"],
-                    "human_judgments_sha256": human_hash, "scores": difference,
-                })
-                comparisons.append(difference)
-                record["human_judgment_id"] = human["judgment_id"]
-                record["status"] = "compared"
+                if purpose == "evaluate":
+                    human, human_hash = human_reference(item, args.reviewer.strip())
+                    difference = compare(prediction, human)
+                    write_json(case_dir / "comparison.json", {
+                        "case_id": case["case_id"], "human_judgment_id": human["judgment_id"],
+                        "human_judgments_sha256": human_hash, "scores": difference,
+                    })
+                    comparisons.append(difference)
+                    record["human_judgment_id"] = human["judgment_id"]
+                    record["status"] = "compared"
             except (EvaluationError, OSError, UnicodeError) as exc:
                 failures += 1
                 record["status"] = "failed"
                 record["error"] = str(exc)
         write_json(destination / "run.json", manifest)
     manifest["status"] = "prepared" if args.prepare_only else "failed" if failures else "completed"
+    manifest["training_eligible"] = (
+        purpose == "export-training" and not args.smoke_test and bool(training_rows) and not failures
+    )
     manifest["finished_at"] = datetime.now(timezone.utc).isoformat()
     write_json(destination / "run.json", manifest)
+    if purpose == "export-training":
+        for filename, rows in (("training.jsonl", training_rows), ("training-index.jsonl", training_index)):
+            (destination / filename).write_text(
+                "".join(json.dumps(row, ensure_ascii=False, allow_nan=False) + "\n" for row in rows),
+                encoding="utf-8",
+            )
     if not args.prepare_only:
-        write_json(destination / "summary.json", {
+        summary = {
             "scope": manifest["scope"], "benchmark_eligible": manifest["benchmark_eligible"],
-            "cases_requested": len(prepared), "cases_compared": len(comparisons), "cases_failed": failures,
-            "metrics": aggregate(comparisons),
-        })
+            "cases_requested": len(prepared), "cases_failed": failures,
+        }
+        if purpose == "evaluate":
+            summary.update(cases_compared=len(comparisons), metrics=aggregate(comparisons))
+        elif purpose == "judge":
+            summary["cases_judged"] = sum(case["status"] == "predicted" for case in manifest["cases"])
+        else:
+            summary["cases_exported"] = len(training_rows)
+        write_json(destination / "summary.json", summary)
     return destination, manifest
 
 
@@ -459,20 +555,40 @@ def print_report(destination, manifest):
     if manifest["mode"] == "prepare_only":
         print("No model was called. No prediction or evaluation result is available.")
         return
+    if manifest["mode"] == "training_export":
+        summary = object_json(read_bytes(destination / "summary.json", destination))
+        print("No model was called. Human scores are assistant targets; model inputs remain blind.")
+        print(f"Human reference reviewer: {manifest['reviewer']}")
+        print(f"Exported: {summary['cases_exported']}/{summary['cases_requested']}; failed: {summary['cases_failed']}")
+        print(f"Training examples: {destination / 'training.jsonl'}")
+        print(f"Case and work-group index: {destination / 'training-index.jsonl'}")
+        for case in manifest["cases"]:
+            if case["status"] == "failed":
+                print(f"{case['case_id']}: {case['error']}")
+        return
     print(f"Model: {manifest['model']}")
-    print(f"Human reference reviewer: {manifest['reviewer']}")
+    judgment_only = manifest["mode"] == "judgment"
+    if not judgment_only:
+        print(f"Human reference reviewer: {manifest['reviewer']}")
     labels = {
         "overall_score": "Overall", "fidelity": "Fidelity",
         "english_naturalness": "English naturalness", "literary_voice": "Literary voice",
     }
     for case in manifest["cases"]:
         print(f"\nCase: {case['case_id']}")
-        if case["status"] != "compared":
-            print(f"Evaluation failed: {case.get('error', 'No comparison available.')}")
+        if case["status"] != ("predicted" if judgment_only else "compared"):
+            print(f"Evaluation failed: {case.get('error', 'No result available.')}")
             continue
         directory = destination / case["case_id"]
-        comparison = object_json(read_bytes(directory / "comparison.json", destination))
         prediction = object_json(read_bytes(directory / "prediction.json", destination))
+        if judgment_only:
+            print(f"{'Dimension':<21} {'LLM score':>10}")
+            for name in METRICS:
+                score = prediction["overall_score"] if name == "overall_score" else prediction["dimension_scores"][name]
+                print(f"{labels[name]:<21} {score:>10}")
+            print(f"Judge rationale: {prediction['rationale'] or 'Not provided.'}")
+            continue
+        comparison = object_json(read_bytes(directory / "comparison.json", destination))
         print(f"Human judgment: {comparison['human_judgment_id']}")
         print(f"{'Dimension':<21} {'Human':>6} {'LLM':>6} {'LLM-human':>10} {'Abs error':>10}")
         for name in METRICS:
@@ -481,8 +597,12 @@ def print_report(destination, manifest):
             delta = "n/a" if score["signed_error"] is None else f"{score['signed_error']:+d}"
             error = "n/a" if score["absolute_error"] is None else str(score["absolute_error"])
             print(f"{labels[name]:<21} {human:>6} {score['predicted']:>6} {delta:>10} {error:>10}")
-        print(f"Judge rationale: {prediction['rationale']}")
+        print(f"Judge rationale: {prediction['rationale'] or 'Not provided.'}")
     summary = object_json(read_bytes(destination / "summary.json", destination))
+    if judgment_only:
+        print(f"\nJudged: {summary['cases_judged']}/{summary['cases_requested']}; failed: {summary['cases_failed']}")
+        print("Human reference comparison is disabled in judge mode.")
+        return
     print(f"\nCompared: {summary['cases_compared']}/{summary['cases_requested']}; failed: {summary['cases_failed']}")
     if not summary["cases_compared"]:
         print("No valid comparisons are available; judge quality cannot be assessed.")
@@ -498,12 +618,14 @@ def print_report(destination, manifest):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Run a blind literary-translation judge and compare human scores separately.")
+    parser = argparse.ArgumentParser(description="Export human-labeled judge training data, evaluate a judge blindly, or judge translations.")
+    parser.add_argument("--mode", choices=["evaluate", "judge", "export-training"], default="evaluate")
     selection = parser.add_mutually_exclusive_group(required=True)
     selection.add_argument("--case", action="append", help="Case ID; repeat to select multiple cases.")
     selection.add_argument("--all", action="store_true", help="Select all literary-translation cases.")
     parser.add_argument("--data-dir", type=Path, default=ROOT)
     parser.add_argument("--reviewer", help="Human reference label; never sent to the model.")
+    parser.add_argument("--translation-file", type=Path, help="Judge mode only: the actual translated output (.txt or .md), using --case for its source.")
     parser.add_argument("--model", help="Model identifier supported by your Chat Completions endpoint.")
     parser.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"))
     parser.add_argument("--api-key-env", default="OPENAI_API_KEY", help="Name of the environment variable containing the API key.")

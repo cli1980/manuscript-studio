@@ -78,10 +78,12 @@ Return only one JSON object with exactly these fields:
     "english_naturalness": integer from 1 to 5,
     "literary_voice": integer from 1 to 5
   },
-  "rationale": "Brief explanation grounded in specific source and translation evidence."
+  "rationale": "Brief explanation grounded in specific source and translation evidence, or null if unavailable."
 }
 ```
 
+Prefer a brief evidence-based rationale when available; use JSON null rather than
+inventing an explanation. Human score-only training targets may have a null rationale.
 Do not rewrite the translation or add fields, Markdown fences, or commentary.
-The evaluator compares your prediction with human scores afterward; those scores
-are not part of your input.
+Any comparison with human scores happens separately after prediction; those
+scores are not part of your input.

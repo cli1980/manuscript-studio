@@ -24,7 +24,7 @@ python -m venv .venv-evals
 
 On macOS or Linux, use `.venv-evals/bin/python` instead. Open
 `http://127.0.0.1:8765`, enter the access key and your reviewer label, then select
-`zh-en-000001` under Cases. The sample's text is displayed unchanged alongside
+`zh-en-modern-001` under Cases. The sample's text is displayed unchanged alongside
 its saved human reviews; testing never changes real ground truth.
 
 For a server dedicated to one judge, set the label at startup:

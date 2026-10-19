@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "group_id": "contemporary-messenger-rna",
+  "passage_id": "contemporary-messenger-rna-passage-034",
+  "revision": 1,
+  "source_language": "zh",
+  "source_file": "source.zh.txt",
+  "work": {
+    "title": "“信使RNA”",
+    "title_en": "Messenger RNA",
+    "author": "leather_boots"
+  },
+  "context": {
+    "genre": "Contemporary Chinese-original speculative fiction / horror / satire",
+    "background": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  },
+  "provenance": {
+    "usage_rights": "permitted",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "attribution": "“信使RNA” / Messenger RNA, by leather_boots. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/messenger-rna and http://scp-int.wikidot.com/messenger-rna.",
+    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+    "corpus_collection": "contemporary_corpus",
+    "corpus_record_id": "contemporary-034",
+    "source_work_id": "messenger-rna",
+    "retrieved_date": "2026-10-19",
+    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+    "source_origin": "published Chinese original",
+    "source_url": "https://scp-cn.wiki/messenger-rna",
+    "author_credit_url": "https://scp-int.wikidot.com/cn-hub",
+    "source_credits": [
+      "Rating: +31",
+      "著作信息 本文由 leather_boots 撰写，先于中文分部发布，后翻译到基金会主站与国际站。 Rating: +31"
+    ],
+    "source_snapshot_sha256": "4fbb3f633fc046ac2669c6efd0aae2ff8d5b05ba77943c5213dadbf59175fc4f",
+    "extracted_block_range_exclusive": [
+      139,
+      165
+    ],
+    "corpus_review": {
+      "reviewer": "Codex (AI)",
+      "date": "2026-10-19",
+      "boundary_rationale": "Connor's final attempt to convey the information is followed by the notification and Serena's response.",
+      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+    }
+  }
+}

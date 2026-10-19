@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "group_id": "contemporary-tagging-catastrophe",
+  "passage_id": "contemporary-tagging-catastrophe-passage-044",
+  "revision": 1,
+  "source_language": "zh",
+  "source_file": "source.zh.txt",
+  "work": {
+    "title": "一行标签引发的“血案”",
+    "title_en": "A \"Bloody\" Incident on a Line of Tags",
+    "author": "Sharia Vanilla"
+  },
+  "context": {
+    "genre": "Contemporary Chinese-original speculative fiction / horror / satire",
+    "background": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  },
+  "provenance": {
+    "usage_rights": "permitted",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "attribution": "一行标签引发的“血案” / A \"Bloody\" Incident on a Line of Tags, by Sharia Vanilla. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/tagging-catastrophe and https://scp-int.wikidot.com/tagging-catastrophe.",
+    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+    "corpus_collection": "contemporary_corpus",
+    "corpus_record_id": "contemporary-044",
+    "source_work_id": "tagging-catastrophe",
+    "retrieved_date": "2026-10-19",
+    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+    "source_origin": "published Chinese original",
+    "source_url": "https://scp-cn.wiki/tagging-catastrophe",
+    "author_credit_url": "https://scp-int.wikidot.com/cn-hub",
+    "source_credits": [
+      "‡ 授权 / 引用 ‡ 隐藏授权 / 引用 请按如下方式引用此页： 列表暂不可用： 此 ListPages 查询尚未由只读迁移站支持。 列表暂不可用： 此 ListPages 查询尚未由只读迁移站支持。 更多详情请参阅 授权指南 。 [[/iftags]]"
+    ],
+    "source_snapshot_sha256": "b2abdfa54db4c287a2dfd60623d5e77956c5e77de1fadf918ac5013671677b91",
+    "extracted_block_range_exclusive": [
+      2,
+      24
+    ],
+    "corpus_review": {
+      "reviewer": "Codex (AI)",
+      "date": "2026-10-19",
+      "boundary_rationale": "The complete comic conversation about a mistaken document and its tags, ending with the supervisor's reaction.",
+      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+    }
+  }
+}

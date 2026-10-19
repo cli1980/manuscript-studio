@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "group_id": "contemporary-when-we-are-not-an-hidden-one",
+  "passage_id": "contemporary-when-we-are-not-an-hidden-one-passage-027",
+  "revision": 1,
+  "source_language": "zh",
+  "source_file": "source.zh.txt",
+  "work": {
+    "title": "当我们不再默默无名",
+    "title_en": "When we are no Longer the Hidden Ones",
+    "author": "BELLOLCY"
+  },
+  "context": {
+    "genre": "Contemporary Chinese-original speculative fiction / horror / satire",
+    "background": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  },
+  "provenance": {
+    "usage_rights": "permitted",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "attribution": "当我们不再默默无名 / When we are no Longer the Hidden Ones, by BELLOLCY. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/when-we-are-not-an-hidden-one and https://scp-int.wikidot.com/when-we-are-not-an-hidden-one.",
+    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+    "corpus_collection": "contemporary_corpus",
+    "corpus_record_id": "contemporary-027",
+    "source_work_id": "when-we-are-not-an-hidden-one",
+    "retrieved_date": "2026-10-19",
+    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+    "source_origin": "published Chinese original",
+    "source_url": "https://scp-cn.wiki/when-we-are-not-an-hidden-one",
+    "author_credit_url": "https://scp-int.wikidot.com/cn-hub",
+    "source_credits": [],
+    "source_snapshot_sha256": "3451c8ab950b5f4c9b17c5c0dddf3dbda31cd9961c4093b53019a37618a34f67",
+    "extracted_block_range_exclusive": [
+      0,
+      19
+    ],
+    "corpus_review": {
+      "reviewer": "Codex (AI)",
+      "date": "2026-10-19",
+      "boundary_rationale": "The complete short story, from the agent returning to the public press conference.",
+      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+    }
+  }
+}

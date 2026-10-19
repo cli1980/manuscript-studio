@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "group_id": "contemporary-hala-a-shadiaowen",
+  "passage_id": "contemporary-hala-a-shadiaowen-passage-011",
+  "revision": 1,
+  "source_language": "zh",
+  "source_file": "source.zh.txt",
+  "work": {
+    "title": "我要我的枪，给老子变回去！",
+    "title_en": "I want my gun. Change back!",
+    "author": "zenghanliang"
+  },
+  "context": {
+    "genre": "Contemporary Chinese-original speculative fiction / horror / satire",
+    "background": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  },
+  "provenance": {
+    "usage_rights": "permitted",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "attribution": "我要我的枪，给老子变回去！ / I want my gun. Change back!, by zenghanliang. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/hala-a-shadiaowen and https://scp-int.wikidot.com/hala-a-shadiaowen.",
+    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+    "corpus_collection": "contemporary_corpus",
+    "corpus_record_id": "contemporary-011",
+    "source_work_id": "hala-a-shadiaowen",
+    "retrieved_date": "2026-10-19",
+    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+    "source_origin": "published Chinese original",
+    "source_url": "https://scp-cn.wiki/hala-a-shadiaowen",
+    "author_credit_url": "https://scp-int.wikidot.com/cn-hub",
+    "source_credits": [],
+    "source_snapshot_sha256": "e3351d4168ffbf7fd114e174900a490c00dbac21567460d406a7bc220e1ab74b",
+    "extracted_block_range_exclusive": [
+      11,
+      25
+    ],
+    "corpus_review": {
+      "reviewer": "Codex (AI)",
+      "date": "2026-10-19",
+      "boundary_rationale": "One dated desert scene, ending as the narrator settles to sleep.",
+      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+    }
+  }
+}

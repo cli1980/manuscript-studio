@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "group_id": "contemporary-under-the-whale",
+  "passage_id": "contemporary-under-the-whale-passage-046",
+  "revision": 1,
+  "source_language": "zh",
+  "source_file": "source.zh.txt",
+  "work": {
+    "title": "鲸",
+    "title_en": "Under The Whale",
+    "author": "MottHery (account deleted)"
+  },
+  "context": {
+    "genre": "Contemporary Chinese-original speculative fiction / horror / satire",
+    "background": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  },
+  "provenance": {
+    "usage_rights": "permitted",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "attribution": "鲸 / Under The Whale, by MottHery (account deleted). Translation: Monicaaacaaat CC BY-SA 3.0. Sources: https://scp-cn.wiki/under-the-whale and https://scp-int.wikidot.com/under-the-whale.",
+    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+    "corpus_collection": "contemporary_corpus",
+    "corpus_record_id": "contemporary-046",
+    "source_work_id": "under-the-whale",
+    "retrieved_date": "2026-10-19",
+    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+    "source_origin": "published Chinese original",
+    "source_url": "https://scp-cn.wiki/under-the-whale",
+    "author_credit_url": "https://scp-int.wikidot.com/cn-hub",
+    "source_credits": [
+      "Rating: +72",
+      "著作信息 鲸/Under The Whale 作者： MottHery ， 作者页 在此 敬生命，敬塔罗兰。 Rating: +72"
+    ],
+    "source_snapshot_sha256": "d213c1be54696d1df1cd3b9ef4a6e4ce5b510dbe02c5939641e199838bed2442",
+    "extracted_block_range_exclusive": [
+      0,
+      11
+    ],
+    "corpus_review": {
+      "reviewer": "Codex (AI)",
+      "date": "2026-10-19",
+      "boundary_rationale": "The café meeting and first hallucinatory recollection end with the narrator agreeing to listen, before the next montage begins.",
+      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+    }
+  }
+}

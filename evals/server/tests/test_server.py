@@ -20,15 +20,19 @@ from evals.server.workspace import snapshot
 
 EVALS = Path(__file__).resolve().parents[2]
 ORIGIN = "http://127.0.0.1:8765"
-CASE_ID = "zh-en-000001"
-PASSAGE_ID = "work-001-passage-001"
+CASE_ID = "zh-en-modern-001"
+PASSAGE_ID = "modern-lu-xun-guxiang-passage-001"
 RUBRIC = "literary-translation-quality-v1"
 
 
 def sample_copy(root):
     if root.resolve() == EVALS.resolve():
         raise ValueError("Tests must not write to real evaluation data.")
-    for relative in ("cases", "fixtures/manuscripts", "rubrics"):
+    for relative in (
+        f"cases/literary-translation/{CASE_ID}",
+        "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001",
+        "rubrics",
+    ):
         shutil.copytree(EVALS / relative, root / relative)
     case_root = root / f"cases/literary-translation/{CASE_ID}"
     case = json.loads((case_root / "case.json").read_text(encoding="utf-8"))
@@ -82,7 +86,7 @@ class ServerTests(unittest.TestCase):
 
     def test_sample_read_is_exact_and_has_no_generated_score(self):
         case = self.get_case()
-        self.assertEqual(case["source"]["text"], (EVALS / "fixtures/manuscripts/work-001/passage-001/source.zh.txt").read_bytes().decode("utf-8"))
+        self.assertEqual(case["source"]["text"], (EVALS / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt").read_bytes().decode("utf-8"))
         self.assertEqual(case["translation"], (EVALS / f"cases/literary-translation/{CASE_ID}/translation.en.txt").read_bytes().decode("utf-8"))
         self.assertIsNone(case["judgments"][0]["overall_score"])
         self.assertEqual(case["judgments"][0]["status"], "pending")
@@ -319,7 +323,7 @@ class ServerTests(unittest.TestCase):
             restarted.state.workspace.close()
 
     def test_submit_rolls_back_partial_writes_and_can_retry(self):
-        second_id = "zh-en-000002"
+        second_id = "zh-en-modern-002"
         target = self.source_root / f"cases/literary-translation/{second_id}"
         shutil.copytree(self.source_root / f"cases/literary-translation/{CASE_ID}", target)
         metadata = json.loads((target / "case.json").read_text(encoding="utf-8"))
@@ -373,10 +377,10 @@ class ServerTests(unittest.TestCase):
         baseline = snapshot(workspace.source)
         for path in (
             self.root / f"cases/literary-translation/{CASE_ID}/translation.en.txt",
-            self.root / "fixtures/manuscripts/work-001/passage-001/source.zh.txt",
+            self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt",
             self.root / f"rubrics/{RUBRIC}.json",
             self.root / f"cases/literary-translation/{CASE_ID}/case.json",
-            self.root / "fixtures/manuscripts/work-001/passage-001/passage.json",
+            self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json",
         ):
             with self.subTest(path=path):
                 old = path.read_bytes()
@@ -398,7 +402,7 @@ class ServerTests(unittest.TestCase):
         repository = self.app.state.repository
         for path, area in (
             (self.root / f"cases/literary-translation/{CASE_ID}/case.json", repository.cases),
-            (self.root / "fixtures/manuscripts/work-001/passage-001/source.zh.txt", repository.passages),
+            (self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt", repository.passages),
         ):
             before = path.read_bytes()
             with self.assertRaises(DataError):
@@ -707,7 +711,7 @@ class BrowserTests(unittest.TestCase):
             sample_copy(root)
             source = root / f"cases/literary-translation/{CASE_ID}"
             for number in range(2, 7):
-                case_id = f"zh-en-{number:06d}"
+                case_id = f"zh-en-modern-{number:03d}"
                 destination = source.parent / case_id
                 shutil.copytree(source, destination)
                 metadata = json.loads((destination / "case.json").read_text(encoding="utf-8"))
@@ -755,20 +759,20 @@ class BrowserTests(unittest.TestCase):
                             (1, "Not reviewed"), (2, "Draft"), (3, "Completed"),
                             (4, "Not reviewed"), (5, "Not reviewed"), (6, "Not reviewed"),
                         ):
-                            expect(page.locator(f'[data-case-id="zh-en-{number:06d}"]')).to_contain_text(status)
+                            expect(page.locator(f'[data-case-id="zh-en-modern-{number:03d}"]')).to_contain_text(status)
                         expect(page.locator("#case-list")).not_to_contain_text("Dataset")
                         page.locator(f'[data-case-id="{CASE_ID}"]').click()
                         page.get_by_role("button", name="Save draft", exact=True).click()
                         expect(page.locator(f'[data-case-id="{CASE_ID}"]')).to_contain_text("Draft")
                         expect(page.locator("#case-subtitle")).to_contain_text("Draft")
-                        page.locator('[data-case-id="zh-en-000002"]').click()
+                        page.locator('[data-case-id="zh-en-modern-002"]').click()
                         expect(page.get_by_label("Overall quality")).to_have_value("3")
                         page.get_by_role("button", name="Save draft", exact=True).click()
                         expect(page.locator("#notice")).to_contain_text("Assessment saved")
-                        expect(page.locator("#case-title")).to_have_text("zh-en-000002")
+                        expect(page.locator("#case-title")).to_have_text("zh-en-modern-002")
                         expect(page.locator("#case-detail")).to_be_visible()
                         page.get_by_role("button", name="Mark complete", exact=True).click()
-                        for next_id in ("zh-en-000004", "zh-en-000005", "zh-en-000006", CASE_ID):
+                        for next_id in ("zh-en-modern-004", "zh-en-modern-005", "zh-en-modern-006", CASE_ID):
                             expect(page.locator("#case-title")).to_have_text(next_id)
                             expect(page.locator("#case-detail")).to_be_visible()
                             expect(page.get_by_label("Overall quality")).to_have_value("")
@@ -781,7 +785,7 @@ class BrowserTests(unittest.TestCase):
                         expect(page.locator("#case-empty")).to_contain_text("You have completed all cases")
                         expect(page.locator("#case-list button.selected")).to_have_count(0)
                         for number in range(1, 7):
-                            expect(page.locator(f'[data-case-id="zh-en-{number:06d}"]')).to_contain_text("Completed")
+                            expect(page.locator(f'[data-case-id="zh-en-modern-{number:03d}"]')).to_contain_text("Completed")
                         self.assertEqual(snapshot(app.state.workspace.source), originals)
                         self.assertEqual(app.state.workspace.status()["pending_files"], 5)
                     finally:

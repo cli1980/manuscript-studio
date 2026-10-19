@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "group_id": "modern-lu-xun-guxiang",
+  "passage_id": "modern-lu-xun-guxiang-passage-001",
+  "revision": 1,
+  "source_language": "zh",
+  "source_file": "source.zh.txt",
+  "work": {
+    "title": "故乡",
+    "author": "Lu Xun (鲁迅)"
+  },
+  "context": {
+    "genre": "Modern Chinese fiction",
+    "background": null
+  },
+  "provenance": {
+    "source_origin": "user-provided",
+    "usage_rights": "pending"
+  }
+}

@@ -1,0 +1,67 @@
+You, over there, come over here - look at the document you filed, and tell me how you came up with that?
+
+Huh? Let me see…
+
+Anything wrong with that? Isn't that what I remember about the Pine Troll? Hairless and 13.2 meters long.
+
+The content is fine, of course - the whole document was written by 7-Waterlily alone. But if I remember correctly, I told you to add those tags yesterday, right? You added them so wildly that I was speechless.
+
+Wait, let me see…
+
+No, what's wrong with it?
+
+alive biological china goc keter neutralized scp species uiu wooden
+
+…
+
+Well, I guess you probably tore up the tagging guide and threw the pieces out as darts. First of all, where is your original tag?
+
+What's this?
+
+Let's put it this way. It's a tag for anomalies discovered and filed by a single branch. Sometimes anomalies handled by other branches may require our containment assistance, and our clerks will translate their documents into Chinese - to distinguish ours from theirs, we created the original tag. Incidentally, the china tag can only be used in translated documents, as the anomalies described in such documents are sometimes active in China and thus require more attention.
+
+alive biological goc keter neutralized original scp species uiu wooden
+
+Edited. I thought that was a branch tag.
+
+That tag is used in Translation Archive Sites, and those people use cn.
+
+So why did you use two Object Class tags?
+
+Didn't that thing get chopped up by the gocks? It was certainly neutralized.
+
+That's not the problem.
+
+You know, redundant information doesn't help our containment efforts, such as the former Object Class of a reclassified anomaly. Therefore, each document needs to be tagged with only one Object Class, which in most cases is the final state of the anomaly.
+
+Then there is goc. Although the acronym is catchy, you must use global-occult-coalition when adding tags. This rule is supposedly because goc can lead to some, uh, subtle abbreviation problems that uiu doesn't have.
+
+Incidentally, uiu doesn't need to be added if it just appears in the sponsorship section of a GOC blue header file.
+
+alive biological global-occult-coalition neutralized original scp species wooden
+
+It's okay now, right?
+
+Not yet, it's far from done. Who told you to use alive and biological together?
+
+What, isn't everything alive biological?
+
+Biological, as the name implies, refers to anomalies composed of biological components. Thus, alive is a subset of biological, and so the former generally supersedes the latter.
+
+Of course, there is another case where tags cannot coexist due to conflict: for example, autonomous is used to denote dead objects that self-activate for various reasons, and thus actually conflicts with alive.
+
+Finally, you also used a previously used tag that seemed "appropriate" - wooden, under the Uncategorized section of the tagging guide. This tag was split into appliance, tree, and a few other smaller tags in 2021. Articles that still have this tag are old documents gathering dust in the closet. If you're not an old fogey, remove this shit.
+
+alive global-occult-coalition neutralized original scp species tree
+
+Done!
+
+Wait, I see something cool. Just give me a second.
+
+?
+
+absurdist-fiction alive black-comedy comedy global-occult-coalition neutralized original scp species tree
+
+???
+
+You come back here!

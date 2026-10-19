@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "group_id": "contemporary-hecatolite",
+  "passage_id": "contemporary-hecatolite-passage-012",
+  "revision": 1,
+  "source_language": "zh",
+  "source_file": "source.zh.txt",
+  "work": {
+    "title": "月长石",
+    "title_en": "Hecatolite",
+    "author": "Lumina Mio"
+  },
+  "context": {
+    "genre": "Contemporary Chinese-original speculative fiction / horror / satire",
+    "background": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  },
+  "provenance": {
+    "usage_rights": "permitted",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "attribution": "月长石 / Hecatolite, by Lumina Mio. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/hecatolite and https://scp-int.wikidot.com/hecatolite.",
+    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+    "corpus_collection": "contemporary_corpus",
+    "corpus_record_id": "contemporary-012",
+    "source_work_id": "hecatolite",
+    "retrieved_date": "2026-10-19",
+    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+    "source_origin": "published Chinese original",
+    "source_url": "https://scp-cn.wiki/hecatolite",
+    "author_credit_url": "https://scp-int.wikidot.com/cn-hub",
+    "source_credits": [
+      "Rating: +70",
+      "著作信息 作者： Lumina Mio 用指尖粘上破碎的月光，为伤痕累累的心脏画出一件绮丽的外袍。 更多作品见 此 。 Rating: +70"
+    ],
+    "source_snapshot_sha256": "c7117756386f88d4fc27ab30b31f3770b6ab6a547c9e00e563051a9da0c418e5",
+    "extracted_block_range_exclusive": [
+      8,
+      17
+    ],
+    "corpus_review": {
+      "reviewer": "Codex (AI)",
+      "date": "2026-10-19",
+      "boundary_rationale": "A complete recollection of testing and accepting Shiina's magical-girl claim.",
+      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+    }
+  }
+}

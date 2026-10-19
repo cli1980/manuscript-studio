@@ -1,0 +1,61 @@
+Though transferred to the protein synthesis project, Connor was only assigned one specific task—assembling short peptides from amino acids. He could perform his designated role blindfolded, but everything beyond that remained a mystery to him.
+
+He had anticipated this compartmentalization. Protein structures were complex beasts, and their synthesis was inevitably divided into assembly-line segments, with each researcher knowing only their own cog in the machine.
+
+But he knew Whitmore's computer held the complete blueprint.
+
+One evening, he knocked on Whitmore's office door.
+
+"Enter."
+
+Connor stepped inside.
+
+"You again… I believe I made it clear not to disturb me without good reason—so this better be important."
+
+Connor positioned himself at the side of the desk, his eyes flickering to the monitor. Just as expected—GOCOS.
+
+During his Foundation days, Connor had conversed with a retired GOC operative who revealed their classified computers ran on GOCOS, a proprietary system with paranoid-level security. Every failed login attempt was logged. Even with the correct password, fingerprint and facial recognition were required. But Connor, ever the quick study, had spent one morning with an Artificial Intelligence Conscript learning how to "circumvent" these protections.
+
+"I'd like to request a week's leave," Connor said.
+
+"Denied." Whitmore didn't even look up.
+
+"It's my wife's birthday soon—"
+
+"And I believe I just reminded you not to waste my time."
+
+Connor left—He knew his application must be denied, but everything is on schedule. Tonight, maintenance would disable this sector's surveillance cameras.
+
+When darkness fell, Connor slipped past patrols with his laptop bag. Whitmore's door should have been locked, but the gum Carter gave him now jammed the mechanism.
+
+The closer to success, the greater the risk. He moved like a shadow toward the workstation.
+
+Finally reaching the CPU tower, he crouched behind the desk. Now came the real test—applying his crash course in system infiltration.
+
+Connor steadied his breathing. The power button taunted him—untouchable. A single fingerprint would betray him.
+
+Instead, he produced his tool—a simple screwdriver.
+
+Working by feel in the dark, he removed the tower's side panel and gently extracted the hard drive. His laptop screen, dimmed to near-invisibility, accepted the drive through a custom adapter.
+
+The transfer completed in under sixty seconds.
+
+As he reassembled the tower, footsteps echoed in the corridor. Connor froze mid-motion, the screwdriver suspended until the sounds faded.
+
+His trembling hands completed the reassembly. The return journey to his quarters passed without incident.
+
+But his mission wasn't complete. The stolen data was voluminous—impossible to smuggle out intact. He'd need to internalize every detail, then recreate a condensed version from memory.
+
+* * *
+
+Site-18, Site Director's Office.
+
+"The deadline is approaching," Hayes said. "Do you think he can make it back?"
+
+"He will," Serena replied.
+
+"I don’t doubt his resolve. But GOC’s surveillance might truly be flawless."
+
+"That’s exactly why he’s the one for this mission. I know what kind of man he is. If he’s trapped behind an impenetrable wall, he’ll carve a hole through it."
+
+"I trust him," Hayes said, his gaze drifting toward the window.

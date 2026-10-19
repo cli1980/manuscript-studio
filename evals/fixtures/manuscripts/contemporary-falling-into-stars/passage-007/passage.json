@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "group_id": "contemporary-falling-into-stars",
+  "passage_id": "contemporary-falling-into-stars-passage-007",
+  "revision": 1,
+  "source_language": "zh",
+  "source_file": "source.zh.txt",
+  "work": {
+    "title": "坠星者",
+    "title_en": "Falling Into Stars",
+    "author": "Lyrics Linn"
+  },
+  "context": {
+    "genre": "Contemporary Chinese-original speculative fiction / horror / satire",
+    "background": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  },
+  "provenance": {
+    "usage_rights": "permitted",
+    "license": "CC BY-SA 3.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+    "attribution": "坠星者 / Falling Into Stars, by Lyrics Linn. Translation: Jochoi; translation assistance: A Lancelot and Star Lyn CC BY-SA 3.0. Sources: https://scp-cn.wiki/falling-into-stars and https://scp-int.wikidot.com/falling-into-stars.",
+    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+    "corpus_collection": "contemporary_corpus",
+    "corpus_record_id": "contemporary-007",
+    "source_work_id": "falling-into-stars",
+    "retrieved_date": "2026-10-19",
+    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+    "source_origin": "published Chinese original",
+    "source_url": "https://scp-cn.wiki/falling-into-stars",
+    "author_credit_url": "https://scp-int.wikidot.com/cn-hub",
+    "source_credits": [
+      "Rating: +789",
+      "著作信息 坠星者 发布时间： 2018年9月27日 作者： Lyrics Linn ，进入 人事档案 查看该名作者的更多作品 翻译： 点此查看主站发布版 ，感谢 Jochoi 的翻译和 A Lancelot 、 Star Lyn 的协助！！！ 呜哇，好高兴qwq Rating: +789"
+    ],
+    "source_snapshot_sha256": "e7fe3aa1b0ceefc3bad01e1fbd7436390f01fd81d418ab0e12190ece85a3cc78",
+    "extracted_block_range_exclusive": [
+      175,
+      204
+    ],
+    "corpus_review": {
+      "reviewer": "Codex (AI)",
+      "date": "2026-10-19",
+      "boundary_rationale": "Bright receives a new body and a ship, chooses a name, and departs: the complete closing sequence.",
+      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+    }
+  }
+}
