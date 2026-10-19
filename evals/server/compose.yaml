@@ -1,0 +1,24 @@
+services:
+  ground-truth:
+    build: .
+    ports:
+      - "127.0.0.1:8765:8765"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 1
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - ../cases:/data/cases
+      - ../fixtures/manuscripts:/data/fixtures/manuscripts:ro
+      - ../rubrics:/data/rubrics:ro
+    networks:
+      - isolated
+networks:
+  isolated:
+    internal: true

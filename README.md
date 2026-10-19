@@ -172,6 +172,20 @@ and Windows reparse-point checks still run. To also check the rendered approval
 interface's JavaScript syntax, set `NODE_BINARY` to an available Node.js executable
 before running the approval-review suite.
 
+Agent workflow evaluations live in [`evals/`](evals/README.md), outside the
+distributed skill directories. The [ground-truth review server](evals/server/README.md)
+provides a judge-only translation review interface for scores, comments, and
+issue annotations, with temporary shared-key access. Passages, translations,
+and case metadata are read-only. Cases, shared fixtures, rubrics, and ignored
+run results remain separate from distributed skills. The
+[blind translation-judge runner](evals/README.md#run-the-translation-judge) can
+prepare model inputs or score cases through a configured model API and compare
+the results with human judgments. Dataset export and fine-tuning are not implemented.
+
+Server edits are staged in a temporary workspace. Use **Submit changes** to
+publish judgment records to the original evaluation files; unsubmitted edits are discarded
+when the server restarts.
+
 ## The idea behind the project
 
 Fear alone is not a good reason for authors, translators, editors, or publishing professionals to resist AI. AI agents do not replace the author's idea, experience, taste, or judgment; they provide skills and perform structured work under direction.

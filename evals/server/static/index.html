@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Manuscript Studio · Ground truth</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header><div class="brand">Manuscript Studio <span>Evaluation workspace</span></div><span id="session-reviewer" class="muted" hidden></span><button id="logout" class="quiet" hidden>Sign out</button></header>
+  <div id="notice" role="status" aria-live="polite" hidden></div>
+  <section id="login-panel" class="login card">
+    <p class="eyebrow">Human ground truth</p>
+    <h1>A place for careful judgment.</h1>
+    <p>Read the supplied passages and record your literary judgment through scores and comments.</p>
+    <form id="login-form">
+      <label for="access-key">Startup access key</label>
+      <input id="access-key" type="password" autocomplete="off" required maxlength="200">
+      <div id="reviewer-entry">
+        <label for="reviewer-label">Reviewer label</label>
+        <input id="reviewer-label" type="text" autocomplete="nickname" required maxlength="500" placeholder="e.g. judge-01">
+      </div>
+      <p id="fixed-reviewer-note" class="muted" hidden>A judge is already assigned to this server. Enter the access key to continue.</p>
+      <button type="submit">Open workspace</button>
+    </form>
+    <p class="muted">Use the key printed in the server terminal. One judge is assigned for the server run and can sign in from multiple browsers. Restarting signs every browser out.</p>
+  </section>
+  <main id="workspace" hidden>
+    <section class="workspace-bar" aria-label="Pending workspace changes">
+      <div><strong>Temporary workspace</strong><p id="workspace-state" class="muted">Loading pending changes…</p></div>
+      <button id="submit-changes" disabled>Submit changes</button>
+    </section>
+    <p class="muted">Your browsers share a temporary workspace. Submit changes to update the source files. Unsubmitted changes are discarded on restart.</p>
+    <nav aria-label="Workspace"><button id="cases-tab" class="active">Cases</button><button id="passages-tab">Original passages</button></nav>
+    <section id="cases-view">
+      <div class="heading"><div><p class="eyebrow">Review &amp; annotate</p><h1>Cases</h1></div></div>
+      <label for="skill-filter">Skill</label><select id="skill-filter"></select>
+      <p id="skill-note" class="muted"></p>
+      <div class="case-layout">
+        <aside><div id="case-list" class="item-list" aria-label="Cases"></div></aside>
+        <div>
+          <article id="case-detail" hidden>
+            <div class="heading"><div><h2 id="case-title"></h2><p id="case-subtitle" class="muted"></p></div></div>
+            <div class="comparison">
+              <section class="card"><p class="eyebrow" id="source-heading">Original</p><pre id="source-text" class="passage"></pre></section>
+              <section class="card"><p class="eyebrow" id="translation-heading">Translation</p><pre id="translation-text" class="passage"></pre></section>
+            </div>
+            <details class="card">
+              <summary>Case context &amp; metadata · read-only</summary>
+              <p id="source-context"></p>
+              <p id="case-brief"></p>
+              <p id="case-provenance" class="muted"></p>
+              <p class="muted">Text, task instructions, provenance, and dataset readiness are maintained outside this judge interface.</p>
+            </details>
+            <section class="card">
+              <p class="eyebrow">Human assessment</p><h2>Your review</h2>
+              <p id="assessment-info" class="muted"></p>
+              <div id="review-conflict" class="issue" hidden>
+                <p>This review changed since you opened it. Your form edits are still here. Load the latest saved review before making further changes.</p>
+                <button id="load-latest-review" type="button" class="quiet">Load latest review</button>
+              </div>
+              <form id="judgment-form">
+                <div class="form-grid">
+                  <div><strong>Reviewer</strong><p id="assessment-reviewer" class="muted"></p></div>
+                  <div><strong>Assigned rubric</strong><p id="assigned-rubric" class="muted"></p></div>
+                </div>
+                <p id="reviewer-policy" class="muted"></p>
+                <details><summary>Scoring guidance</summary><div id="rubric-guidance"></div></details>
+                <div class="scores">
+                  <label>Overall quality <select name="overall_score" class="score"></select></label>
+                  <label>Fidelity <select name="fidelity" class="score"></select></label>
+                  <label>English naturalness <select name="english_naturalness" class="score"></select></label>
+                  <label>Literary voice <select name="literary_voice" class="score"></select></label>
+                </div>
+                <label>Comments <textarea name="rationale" rows="4" maxlength="10000" placeholder="Describe your reading experience and explain your scores with evidence from the passages."></textarea></label>
+                <h3>Specific issues</h3><div id="issues"></div><button type="button" id="add-issue" class="quiet">Add issue</button>
+                <p class="muted">Both actions save to the temporary workspace. Use Submit changes above to update the source files.</p>
+                <div class="actions"><button type="submit" name="action" value="pending" class="quiet">Save draft</button><button type="submit" name="action" value="complete">Mark complete</button></div>
+              </form>
+            </section>
+            <details id="review-history" class="card" hidden>
+              <summary id="review-history-summary">Review history</summary>
+              <p class="muted">Earlier versions and other reviewers' assessments are read-only. Your current review stays in the form above.</p>
+              <div id="review-history-list"></div>
+            </details>
+          </article>
+          <p id="case-empty" class="empty">Select a case to compare its source and translation.</p>
+        </div>
+      </div>
+    </section>
+    <section id="passages-view" hidden>
+      <div class="heading"><div><p class="eyebrow">Shared source library · read-only</p><h1>Original passages</h1></div></div>
+      <div class="form-grid">
+        <label>Filter by work <select id="work-filter"><option value="">All works</option></select></label>
+        <label>Filter by language <select id="language-filter"><option value="">All languages</option></select></label>
+      </div>
+      <div class="case-layout"><aside><div id="passage-list" class="item-list"></div></aside><article id="passage-detail" class="card" hidden><h2 id="passage-title"></h2><p id="passage-info" class="muted"></p><pre id="passage-text" class="passage"></pre><p id="passage-context"></p></article></div>
+    </section>
+  </main>
+  <dialog id="submit-dialog" aria-labelledby="submit-title">
+    <h2 id="submit-title">Submit your saved reviews?</h2>
+    <p>This publishes your saved reviews from all your browser sessions. Passages, translations, and case metadata stay unchanged.</p>
+    <ul id="pending-records"></ul>
+    <p id="submit-result" role="alert"></p>
+    <div class="actions"><button id="cancel-submit" class="quiet">Keep reviewing</button><button id="confirm-submit">Submit to source</button></div>
+  </dialog>
+</body>
+</html>

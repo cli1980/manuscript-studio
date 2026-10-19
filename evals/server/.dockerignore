@@ -1,0 +1,11 @@
+*
+!requirements.txt
+!__init__.py
+!__main__.py
+!app.py
+!models.py
+!repository.py
+!workspace.py
+!static/
+!static/**
+!Dockerfile
