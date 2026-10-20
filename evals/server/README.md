@@ -2,7 +2,7 @@
 
 A review interface for one literary judge per server run, usable from multiple
 browser sessions. Inspect supplied texts and record
-subjective quality scores, comments, and evidence-backed issues. The five skills
+subjective quality scores, comments, and evidence-backed issues. The six skills
 appear in navigation; literary translation has the first assessment form.
 Other skills remain unsupported until their review formats are defined.
 

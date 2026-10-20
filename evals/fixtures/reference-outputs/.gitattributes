@@ -1,0 +1,2 @@
+# Reference hashes must survive Windows checkouts with core.autocrlf enabled.
+*.md text eol=lf

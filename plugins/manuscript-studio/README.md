@@ -4,6 +4,7 @@ An installable skills-only plugin for ChatGPT Work and Codex.
 
 ## Included skills
 
+- Prepare Manuscript
 - Literary Editing
 - Literary Translation
 - Literary Agent Querying
@@ -42,6 +43,6 @@ workspace; it is separate from publishing to the public plugin directory.
 
 ## Use
 
-Invoke the plugin or a bundled skill explicitly, or ask directly for literary
+Invoke the plugin or a bundled skill explicitly, or ask directly for manuscript preparation, literary
 editing, literary translation, agent research, a query package, manuscript
 formatting, or an interactive approval review.

@@ -13,7 +13,7 @@ Follow these rules in every service:
 
 1. Treat the author or authorized user as the creative decision-maker.
 2. Treat the source location and workspace as separate managed locations. Never use the source location as the workspace.
-3. Preserve the received source baseline. Normalize extraction errors only when the source makes the intended text objectively clear.
+3. Preserve the received source baseline. Delegate source discovery, extraction, and preparation verification to `prepare-manuscript`; do not perform editorial changes during intake.
 4. Use the same workspace structure in every environment. Select `dual-repository-git` or `artifact-workspace` during setup.
 5. In Git mode, use two separate local repositories: one for the workspace and one for the source draft. Never nest them.
 6. Bind every verdict and proposal to the exact workspace review identity and the source identity from which it was imported: commit SHAs in Git mode or durable fingerprints in artifact mode.
@@ -40,7 +40,9 @@ First identify:
 - whether the environment supports two safe local Git repositories;
 - the requested service and scope.
 
-Create the invariant workspace structure in either a local workspace repository or the environment-provided task artifact area. Import or normalize the source into `manuscript/chapters/` without editorial changes. Record source and workspace identities in the manifest and project state.
+Use the sibling [prepare-manuscript skill](../prepare-manuscript/SKILL.md) to obtain a verified chapter-Markdown package from the designated source location. Create the invariant editorial workspace in either a local repository or the environment-provided task artifact area, then copy the selected prepared chapters into `manuscript/chapters/` without editorial changes. Keep that editable workspace separate from both the original and the neutral prepared package.
+
+Record the shared `work.json` locator, prepared revision, chapter mapping, and source/workspace identities in the editorial manifest and project state. Maintain only `workflows.literary-editing` under the [shared status contract](../prepare-manuscript/references/preparation-contract.md#downstream-status-and-ownership). Preparation readiness does not replace any editorial approval or source-sync gate.
 
 For an existing project, read [references/editorial-state.md](references/editorial-state.md) in full. Verify operating mode, both location identities, current review base, manuscript paths, active job, verdicts, proposals, approvals, exports, source-sync state, and shared records before resuming.
 

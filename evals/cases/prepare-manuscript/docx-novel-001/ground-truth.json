@@ -1,0 +1,592 @@
+{
+  "schema_version": 1,
+  "case_id": "docx-novel-001",
+  "status": "verified",
+  "counting_policy": "unicode-codepoints-without-whitespace-v1",
+  "source_hashes": {
+    "novel-docx": "c2c13eaf5110ea7e68a41893b91c762151bab5e926e6cc316087b3dc99aa9a26"
+  },
+  "verification": {
+    "primary": "ElementTree logical-paragraph walk selecting Choice",
+    "independent": "minidom pruned-tree paragraph walk selecting Fallback",
+    "paragraph_text_style_and_order_agree": true,
+    "toc_and_body_headings_agree": true
+  },
+  "counts": {
+    "numbered_chapters": 19,
+    "epilogues": 1,
+    "appendices": 1,
+    "afterwords": 1,
+    "body_sections": 22,
+    "prepared_markdown_units": 23,
+    "toc_entries": 22,
+    "logical_paragraphs_including_empty": 2457
+  },
+  "totals": {
+    "whole_document": {
+      "nonempty_paragraphs": 1926,
+      "characters_excluding_whitespace": 114063,
+      "text_sha256_excluding_whitespace": "73eb745037f9d7ca9f0b3e575e79d64a5221390677cdcc27be0d42ab9df9c7a0",
+      "paragraph_sequence_sha256": "cb973e62b04e5453b4d45112857f50416dd1796999026531098ea9cc9c339896"
+    },
+    "cover": {
+      "nonempty_paragraphs": 3,
+      "characters_excluding_whitespace": 21,
+      "text_sha256_excluding_whitespace": "bafbc2d61ec169b0c0e9c65cd6cef4b63322650f78e884ce7d9e3319b57a3bae",
+      "paragraph_sequence_sha256": "7b6cf9c9cad2e1a497199551c2ad8f287e56e258efd867ce12b06e996a79fddf"
+    },
+    "table_of_contents": {
+      "nonempty_paragraphs": 23,
+      "characters_excluding_whitespace": 153,
+      "text_sha256_excluding_whitespace": "6a1db088851d2607fff726003a96da4515f2860c618181a392b4f6f798f8c71b",
+      "paragraph_sequence_sha256": "a5783e6ed54b49274cd825c9da7c79e6946571e22aef9b1d8cdf599ff9952591"
+    },
+    "body_including_headings": {
+      "nonempty_paragraphs": 1900,
+      "characters_excluding_whitespace": 113889,
+      "text_sha256_excluding_whitespace": "6d0c89093d90e18e340cf9a84da306f203cf906aea0a4aeedb4fd992b6cfc3e8",
+      "paragraph_sequence_sha256": "5a3321e70fff8a8c24246fb1bf39db2b8ae57efd9c1b71ee9564050cadb56cfe"
+    },
+    "narrative_including_headings": {
+      "nonempty_paragraphs": 1820,
+      "characters_excluding_whitespace": 109694,
+      "text_sha256_excluding_whitespace": "aa33449595433753ad2ae1044dbc276fdfc53fadf99741a007ab4b6dca90fc43",
+      "paragraph_sequence_sha256": "4427d7c7a70ab9e03e6345a1bd680c811d8296204e521033bb59b8b49d6af9c3"
+    },
+    "narrative_excluding_headings": {
+      "nonempty_paragraphs": 1800,
+      "characters_excluding_whitespace": 109607,
+      "text_sha256_excluding_whitespace": "f904b575762255a0b9f3b8ce94c8e2f51b9f8ac40e5602bc7d02784b790a2fc7",
+      "paragraph_sequence_sha256": "89e6e2417281f0bcdea3d220f15fd264418917b9cc14444dbf789c41e1daeddf"
+    }
+  },
+  "toc": [
+    {
+      "title": "一、新年",
+      "stored_page_number": 1
+    },
+    {
+      "title": "二、异梦",
+      "stored_page_number": 14
+    },
+    {
+      "title": "三、指环",
+      "stored_page_number": 21
+    },
+    {
+      "title": "四、往事",
+      "stored_page_number": 29
+    },
+    {
+      "title": "五、访客",
+      "stored_page_number": 41
+    },
+    {
+      "title": "六、梦婆",
+      "stored_page_number": 50
+    },
+    {
+      "title": "七、谜团",
+      "stored_page_number": 58
+    },
+    {
+      "title": "八、真相",
+      "stored_page_number": 68
+    },
+    {
+      "title": "九、追忆",
+      "stored_page_number": 78
+    },
+    {
+      "title": "十、故乡",
+      "stored_page_number": 85
+    },
+    {
+      "title": "十一、重逢",
+      "stored_page_number": 92
+    },
+    {
+      "title": "十二、浮城",
+      "stored_page_number": 100
+    },
+    {
+      "title": "十三、祭司",
+      "stored_page_number": 107
+    },
+    {
+      "title": "十四、米娅",
+      "stored_page_number": 114
+    },
+    {
+      "title": "十五、陷阱",
+      "stored_page_number": 120
+    },
+    {
+      "title": "十六、高塔",
+      "stored_page_number": 129
+    },
+    {
+      "title": "十七、博士",
+      "stored_page_number": 136
+    },
+    {
+      "title": "十八、基地",
+      "stored_page_number": 143
+    },
+    {
+      "title": "十九、末日",
+      "stored_page_number": 150
+    },
+    {
+      "title": "尾声",
+      "stored_page_number": 156
+    },
+    {
+      "title": "附录：遗落的传说",
+      "stored_page_number": 171
+    },
+    {
+      "title": "后记",
+      "stored_page_number": 177
+    }
+  ],
+  "units": [
+    {
+      "unit_id": "front-matter",
+      "title": null,
+      "source_number": null,
+      "role": "front_matter",
+      "section_kind": "front_matter",
+      "start_paragraph": 1,
+      "end_paragraph": 29,
+      "statistics": {
+        "nonempty_paragraphs": 26,
+        "characters_excluding_whitespace": 174,
+        "text_sha256_excluding_whitespace": "09cb773e04a9467dacf3b5e0cc1afffac1a916ce2897847b0be637eef6feb08b",
+        "paragraph_sequence_sha256": "29dcc7ccf743fe3408a63a3798538f29e2aeba0e916c571b2e721709d9fe3d7c"
+      },
+      "characters_excluding_heading_and_whitespace": 174,
+      "opening_anchor": "遗落梦境与记忆尽头",
+      "closing_anchor": "后记\t177"
+    },
+    {
+      "unit_id": "body-unit-01",
+      "title": "一、新年",
+      "source_number": "一",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 30,
+      "end_paragraph": 214,
+      "statistics": {
+        "nonempty_paragraphs": 162,
+        "characters_excluding_whitespace": 8612,
+        "text_sha256_excluding_whitespace": "5fbfe21b27c5f65ad76a206446dfbb9e758f85db4226d08c96439636df325905",
+        "paragraph_sequence_sha256": "3e285d5ef8eb889041b28ca12b94f0147213d244f7d81922337b33f2e76f53da"
+      },
+      "characters_excluding_heading_and_whitespace": 8608,
+      "opening_anchor": "一、新年",
+      "closing_anchor": "这个时候，外面传来几声闷响。隔着小窗，他们看见了五颜六色的光——那是庆祝新年的人们开始燃放烟火。"
+    },
+    {
+      "unit_id": "body-unit-02",
+      "title": "二、异梦",
+      "source_number": "二",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 215,
+      "end_paragraph": 295,
+      "statistics": {
+        "nonempty_paragraphs": 66,
+        "characters_excluding_whitespace": 4670,
+        "text_sha256_excluding_whitespace": "0c160e9f8fb55e0af17abd48fb9f7dd4a93f479b4203c7b7d7928fd13a093bfc",
+        "paragraph_sequence_sha256": "805687723fec27993ebca6f260714613033ba9a0d179495419bf23ff19f4e867"
+      },
+      "characters_excluding_heading_and_whitespace": 4666,
+      "opening_anchor": "二、异梦",
+      "closing_anchor": "陆一鸣这么一想，心里竟也变得坦然。"
+    },
+    {
+      "unit_id": "body-unit-03",
+      "title": "三、指环",
+      "source_number": "三",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 296,
+      "end_paragraph": 411,
+      "statistics": {
+        "nonempty_paragraphs": 101,
+        "characters_excluding_whitespace": 5157,
+        "text_sha256_excluding_whitespace": "04da6685ee4b5ac07b74d0cb51f275d00711d660755b9235d6483d56ce5e8356",
+        "paragraph_sequence_sha256": "5bb9ef5e5e2c70130c6055e28309eab2862fd7f7594cadc7aea03d9e23b393ed"
+      },
+      "characters_excluding_heading_and_whitespace": 5153,
+      "opening_anchor": "三、指环",
+      "closing_anchor": "突然，一个机仆不知从哪儿钻了出来，嘎吱嘎吱地跑到他跟前，问：“先生，需要帮忙吗？”"
+    },
+    {
+      "unit_id": "body-unit-04",
+      "title": "四、往事",
+      "source_number": "四",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 412,
+      "end_paragraph": 558,
+      "statistics": {
+        "nonempty_paragraphs": 113,
+        "characters_excluding_whitespace": 7899,
+        "text_sha256_excluding_whitespace": "069bbd0c78f598fad368a4c7d39885f383b46813c3bfccaa049aae226decc40d",
+        "paragraph_sequence_sha256": "c3c9892bcf991f25365f34d3aebe71009a1201180c10b0b7ca277623a90c54de"
+      },
+      "characters_excluding_heading_and_whitespace": 7895,
+      "opening_anchor": "四、往事",
+      "closing_anchor": "了地。他不断对陆一鸣说自己没看走眼。在陆一鸣启程前，陈向南还特意调拨了十好几箱上好的法兰西干邑，配到先遣队的必需物资里。"
+    },
+    {
+      "unit_id": "body-unit-05",
+      "title": "五、访客",
+      "source_number": "五",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 559,
+      "end_paragraph": 658,
+      "statistics": {
+        "nonempty_paragraphs": 84,
+        "characters_excluding_whitespace": 6139,
+        "text_sha256_excluding_whitespace": "350d373cfdc61abb7982db7411d57433798de963580f8180c97bbd1a132c4cab",
+        "paragraph_sequence_sha256": "c1c68e7c0359457fd393520aa4eb1267c3d54bac5d00514541a4f79073d2d304"
+      },
+      "characters_excluding_heading_and_whitespace": 6135,
+      "opening_anchor": "五、访客",
+      "closing_anchor": "“别——”陆一鸣急忙摆手，“算了！还是别了。”"
+    },
+    {
+      "unit_id": "body-unit-06",
+      "title": "六、梦婆",
+      "source_number": "六",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 659,
+      "end_paragraph": 744,
+      "statistics": {
+        "nonempty_paragraphs": 74,
+        "characters_excluding_whitespace": 5489,
+        "text_sha256_excluding_whitespace": "6e0ee06db5b1b7d363016b546c9cbcd48968ba6117c91cad8a401d6cfb585cf8",
+        "paragraph_sequence_sha256": "129b9a6c8dadbe5aabcb2d82527ab01bcb4178a2a0cb30dea5232aecfdb58b42"
+      },
+      "characters_excluding_heading_and_whitespace": 5485,
+      "opening_anchor": "六、梦婆",
+      "closing_anchor": "“伊丝，你在乱说什么啊！”陈柳的脸又红了，她嗔怒地跺了跺脚，责怪起这个胡乱说话的老太婆来。"
+    },
+    {
+      "unit_id": "body-unit-07",
+      "title": "七、谜团",
+      "source_number": "七",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 745,
+      "end_paragraph": 854,
+      "statistics": {
+        "nonempty_paragraphs": 97,
+        "characters_excluding_whitespace": 7030,
+        "text_sha256_excluding_whitespace": "0b8e50b8351ac5303293ae9a8ff0a52161e394e61bab844267c5c7d11bbc014f",
+        "paragraph_sequence_sha256": "53fcc148c7ee76c6c0062acb70251b4d3f9e2278d92fb40b20882a0c1bcc1e93"
+      },
+      "characters_excluding_heading_and_whitespace": 7026,
+      "opening_anchor": "七、谜团",
+      "closing_anchor": "“帮！当然帮！”齐孝军哪还顾得上细究陆一鸣那团乱麻般的行事逻辑，俯身凑过去，拍了拍对方的肩膀，算是应了下来。"
+    },
+    {
+      "unit_id": "body-unit-08",
+      "title": "八、真相",
+      "source_number": "八",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 855,
+      "end_paragraph": 998,
+      "statistics": {
+        "nonempty_paragraphs": 114,
+        "characters_excluding_whitespace": 6204,
+        "text_sha256_excluding_whitespace": "ff303ccb7932638361d7c23f4f962f1e2cfeeaa0b0cf981edfcdedb910565f43",
+        "paragraph_sequence_sha256": "cca20c73da6a8dcd21704a01734fc6dfc304b690926ec4e5a53633db045c6569"
+      },
+      "characters_excluding_heading_and_whitespace": 6200,
+      "opening_anchor": "八、真相",
+      "closing_anchor": "他不敢细想下去，抓起床头的瓶子灌了几口酒，一头倒在床上，昏昏沉沉地睡了过去。"
+    },
+    {
+      "unit_id": "body-unit-09",
+      "title": "九、追忆",
+      "source_number": "九",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 999,
+      "end_paragraph": 1088,
+      "statistics": {
+        "nonempty_paragraphs": 59,
+        "characters_excluding_whitespace": 4365,
+        "text_sha256_excluding_whitespace": "3aa5d4ec62bfc35e8cd1db8c59fb89df508effbf10fc6baab38d903920d1d958",
+        "paragraph_sequence_sha256": "5c56e87cab6a6ce84e4e21aa47ed46267958d789e5fb0b0459e343b4f384f570"
+      },
+      "characters_excluding_heading_and_whitespace": 4361,
+      "opening_anchor": "九、追忆",
+      "closing_anchor": "步履轻盈地朝他走来时，为什么他心里充溢的全是亲切和熟稔；当她拉着他的手疾步如飞时，他又为什么会有一种似曾经历的奇异感觉。"
+    },
+    {
+      "unit_id": "body-unit-10",
+      "title": "十、故乡",
+      "source_number": "十",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 1089,
+      "end_paragraph": 1156,
+      "statistics": {
+        "nonempty_paragraphs": 55,
+        "characters_excluding_whitespace": 4849,
+        "text_sha256_excluding_whitespace": "65a36c8d077f32b65e4d8e5ed9eedd2a9400ee5362e43269e4233d76f407d8c0",
+        "paragraph_sequence_sha256": "540af61b1aeef671f31835e73af11c04fd233ed5bedcd2c5b88368465a9117e6"
+      },
+      "characters_excluding_heading_and_whitespace": 4845,
+      "opening_anchor": "十、故乡",
+      "closing_anchor": "。他轻轻把它拿起来，凑到鼻子下面，竟仍能嗅到一丝淡淡的腥味——似乎在提醒他：先前那一番刻意的遗忘，究竟有多荒谬、多徒劳。"
+    },
+    {
+      "unit_id": "body-unit-11",
+      "title": "十一、重逢",
+      "source_number": "十一",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 1157,
+      "end_paragraph": 1260,
+      "statistics": {
+        "nonempty_paragraphs": 88,
+        "characters_excluding_whitespace": 5215,
+        "text_sha256_excluding_whitespace": "e9df55d6a86fb23807fae70ab867ace235fab95e87efa7d925b3d33cc45634ba",
+        "paragraph_sequence_sha256": "95c0b3e4d4ae468cc833841e0ebbda0115784a92362a08035b277a5f79c02dba"
+      },
+      "characters_excluding_heading_and_whitespace": 5210,
+      "opening_anchor": "十一、重逢",
+      "closing_anchor": "“浮城阿瓦隆。”米娅的声音低沉而潮湿，显然还没来得及收起心中的悲伤。"
+    },
+    {
+      "unit_id": "body-unit-12",
+      "title": "十二、浮城",
+      "source_number": "十二",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 1261,
+      "end_paragraph": 1351,
+      "statistics": {
+        "nonempty_paragraphs": 63,
+        "characters_excluding_whitespace": 4226,
+        "text_sha256_excluding_whitespace": "d0c24c74357f20b8620026d66edc775c0e3d770b0946805242137d75a88d818c",
+        "paragraph_sequence_sha256": "90da620b078f39de135759efff8ee385e711e91a37fa6ef4c217c0c2e4152774"
+      },
+      "characters_excluding_heading_and_whitespace": 4221,
+      "opening_anchor": "十二、浮城",
+      "closing_anchor": "这一突如其来的涟漪完全出乎陆一鸣的意料。他在这个异世界里好不容易攒起来的从容瞬间松动、垮塌，慌乱不声不响地浮上心头。"
+    },
+    {
+      "unit_id": "body-unit-13",
+      "title": "十三、祭司",
+      "source_number": "十三",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 1352,
+      "end_paragraph": 1425,
+      "statistics": {
+        "nonempty_paragraphs": 64,
+        "characters_excluding_whitespace": 4926,
+        "text_sha256_excluding_whitespace": "8656f28a7d447c7822ecece9cdc000971b3686ed6e84eaaae648bf42b826cc6e",
+        "paragraph_sequence_sha256": "2f046a8c44dca5f41e671d1805ee7ae285c517b9e86b70b9fac136feb03491f7"
+      },
+      "characters_excluding_heading_and_whitespace": 4921,
+      "opening_anchor": "十三、祭司",
+      "closing_anchor": "女的时候，我就狂热地崇拜他，这没什么大不了；在那些本来就阴冷无比的日子里，谁又能拒绝那种像太阳一样耀眼而炽热的光芒呢？”"
+    },
+    {
+      "unit_id": "body-unit-14",
+      "title": "十四、米娅",
+      "source_number": "十四",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 1426,
+      "end_paragraph": 1494,
+      "statistics": {
+        "nonempty_paragraphs": 63,
+        "characters_excluding_whitespace": 4072,
+        "text_sha256_excluding_whitespace": "740dc68f476609eef0ee9c4235670f91fb5c32b6e889cd5f0ef8dd690c88de22",
+        "paragraph_sequence_sha256": "398175eef1fb70a773a501d514bf4f6af06abad4360dc0c262e31430ab16d427"
+      },
+      "characters_excluding_heading_and_whitespace": 4067,
+      "opening_anchor": "十四、米娅",
+      "closing_anchor": "离开阿瓦隆时，陆一鸣发现外界正值破晓。茫茫晨霭笼罩海面，东方泛起一片异红。"
+    },
+    {
+      "unit_id": "body-unit-15",
+      "title": "十五、陷阱",
+      "source_number": "十五",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 1495,
+      "end_paragraph": 1609,
+      "statistics": {
+        "nonempty_paragraphs": 100,
+        "characters_excluding_whitespace": 5980,
+        "text_sha256_excluding_whitespace": "4c3ff8ea66b640d747f2d9d5afd766e896d7022e1c3414e0a9e74f5c265cafe0",
+        "paragraph_sequence_sha256": "bddf614668ec3769c69bcc91ca7bf5fdc19828587107b2efff22108da214dd7c"
+      },
+      "characters_excluding_heading_and_whitespace": 5975,
+      "opening_anchor": "十五、陷阱",
+      "closing_anchor": "听到又一个无辜的生命因自己而消逝，陆一鸣感到不寒而栗。他不得不承认，自己早就掉入一个危机四伏的陷阱。"
+    },
+    {
+      "unit_id": "body-unit-16",
+      "title": "十六、高塔",
+      "source_number": "十六",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 1610,
+      "end_paragraph": 1709,
+      "statistics": {
+        "nonempty_paragraphs": 78,
+        "characters_excluding_whitespace": 4358,
+        "text_sha256_excluding_whitespace": "1b02627fd00459880f188778f91b1ea1f534fc97514490b7d04e44866baee16d",
+        "paragraph_sequence_sha256": "2b8027dbec57f5755dd82491c6fce332d56db848f8eae8aeb87a7bbba610a868"
+      },
+      "characters_excluding_heading_and_whitespace": 4353,
+      "opening_anchor": "十六、高塔",
+      "closing_anchor": "他仿佛感受到了一种暖意，带着隐隐的期盼走了进去。"
+    },
+    {
+      "unit_id": "body-unit-17",
+      "title": "十七、博士",
+      "source_number": "十七",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 1710,
+      "end_paragraph": 1795,
+      "statistics": {
+        "nonempty_paragraphs": 68,
+        "characters_excluding_whitespace": 4527,
+        "text_sha256_excluding_whitespace": "f168f09702bcd6c88c3482aa790ea081f4cac29c84f862e1afb1b20893b6a605",
+        "paragraph_sequence_sha256": "498aefd1351277b8d57d6bd57200e946a18a553a67914fa07b350df4426d34c4"
+      },
+      "characters_excluding_heading_and_whitespace": 4522,
+      "opening_anchor": "十七、博士",
+      "closing_anchor": "他颤抖着念出了这个名字，睁开双眼。投影消失了，舷窗也不见了。客厅一片昏暗，只有从百叶窗的隙漏进来的几抹夕阳，分外耀眼。"
+    },
+    {
+      "unit_id": "body-unit-18",
+      "title": "十八、基地",
+      "source_number": "十八",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 1796,
+      "end_paragraph": 1890,
+      "statistics": {
+        "nonempty_paragraphs": 89,
+        "characters_excluding_whitespace": 4719,
+        "text_sha256_excluding_whitespace": "2c118ea51ac64c0ff94d5717fce02f82ba88719ea7e3492a2bd3493ba5ce2e65",
+        "paragraph_sequence_sha256": "5d61be7ec02a735bf007ac172c32ee102c2f43282b0df5986a46ffba15326504"
+      },
+      "characters_excluding_heading_and_whitespace": 4714,
+      "opening_anchor": "十八、基地",
+      "closing_anchor": "在博士渐行渐远之际，一个似有似无的声音飘了过来：“对了，我仍旧做梦。”"
+    },
+    {
+      "unit_id": "body-unit-19",
+      "title": "十九、末日",
+      "source_number": "十九",
+      "role": "chapter",
+      "section_kind": "numbered_chapter",
+      "start_paragraph": 1891,
+      "end_paragraph": 1960,
+      "statistics": {
+        "nonempty_paragraphs": 67,
+        "characters_excluding_whitespace": 4176,
+        "text_sha256_excluding_whitespace": "ac93cbddc62ec3c197f2bedd51e4bf3a98cad6678fa4ab42084099dffd212934",
+        "paragraph_sequence_sha256": "ec4dcdc892e23516068d2b700736fdbdec4cc993d4f7d794dd5daee5b78d0f84"
+      },
+      "characters_excluding_heading_and_whitespace": 4171,
+      "opening_anchor": "十九、末日",
+      "closing_anchor": "紧接着，里面传来“砰”的一声闷响。奇怪的是，陆一鸣的心绪并未因此掀起波澜；相反，他只感到一种近乎空白的平静。"
+    },
+    {
+      "unit_id": "body-unit-20",
+      "title": "尾声",
+      "source_number": null,
+      "role": "chapter",
+      "section_kind": "epilogue",
+      "start_paragraph": 1961,
+      "end_paragraph": 2357,
+      "statistics": {
+        "nonempty_paragraphs": 215,
+        "characters_excluding_whitespace": 7081,
+        "text_sha256_excluding_whitespace": "308d77a817054f749c32e36492c2034d14481ab38fac389865e70baa235c9a1c",
+        "paragraph_sequence_sha256": "6d38c110b352047ba7192a055cb2d6154d6c4046c353aedc673d1a93b990b55f"
+      },
+      "characters_excluding_heading_and_whitespace": 7079,
+      "opening_anchor": "尾声",
+      "closing_anchor": "成一个完整的故事。等她放下最后的那一本的时候，雨后的烈阳恰巧从车窗外滑了进来。恍惚中，她觉得这场雨仿佛下了足足一个世纪。"
+    },
+    {
+      "unit_id": "body-unit-21",
+      "title": "附录：遗落的传说",
+      "source_number": null,
+      "role": "back_matter",
+      "section_kind": "appendix",
+      "start_paragraph": 2358,
+      "end_paragraph": 2449,
+      "statistics": {
+        "nonempty_paragraphs": 73,
+        "characters_excluding_whitespace": 3610,
+        "text_sha256_excluding_whitespace": "71332a958734e04db7f3ddecbe30c479b7ffe8e2dab24c9748d7cee24cd9cc3f",
+        "paragraph_sequence_sha256": "abc16fd4f9255d542d3e662140ddfcc60f73e8f50229b8da3bd9e0fd156e1d08"
+      },
+      "characters_excluding_heading_and_whitespace": 3602,
+      "opening_anchor": "附录：遗落的传说",
+      "closing_anchor": "若无的悉索细语从四面八方蔓延而来。乌姆的眼前闪烁着奇异的微光。他感到一阵眩晕，身子晃了几晃，瘫倒在地上，再也没有站起来。"
+    },
+    {
+      "unit_id": "body-unit-22",
+      "title": "后记",
+      "source_number": null,
+      "role": "back_matter",
+      "section_kind": "afterword",
+      "start_paragraph": 2450,
+      "end_paragraph": 2457,
+      "statistics": {
+        "nonempty_paragraphs": 7,
+        "characters_excluding_whitespace": 585,
+        "text_sha256_excluding_whitespace": "fa940f078e646370cad479d950d82cd31bdfd8eace98f7877264d2156f71309d",
+        "paragraph_sequence_sha256": "d7febd010912b6964ec526ac8d59d12d127339f5551f08f192a5056300225d39"
+      },
+      "characters_excluding_heading_and_whitespace": 583,
+      "opening_anchor": "后记",
+      "closing_anchor": "萧林于二零二一年元旦"
+    }
+  ],
+  "excluded_header_footer_text": {
+    "word/footer2.xml": "2",
+    "word/footer1.xml": "2"
+  },
+  "stored_word_app_statistics_not_used": {
+    "Pages": "181",
+    "Words": "58707",
+    "Characters": "59296",
+    "Paragraphs": "1966",
+    "CharactersWithSpaces": "116037"
+  },
+  "notes": [
+    "Count Unicode code points for which Python str.isspace() is false; include punctuation, numerals, Latin letters, and Chinese characters.",
+    "Whole-document count includes cover, dedication, author once, TOC labels and displayed page numbers, body headings, appendix, and afterword.",
+    "The 19 numbered chapters plus the epilogue are narrative content; appendix and afterword are counted separately.",
+    "Field instructions, XML/Markdown markup, fonts, headers/footers, and separator-only note definitions are excluded.",
+    "Word Choice/Fallback author representations count once. webHidden is not vanish: stored TOC page results visible in normal/print view are retained.",
+    "Paragraph hashes omit whitespace but preserve nonempty paragraph boundaries and order; flat text hashes additionally omit paragraph boundaries.",
+    "This establishes source text/structure facts, not human visual approval of a Markdown rendering.",
+    "The baseline is immutable for the pinned DOCX SHA-256; a changed source requires a separately versioned case."
+  ],
+  "established_at": "2026-10-20T18:34:24.011846+00:00",
+  "audit_script_sha256_at_establishment": "ef08cc60f6edfbc528c8ed10c76490155ac5300b18114122353da2b11c9c7729"
+}

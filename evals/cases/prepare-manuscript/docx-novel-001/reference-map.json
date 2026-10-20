@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "case_id": "docx-novel-001",
+  "review": {
+    "status": "draft",
+    "reviewed_by": null,
+    "reviewed_at": null
+  },
+  "source_hashes": {
+    "novel-docx": "c2c13eaf5110ea7e68a41893b91c762151bab5e926e6cc316087b3dc99aa9a26"
+  },
+  "profile": {
+    "name": "commonmark-v1",
+    "check_inline_formatting": false,
+    "check_block_structure": true,
+    "check_links": false
+  },
+  "units": [
+    {
+      "unit_id": "front-matter",
+      "title": null,
+      "source_number": null,
+      "role": "front_matter",
+      "source_locator": "Cover content control and TOC before first ChineseHeading paragraph",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0001.md",
+      "sha256": "d7c5e7d1b31b2007c6c1f54eade559adf531def059e747ca5b7f04fba8072acd"
+    },
+    {
+      "unit_id": "body-unit-01",
+      "title": "一、新年",
+      "source_number": "一",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 30: 一、新年; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0002.md",
+      "sha256": "26d7d17869f2ec662af294745bdf0af4ad7d65dbee8d398e5b766ce57240e7fd"
+    },
+    {
+      "unit_id": "body-unit-02",
+      "title": "二、异梦",
+      "source_number": "二",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 215: 二、异梦; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0003.md",
+      "sha256": "adc7780e52ec5568d5cb7a598923d2543a7f2ee617161d71895ac14f6b772e02"
+    },
+    {
+      "unit_id": "body-unit-03",
+      "title": "三、指环",
+      "source_number": "三",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 296: 三、指环; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0004.md",
+      "sha256": "30d3d3a8f2870fd9d51f77c6c187f555da4719960085b16ab48a9931d730f742"
+    },
+    {
+      "unit_id": "body-unit-04",
+      "title": "四、往事",
+      "source_number": "四",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 412: 四、往事; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0005.md",
+      "sha256": "58b4f064ffb1ca4065f40961d331c9fc0e8a568d4903ad7a739d5bf6219038a7"
+    },
+    {
+      "unit_id": "body-unit-05",
+      "title": "五、访客",
+      "source_number": "五",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 559: 五、访客; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0006.md",
+      "sha256": "f76bfe98647d9360d463701507bb61a2a2f051e7c745daa511fade0ba71472f9"
+    },
+    {
+      "unit_id": "body-unit-06",
+      "title": "六、梦婆",
+      "source_number": "六",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 659: 六、梦婆; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0007.md",
+      "sha256": "bf04b9575c1b6e6d13d50314fb674dc3eb613a418429ee269e0f4107a42b4291"
+    },
+    {
+      "unit_id": "body-unit-07",
+      "title": "七、谜团",
+      "source_number": "七",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 745: 七、谜团; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0008.md",
+      "sha256": "5d6bd618f4f8cd5e6e6e3b45b4afd31f4c55484efda9b913e97b370c894bc101"
+    },
+    {
+      "unit_id": "body-unit-08",
+      "title": "八、真相",
+      "source_number": "八",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 855: 八、真相; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0009.md",
+      "sha256": "6b7ffb75650d7f29f781c055014cb637458a9fdec5ae5b01878387529991e363"
+    },
+    {
+      "unit_id": "body-unit-09",
+      "title": "九、追忆",
+      "source_number": "九",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 999: 九、追忆; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0010.md",
+      "sha256": "26a0e6ca15a83a1335a83fca2b18799cb3acca40634f11a0dc6a2faf1fc5e5f7"
+    },
+    {
+      "unit_id": "body-unit-10",
+      "title": "十、故乡",
+      "source_number": "十",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 1089: 十、故乡; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0011.md",
+      "sha256": "d6c4751a28de4b46f36c94460a46014087491783c036d903abad5679bfe1b2b2"
+    },
+    {
+      "unit_id": "body-unit-11",
+      "title": "十一、重逢",
+      "source_number": "十一",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 1157: 十一、重逢; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0012.md",
+      "sha256": "1caf994ea864ed0dc5cf69677be9ac14e2c2528605b5686b4d73e9aaee7657ca"
+    },
+    {
+      "unit_id": "body-unit-12",
+      "title": "十二、浮城",
+      "source_number": "十二",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 1261: 十二、浮城; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0013.md",
+      "sha256": "22b168312c506fe9fd8fbd72580e4b989105f4d279f5873db488712c405f40c1"
+    },
+    {
+      "unit_id": "body-unit-13",
+      "title": "十三、祭司",
+      "source_number": "十三",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 1352: 十三、祭司; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0014.md",
+      "sha256": "6accdb8fdceec8bc3ba6cebf2024865724988f4d924530a3f36f96cd0babc28c"
+    },
+    {
+      "unit_id": "body-unit-14",
+      "title": "十四、米娅",
+      "source_number": "十四",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 1426: 十四、米娅; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0015.md",
+      "sha256": "cc5f753402669dda3d0177e564692472d2d3ac5789c50bddb22f0b18ae2b39db"
+    },
+    {
+      "unit_id": "body-unit-15",
+      "title": "十五、陷阱",
+      "source_number": "十五",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 1495: 十五、陷阱; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0016.md",
+      "sha256": "d52a48ff1ac83b019200868de8ee43631ddd232824ec3a51c0ef465ad7fae9bb"
+    },
+    {
+      "unit_id": "body-unit-16",
+      "title": "十六、高塔",
+      "source_number": "十六",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 1610: 十六、高塔; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0017.md",
+      "sha256": "ab629607a55a3c1dd4a3093331ba505d1819f0219ed3397ad27dee80629f95a5"
+    },
+    {
+      "unit_id": "body-unit-17",
+      "title": "十七、博士",
+      "source_number": "十七",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 1710: 十七、博士; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0018.md",
+      "sha256": "364f9bf7238fb3372e8b37618c8266584dac854945d185ee6eb2cd2afb836efa"
+    },
+    {
+      "unit_id": "body-unit-18",
+      "title": "十八、基地",
+      "source_number": "十八",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 1796: 十八、基地; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0019.md",
+      "sha256": "fdbed820d0f0f75885e7b06c1e527389746307555bd571e93cd90b6cc001c87b"
+    },
+    {
+      "unit_id": "body-unit-19",
+      "title": "十九、末日",
+      "source_number": "十九",
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 1891: 十九、末日; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0020.md",
+      "sha256": "ffc1fef8eaf56cdadcd0f5449bba214cd574e08a3aedf9ed223307d4427d88a0"
+    },
+    {
+      "unit_id": "body-unit-20",
+      "title": "尾声",
+      "source_number": null,
+      "role": "chapter",
+      "source_locator": "word/document.xml logical paragraph 1961: 尾声; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0021.md",
+      "sha256": "2435aefb6f353abb4a042a75307a814c3a5d354e8dc6ec2030efd47dc1820775"
+    },
+    {
+      "unit_id": "body-unit-21",
+      "title": "附录：遗落的传说",
+      "source_number": null,
+      "role": "back_matter",
+      "source_locator": "word/document.xml logical paragraph 2358: 附录：遗落的传说; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0022.md",
+      "sha256": "fe85bf3135bacd276a9818d0b42d537070097446030e59c5e0bd5ec944be936d"
+    },
+    {
+      "unit_id": "body-unit-22",
+      "title": "后记",
+      "source_number": null,
+      "role": "back_matter",
+      "source_locator": "word/document.xml logical paragraph 2450: 后记; through next ChineseHeading or EOF",
+      "file": "../../../fixtures/reference-outputs/prepare-manuscript/docx-novel-001/0023.md",
+      "sha256": "cc698a67bca61cc10b6ed419cb8a6ba7c2a753da13d0094bab74320086cacfa3"
+    }
+  ],
+  "assets": [],
+  "notes": [
+    "Draft oracle authored from direct OOXML inspection, not from a candidate preparation output.",
+    "Human source/visual review is required before changing review.status to approved.",
+    "Choice/Fallback content is selected once; cover title, dedication, and author are retained.",
+    "The 22 body headings comprise 19 numbered chapters, an epilogue, an appendix, and an afterword.",
+    "The leading front_matter unit retains cover information and displayed TOC entries/page numbers.",
+    "Tabs become one space; empty layout paragraphs are omitted. Scene-break interpretation still needs review.",
+    "ChineseDiary and ChineseQuote paragraphs are blockquotes under the public case instructions.",
+    "Inline emphasis and hyperlink destinations are not certified by this draft profile; manual checks remain mandatory.",
+    "Embedded fonts and separator-only footnote/endnote parts are not manuscript assets or textual notes.",
+    "This authoring script is not a DOCX preparation adapter and must not be used to generate evaluated candidates."
+  ]
+}

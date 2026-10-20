@@ -6,7 +6,7 @@ The project is designed to keep authors and translators focused on ideas, voice,
 
 ## Install as a ChatGPT and Codex plugin
 
-The five skills live in one canonical directory, `plugins/manuscript-studio/skills/`.
+The six skills live in one canonical directory, `plugins/manuscript-studio/skills/`.
 The skills-only `manuscript-studio` plugin uses these files directly; the standalone
 installer copies from the same source. Add this GitHub repository as a marketplace:
 
@@ -35,7 +35,7 @@ python scripts/install_skills.py --list
 python scripts/install_skills.py --dry-run
 ```
 
-Install all five skills into `~/.agents/skills/`:
+Install all six skills into `~/.agents/skills/`:
 
 ```text
 python scripts/install_skills.py
@@ -48,7 +48,7 @@ python scripts/install_skills.py literary-editing literary-agent-querying
 ```
 
 Editing, translation, querying, and formatting also install the shared
-`review-approval-sheet` skill to preserve sibling references. Complete skill
+`prepare-manuscript` and `review-approval-sheet` skills to preserve sibling references. Complete skill
 folders are copied, including references, scripts, tests, agent metadata, and
 assets; Python bytecode and cache directories are excluded.
 
@@ -130,6 +130,20 @@ Git is optional but recommended. When Git is available, the agent can maintain t
 
 ## Included skills
 
+### `prepare-manuscript`
+
+Discovers manuscripts only within a designated source location, verifies the
+requested scope, and produces a neutral, versioned package of chapter-based UTF-8
+Markdown. A shared `work.json` records work metadata, preparation readiness, and
+separate downstream status summaries; revision manifests bind chapter order,
+source locators, extraction quality, and file hashes. Editing and translation
+delegate preparation to this skill. Formatting and querying can consume the same
+contract while retaining their own source and approval rules.
+
+The machine-readable schemas and validator are included in the skill. Install
+its `requirements.txt` to run `scripts/validate_preparation.py <work-root>/work.json`;
+use `--check-sources` to verify accessible local originals as well.
+
 ### `literary-editing`
 
 Runs manuscript assessment, developmental editing, line editing, copyediting, specialist review, proofreading, and final QA. It keeps the manuscript source separate from the editorial workspace, presents proposed changes for approval, and applies only decisions the author accepts.
@@ -157,13 +171,20 @@ standalone installer use that same directory; do not recreate top-level skill
 copies. When introducing a sibling-skill dependency, update the installer's
 `DEPENDENCIES` mapping and its tests.
 
-Run the dependency-free Python regression suites from the repository root:
+Run the existing dependency-free Python regression suites from the repository root:
 
 ```text
 python -B scripts/test_install_skills.py
 python -B plugins/manuscript-studio/skills/literary-agent-querying/scripts/test_sample_boundary.py
 python -B plugins/manuscript-studio/skills/literary-agent-querying/scripts/test_validate_on_demand.py
 python -B plugins/manuscript-studio/skills/review-approval-sheet/scripts/test_approval_review.py
+```
+
+The preparation schema validator uses `jsonschema`. In your Python environment:
+
+```text
+python -m pip install -r plugins/manuscript-studio/skills/prepare-manuscript/requirements.txt
+python -B plugins/manuscript-studio/skills/prepare-manuscript/scripts/test_validate_preparation.py
 ```
 
 Installer tests use temporary destinations, not your personal skill directory.

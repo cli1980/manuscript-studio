@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "case_id", "task", "input_location", "recursive", "sources", "reference_file", "expected_metadata", "expected_preparation_status", "expected_workflows", "scope_kind", "require_trace", "manual_checks"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "case_id": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+    "task": {"const": "manuscript-preparation"},
+    "instructions": {"type": "string", "minLength": 1},
+    "input_location": {"type": "string", "minLength": 1},
+    "recursive": {"type": "boolean"},
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["source_id", "file", "sha256"],
+        "properties": {
+          "source_id": {"type": "string", "minLength": 1},
+          "file": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    },
+    "reference_file": {"type": "string", "minLength": 1},
+    "ground_truth_file": {"type": "string", "minLength": 1},
+    "ground_truth_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "expected_metadata": {
+      "type": "object",
+      "propertyNames": {"enum": ["title", "authors", "source_language", "work_type", "genre", "edition"]}
+    },
+    "expected_preparation_status": {"enum": ["ready", "blocked"]},
+    "expected_workflows": {
+      "type": "object",
+      "required": ["literary-editing", "literary-translation", "literary-agent-querying", "format-manuscript"],
+      "propertyNames": {"enum": ["literary-editing", "literary-translation", "literary-agent-querying", "format-manuscript"]},
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status"],
+        "propertyNames": {"enum": ["status", "basis_revision", "scope", "operation", "state_locator", "updated_at"]},
+        "properties": {
+          "status": {"enum": ["not_started", "in_progress", "awaiting_approval", "blocked", "completed", "stale"]}
+        }
+      }
+    },
+    "scope_kind": {"enum": ["whole_work", "selected_chapters"]},
+    "require_trace": {"type": "boolean"},
+    "manual_checks": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  },
+  "dependentRequired": {
+    "ground_truth_file": ["ground_truth_sha256"],
+    "ground_truth_sha256": ["ground_truth_file"]
+  }
+}

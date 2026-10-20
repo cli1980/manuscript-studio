@@ -2,6 +2,13 @@
 
 Use this specification for every active chapter. It defines the temporary artifacts, their contents, and the state required to pause and resume safely.
 
+Bind each chapter workspace to the shared prepared `work.json` locator, prepared
+revision, stable chapter ID, and chapter hash. On resume, verify those bindings
+before reusing a passage map or approval. A changed preparation revision makes
+affected work stale until its source, boundaries, and decisions are revalidated.
+The prepared chapter remains read-only; the passage files below are internal
+copies made only after the translation-specific passage-map approval.
+
 ## Working Layout
 
 Store chapter workflow state under:
@@ -61,6 +68,7 @@ After every save, reread the checkpoint and verify that:
 
 Maintain `review-state.md` with:
 
+- the shared work-record locator, prepared revision, chapter ID, and source chapter hash;
 - the current passage-map approval status;
 - a passage-status table covering every mapped passage, using `unstarted`, `provisional`, `reviewing`, or `finalized`;
 - the current passage number and workflow phase;
@@ -103,4 +111,7 @@ When resuming, read and verify `glossary.md`, the applicable `voice.md` entries,
 
 If chat history conflicts with saved state, reconstruct the workflow from the source files, saved checkpoints, and recorded user decisions. Do not skip or reopen settled issues. If a required checkpoint is missing, incomplete, or does not represent the expected full-passage phase, return to the phase that creates it rather than advancing.
 
-The completed chapter under `translated_english/`, normalized source chapters, `glossary.md`, and `voice.md` are durable project artifacts. Everything under `.literary-translation-work/` remains temporary internal workflow state.
+The prepared source package is durable shared input. Completed chapters under
+`translated_english/`, `glossary.md`, and `voice.md` are durable translation-project
+artifacts. Everything under `.literary-translation-work/` remains temporary
+internal workflow state.

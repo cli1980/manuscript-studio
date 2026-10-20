@@ -18,7 +18,7 @@ STATE_FILE = ".manuscript-studio-install.json"
 LOCK_FILE = ".manuscript-studio-install.lock"
 BACKUP_DIR = ".manuscript-studio-backups"
 DEPENDENCIES = {
-    name: ("review-approval-sheet",)
+    name: ("prepare-manuscript", "review-approval-sheet")
     for name in (
         "literary-editing", "literary-translation", "literary-agent-querying",
         "format-manuscript",

@@ -7,6 +7,11 @@ Use two distinct locations for every project:
 
 Never use the source location itself as the workspace. Record both identities explicitly and keep their files, version identities, and permissions separate.
 
+The neutral package produced by [prepare-manuscript](../../prepare-manuscript/SKILL.md)
+is a third, shared input location. It is neither the author-controlled source
+repository nor the editable editorial workspace. Keep it outside both roots.
+Preparation owns source extraction; editing owns its working copies and approvals.
+
 ## Invariant workspace layout
 
 Use the same logical layout in both operating modes:
@@ -55,7 +60,11 @@ Use two independent local repositories:
 
 Do not nest one repository inside the other. Record both roots, baseline commits, current commits, and tracked source paths in the manifest and project state.
 
-Import or extract the source draft into `workspace/manuscript/chapters/` without editorial changes. Bind each review to the workspace manuscript commit and the source commit from which that workspace version was imported.
+Copy the selected verified prepared chapters into `workspace/manuscript/chapters/`
+without editorial changes. Bind each review to the workspace manuscript commit,
+the prepared revision and chapter hashes, and the original source identity.
+Verify the original repository commit/fingerprint against preparation's recorded
+source identity before recording the import base.
 
 After explicit approval:
 

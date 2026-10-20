@@ -22,7 +22,7 @@ Turn an unchanged manuscript into a deliberately designed publication artifact. 
 
 ## Initialize or Resume
 
-When a writable project root exists, preserve state under:
+When a writable project root exists, preserve format-specific state under:
 
 ```text
 manuscript-formatting/
@@ -35,6 +35,15 @@ manuscript-formatting/
 When no writable root exists, use equivalent Codex artifacts. Do not place formatting state inside an editorial or query-package folder.
 
 Inspect the manuscript, existing format specification, review state, project metadata, and requested deliverable. Report a compact freshness summary when reusable state exists. Refresh only changed or unsafe decisions; do not repeat intake because a new output file was requested.
+
+When the designated input is a prepared manuscript, read its `work.json` and
+current revision manifest under the sibling
+[preparation contract](../prepare-manuscript/references/preparation-contract.md).
+Use the verified chapter order and declared assets as the content inventory.
+Maintain only `workflows.format-manuscript`, bound to the prepared revision and
+edition scope, with `format-spec.md` as the state locator. If preparation is needed,
+delegate it to [prepare-manuscript](../prepare-manuscript/SKILL.md). The shared
+status is a summary; design approval and output verification remain mandatory.
 
 ## Establish the Edition Profile
 

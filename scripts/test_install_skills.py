@@ -62,15 +62,25 @@ class InstallerTests(unittest.TestCase):
 
     def test_review_dependency_is_installed_with_query_skill(self):
         self.make_skill("literary-agent-querying")
+        self.make_skill("prepare-manuscript")
         self.make_skill("review-approval-sheet")
         self.install(["literary-agent-querying"])
         self.assertTrue((self.destination / "review-approval-sheet/SKILL.md").is_file())
+        self.assertTrue((self.destination / "prepare-manuscript/SKILL.md").is_file())
         self.assertFalse((self.destination / "alpha").exists())
 
     def test_missing_dependency_fails_without_writing(self):
         self.make_skill("literary-editing")
+        self.make_skill("prepare-manuscript")
         with self.assertRaisesRegex(ValueError, "review-approval-sheet"):
             self.install(["literary-editing"])
+        self.assertFalse(self.destination.exists())
+
+    def test_missing_preparation_dependency_fails_without_writing(self):
+        self.make_skill("literary-translation")
+        self.make_skill("review-approval-sheet")
+        with self.assertRaisesRegex(ValueError, "prepare-manuscript"):
+            self.install(["literary-translation"])
         self.assertFalse(self.destination.exists())
 
     def test_dry_run_does_not_create_destination(self):
@@ -299,7 +309,7 @@ class RepositoryTests(unittest.TestCase):
             available = installer.available_skills(installer.SKILLS_ROOT)
             self.assertEqual(set(available), {
                 "literary-editing", "literary-translation", "literary-agent-querying",
-                "format-manuscript", "review-approval-sheet",
+                "format-manuscript", "review-approval-sheet", "prepare-manuscript",
             })
             self.assertEqual({path.name for path in destination.iterdir()}, set(available))
             for name, source in available.items():

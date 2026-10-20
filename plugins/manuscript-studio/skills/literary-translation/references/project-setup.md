@@ -1,47 +1,36 @@
 # Translation Project Setup
 
-Use this procedure when starting a new literary translation project or when an existing project lacks normalized source files, a glossary, a voice record, or output folders.
+Use this procedure when starting a translation project or when its prepared-source
+handoff, glossary, voice record, or output folders are missing.
 
-## 1. Locate the Original
+## 1. Obtain the prepared manuscript
 
-Search available project files, attachments, Library content, and connected storage using the most direct file-search tool available. Search by work title, author, chapter title or number, source-language phrases, and likely filename variants.
+Read the sibling [prepare-manuscript skill](../../prepare-manuscript/SKILL.md) and
+its [preparation contract](../../prepare-manuscript/references/preparation-contract.md).
+Obtain the user's specific source location and requested work/chapter scope.
+Delegate discovery, extraction, and verification to that skill, or reuse an
+unchanged verified package. Do not search outside the designated source location.
 
-Confirm that the located artifact is the original source rather than an earlier translation, synopsis, excerpt, or adaptation.
+Require a valid `work.json` with preparation `ready` and a verified revision
+containing the complete requested original-language chapters. Resolve chapter
+paths from the revision manifest and follow its order and stable chapter IDs.
+Do not translate from a summary, earlier translation, edited workspace copy, or
+incomplete extraction in place of the original.
 
-If the complete original-language source for the requested scope cannot be found, ask the user to provide it. The full chapter workflow requires at least the complete current chapter. An isolated excerpt may be translated only provisionally; do not substitute reverse translation or infer missing source text.
+Keep the prepared package outside the translation project's workflow/output
+folders. Never modify its source chapters while translating. If a source error
+or changed original is discovered, return it to preparation and bind subsequent
+work to a newly verified revision. Do not silently carry old approvals to new text.
 
-## 2. Inspect and Normalize Source Artifacts
+An isolated excerpt may still be translated provisionally under the main skill's
+context rules; it does not become a ready prepared chapter.
 
-Inventory the supplied source artifacts and determine:
+For legacy `original_chinese/` or `original_<language>/` projects, follow the
+shared migration procedure. Preserve existing files and user decisions, verify
+them against the designated original, and record the new source binding without
+silently renaming or deleting user files.
 
-- file type and source language;
-- whether the work is already chapter-separated;
-- chapter order, numbering, and titles;
-- whether extraction preserves paragraphs, punctuation, dialogue, notes, and section breaks;
-- whether OCR errors or missing pages require user attention.
-
-If a single PDF, DOC, or DOCX contains multiple chapters:
-
-1. Use the appropriate document or PDF workflow to extract its text.
-2. Identify real chapter boundaries from headings and structure, not arbitrary length.
-3. Save each chapter as a separate UTF-8 Markdown file.
-4. Preserve source wording, punctuation, paragraph breaks, and order.
-5. Do not silently modernize, correct, translate, or normalize the literary text.
-6. Compare the extracted files with the artifact and resolve material extraction errors before translation.
-
-Use:
-
-- `original_chinese/` when the source is Chinese;
-- `original_<source-language>/` otherwise, using a short lowercase language name such as `original_japanese/` or `original_spanish/`.
-
-Use stable sortable filenames that preserve chapter order, for example:
-
-- `00_chapter_1_新年.md`
-- `01_chapter_2_异梦.md`
-
-If the project already has a consistent source naming convention, preserve it.
-
-## 3. Prepare Durable Project Structure
+## 2. Prepare Translation-Specific Project Structure
 
 Ensure the project contains:
 
@@ -49,17 +38,22 @@ Ensure the project contains:
 project/
 ├── glossary.md
 ├── voice.md
-├── original_<source-language>/
 └── translated_english/
 ```
 
 These are durable, project-accessible artifacts.
 
+The chapter source lives in the neutral prepared package, not in a second
+translation-owned extraction tree. Record its `work.json` locator, revision, and
+active chapter ID in internal review state. Maintain only the
+`workflows.literary-translation` summary in the work record, with the actual
+translation project/state locator and the operation's chapter scope.
+
 Create both `glossary.md` and `voice.md` as UTF-8 Markdown files during initialization, even when only their headings or baseline schemas can be populated. Never leave either artifact only in chat history or internal workflow state.
 
 Treat both files as user-editable project sources of truth. Reread their current on-disk contents when starting or resuming work and before beginning each chapter. Treat direct user edits as binding unless they are ambiguous or conflict with another explicit user decision. Preserve user-added fields, comments, organization, and unsupported entries; merge skill-generated updates locally instead of regenerating or silently overwriting either file.
 
-## 4. Create or Load the Glossary
+## 3. Create or Load the Glossary
 
 If `glossary.md` exists, read it before translating. If it does not, create it from the original and any reliable prior translations.
 
@@ -108,7 +102,7 @@ Whenever the user corrects, approves, or replaces a mapping:
 4. check the active chapter for affected occurrences;
 5. ask before retroactively changing already finalized chapters if the scope is not explicit.
 
-## 5. Create or Load the Voice Record
+## 4. Create or Load the Voice Record
 
 If `voice.md` exists, read it before chapter analysis. If it does not, create it during discovery. Keep it concise when the work's voice is relatively uniform and expand it when voice, dialect, culture, or social register materially affects translation.
 

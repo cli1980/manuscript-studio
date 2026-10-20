@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "case_id", "review", "source_hashes", "profile", "units", "assets", "notes"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "case_id": {"type": "string", "minLength": 1},
+    "review": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "reviewed_by", "reviewed_at"],
+      "properties": {
+        "status": {"enum": ["draft", "approved"]},
+        "reviewed_by": {"type": ["string", "null"], "minLength": 1},
+        "reviewed_at": {"type": ["string", "null"], "format": "date-time"}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "approved"}}},
+        "then": {"properties": {"reviewed_by": {"type": "string", "minLength": 1},
+                                "reviewed_at": {"type": "string", "format": "date-time"}}}
+      }]
+    },
+    "source_hashes": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    },
+    "profile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "check_inline_formatting", "check_block_structure", "check_links"],
+      "properties": {
+        "name": {"const": "commonmark-v1"},
+        "check_inline_formatting": {"type": "boolean"},
+        "check_block_structure": {"type": "boolean"},
+        "check_links": {"type": "boolean"}
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["unit_id", "title", "source_number", "role", "file", "sha256", "source_locator"],
+        "properties": {
+          "unit_id": {"type": "string", "minLength": 1},
+          "title": {"type": ["string", "null"]},
+          "source_number": {"type": ["string", "null"]},
+          "role": {"enum": ["chapter", "front_matter", "back_matter", "standalone"]},
+          "file": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "source_locator": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["file", "sha256"],
+        "properties": {
+          "file": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    },
+    "notes": {"type": "array", "items": {"type": "string"}}
+  }
+}

@@ -1,6 +1,6 @@
 ---
 name: literary-translation
-description: Set up and translate literary works chapter by chapter through source discovery and normalization, a living glossary and evolving voice record, whole-chapter analysis, systematic passage division with interactive boundary approval, two-path drafting, source-grounded editorial review with reusable approval sheets, and durable completed-chapter output. Use when translating fiction, memoir, narrative nonfiction, poetry-inflected prose, or other literary writing from a source language into natural English, especially for new translation projects, passage-by-passage collaboration, close fidelity review, preservation of voice and reader experience, continuity with earlier translated chapters, or culturally dense writing shaped by dialect, oral storytelling, folklore, socially marked speech, or changing regional and historical registers.
+description: Translate literary works chapter by chapter from a shared prepared-manuscript package, using a living glossary and evolving voice record, whole-chapter analysis, systematic passage division with interactive boundary approval, two-path drafting, source-grounded editorial review with reusable approval sheets, and durable completed-chapter output. Use when translating fiction, memoir, narrative nonfiction, poetry-inflected prose, or other literary writing from a source language into natural English, especially for new translation projects, passage-by-passage collaboration, close fidelity review, preservation of voice and reader experience, continuity with earlier translated chapters, or culturally dense writing shaped by dialect, oral storytelling, folklore, socially marked speech, or changing regional and historical registers.
 ---
 
 # Literary Translation
@@ -19,7 +19,9 @@ Use natural English rather than reproducing source-language syntax. Do not add e
 
 Determine the project state before beginning Step 1.
 
-For a new project, or an existing project missing normalized source files, `glossary.md`, `voice.md`, or `translated_english/`, read [references/project-setup.md](references/project-setup.md) in full and complete the applicable setup steps.
+For a new project, or an existing project missing a verified prepared source, `glossary.md`, `voice.md`, or `translated_english/`, read [references/project-setup.md](references/project-setup.md) in full. Delegate location-scoped manuscript discovery, extraction, chapter normalization, and source metadata to the sibling [prepare-manuscript skill](../prepare-manuscript/SKILL.md); do not duplicate its preparation workflow here.
+
+Use the shared `work.json` and its current revision manifest as the source handoff. Read chapters in manifest order and preserve the prepared source files. Update only `workflows.literary-translation` under the [shared status contract](../prepare-manuscript/references/preparation-contract.md#downstream-status-and-ownership), pointing to the translation project's actual state location. Bind the operation and chapter scope to the prepared revision. Chapter completion is not whole-work completion.
 
 Read [references/workflow-state.md](references/workflow-state.md) in full before creating, verifying, or resuming an internal chapter workspace, and follow it throughout the chapter workflow.
 

@@ -627,7 +627,7 @@ class ServerTests(unittest.TestCase):
 
     def test_skill_registry_and_unsupported_editor(self):
         skills = self.client.get("/api/skills").json()
-        self.assertEqual(len(skills), 5)
+        self.assertEqual(len(skills), 6)
         self.assertEqual([s["id"] for s in skills if s["supported"]], ["literary-translation"])
         self.assertEqual(self.client.get("/api/cases?skill=literary-editing").json(), [])
         self.assertEqual(self.client.post("/api/cases", json={"skill": "literary-editing"}, headers=self.headers).status_code, 405)

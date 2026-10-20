@@ -54,7 +54,7 @@ Record:
 - workspace repository root, baseline, and current commit in Git mode;
 - source and workspace fingerprints and workspace revision IDs in artifact mode;
 - active job ID, service, and scope;
-- phase: `intake`, `normalizing`, `ready`, `reviewing`, `verdict-presented`, `awaiting-approval`, `applying-workspace`, `verifying-workspace`, `syncing-source`, `awaiting-manual-source-update`, `completed`, `paused`, or `blocked`;
+- phase: `intake`, `preparing-source`, `ready`, `reviewing`, `verdict-presented`, `awaiting-approval`, `applying-workspace`, `verifying-workspace`, `syncing-source`, `awaiting-manual-source-update`, `completed`, `paused`, or `blocked`; interpret legacy `normalizing` as `preparing-source`, delegated to the shared preparation skill;
 - reviewed source and workspace identities;
 - manuscript paths;
 - verdict, proposal, decision-table Markdown, decision-table JSON, approval, report, and export paths;
@@ -67,6 +67,10 @@ Record:
 Update state before each approval request, after every workspace application, and after source synchronization or export delivery.
 
 ## Review identity
+
+Include the shared prepared `work.json` locator, prepared revision, and stable
+chapter-ID-to-editorial-file mapping alongside the two identities below.
+Do not edit the prepared chapters when applying an editorial decision.
 
 Use one schema with mode-specific values:
 

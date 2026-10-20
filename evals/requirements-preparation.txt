@@ -1,0 +1,2 @@
+-r ../plugins/manuscript-studio/skills/prepare-manuscript/requirements.txt
+markdown-it-py>=3,<5

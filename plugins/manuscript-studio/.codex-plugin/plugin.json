@@ -1,7 +1,7 @@
 {
   "name": "manuscript-studio",
-  "version": "0.3.0",
-  "description": "Manuscript-grounded literary workflows for editing, translation, formatting, querying, and approval.",
+  "version": "0.4.0",
+  "description": "Shared manuscript preparation and literary workflows for editing, translation, formatting, querying, and approval.",
   "author": {
     "name": "Lin Shaw",
     "url": "https://github.com/cli1980"
@@ -14,6 +14,7 @@
     "literary-translation",
     "literary-agents",
     "manuscripts",
+    "manuscript-preparation",
     "manuscript-formatting",
     "query-letters",
     "approval-workflow"
@@ -21,8 +22,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Manuscript Studio",
-    "shortDescription": "Edit, translate, format, query, and review manuscripts.",
-    "longDescription": "Professional manuscript-grounded workflows for literary editing, Chinese-English literary translation, reusable edition formatting, agent research, submission-ready query packages, and revision-bound interactive approvals.",
+    "shortDescription": "Prepare, edit, translate, format, query, and review manuscripts.",
+    "longDescription": "Location-scoped manuscript preparation with verified chapter Markdown and shared work metadata, followed by professional literary editing, Chinese-English translation, reusable edition formatting, agent querying, and revision-bound interactive approvals.",
     "developerName": "Lin Shaw",
     "category": "Productivity",
     "capabilities": [
@@ -30,6 +31,7 @@
     ],
     "websiteURL": "https://github.com/cli1980/manuscript-studio",
     "defaultPrompt": [
+      "Prepare manuscripts from a specified location as verified chapter Markdown with shared work metadata.",
       "Assess and edit my literary manuscript.",
       "Translate this literary manuscript.",
       "Format my manuscript as a polished Word edition with a table of contents.",

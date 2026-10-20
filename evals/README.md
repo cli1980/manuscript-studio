@@ -1,6 +1,6 @@
 # Skill evaluations
 
-Evaluate how an agent performs when using the five distributed Manuscript Studio
+Evaluate how an agent performs when using the six distributed Manuscript Studio
 skills. Load skill instructions and resources from
 [`../plugins/manuscript-studio/skills/`](../plugins/manuscript-studio/skills/);
 do not maintain evaluation copies of the skills.
@@ -33,6 +33,7 @@ evals/
 ├── README.md
 ├── cases/
 │   ├── literary-editing/
+│   ├── prepare-manuscript/
 │   ├── literary-translation/
 │   ├── literary-agent-querying/
 │   ├── format-manuscript/
@@ -78,6 +79,15 @@ Existing Python unit tests remain in their current locations and continue to
 validate deterministic utilities. See the
 [development instructions](../README.md#development-and-verification) for their
 commands.
+
+## Evaluate manuscript preparation
+
+For manuscript preparation, use the separate
+[deterministic skill evaluator](PREPARATION_EVALUATION.md). It checks a candidate
+prepared package against case-defined sources and reference Markdown, with
+explicit missing-evidence reporting for discovery traces and visual review.
+Its first DOCX case has fixed source ground truth for counts, boundaries, and text
+fingerprints; review of the reference Markdown's presentation remains separate.
 
 ## Run the translation judge
 
@@ -232,7 +242,7 @@ case failures and 2 for configuration or preflight errors.
 Run the runner's tests:
 
 ```text
-python -B -m unittest discover -s evals/tests -v
+python -B -m unittest discover -s evals/tests -p test_run_judge.py -v
 ```
 
 The tests use temporary copies of the current sample and a deterministic local

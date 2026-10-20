@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "case_id", "status", "counting_policy", "source_hashes", "verification", "counts", "totals", "units", "notes"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "case_id": {"type": "string", "minLength": 1},
+    "status": {"const": "verified"},
+    "counting_policy": {"const": "unicode-codepoints-without-whitespace-v1"},
+    "source_hashes": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/hash"}},
+    "verification": {"type": "object"},
+    "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "totals": {
+      "type": "object", "required": ["whole_document"],
+      "additionalProperties": {"$ref": "#/$defs/statistics"}
+    },
+    "units": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["unit_id", "title", "source_number", "role", "statistics"],
+        "properties": {
+          "unit_id": {"type": "string", "minLength": 1},
+          "title": {"type": ["string", "null"]},
+          "source_number": {"type": ["string", "null"]},
+          "role": {"enum": ["chapter", "front_matter", "back_matter", "standalone"]},
+          "section_kind": {"type": "string"},
+          "start_paragraph": {"type": "integer", "minimum": 1},
+          "end_paragraph": {"type": "integer", "minimum": 1},
+          "statistics": {"$ref": "#/$defs/statistics"},
+          "characters_excluding_heading_and_whitespace": {"type": "integer", "minimum": 0},
+          "opening_anchor": {"type": "string"},
+          "closing_anchor": {"type": "string"}
+        }
+      }
+    },
+    "toc": {"type": "array", "items": {"type": "object"}},
+    "excluded_header_footer_text": {"type": "object", "additionalProperties": {"type": "string"}},
+    "stored_word_app_statistics_not_used": {"type": "object"},
+    "notes": {"type": "array", "items": {"type": "string"}},
+    "established_at": {"type": "string", "format": "date-time"},
+    "audit_script_sha256_at_establishment": {"$ref": "#/$defs/hash"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "statistics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["nonempty_paragraphs", "characters_excluding_whitespace", "text_sha256_excluding_whitespace", "paragraph_sequence_sha256"],
+      "properties": {
+        "nonempty_paragraphs": {"type": "integer", "minimum": 0},
+        "characters_excluding_whitespace": {"type": "integer", "minimum": 0},
+        "text_sha256_excluding_whitespace": {"$ref": "#/$defs/hash"},
+        "paragraph_sequence_sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  }
+}

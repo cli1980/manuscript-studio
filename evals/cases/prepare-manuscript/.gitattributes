@@ -1,0 +1,3 @@
+# Frozen source-ground-truth hashes must survive Windows checkouts.
+ground-truth.json text eol=lf
+GROUND_TRUTH.md text eol=lf

@@ -40,7 +40,11 @@ Tag it `source-manuscript-baseline`, or use a stable work-specific tag when the 
 
 ## Workspace baseline
 
-Create the invariant workspace layout and normalize the source before staging. Stage only verified normalized chapters, provenance records, manifest, brief, shared records, and project state. Create a baseline commit such as:
+Create the invariant workspace layout and copy the verified chapters supplied by
+`prepare-manuscript` before staging. Record the prepared revision and chapter
+mapping; do not run a separate editorial extraction procedure. Stage only those
+verified working copies, editorial provenance records, manifest, brief, shared
+records, and project state. Create a baseline commit such as:
 
 ```text
 chore(workspace): establish editorial baseline

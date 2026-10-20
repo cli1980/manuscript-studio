@@ -1,6 +1,6 @@
 # Manuscript Intake and Project Initialization
 
-Use this workflow before the first editorial review or whenever the source record, normalized chapters, manifest, workspace state, or operating mode is missing.
+Use this workflow before the first editorial review or whenever the prepared-source binding, editorial source record, working chapter copies, workspace state, or operating mode is missing. Source discovery and extraction belong to the shared preparation skill.
 
 Read [workspace-and-source.md](workspace-and-source.md) before creating durable files. Keep the author-controlled source and editorial workspace separate throughout setup.
 
@@ -16,6 +16,9 @@ Resolve and record:
 - whether the two locations are physically separate and not nested.
 
 Never initialize the workspace inside the source location. Do not relocate, overwrite, or rename the source merely to simplify setup.
+
+Also identify the neutral prepared package or a separate preparation destination.
+It must not be the author-controlled source location or the editorial workspace.
 
 ## Select the operating mode
 
@@ -43,26 +46,29 @@ workspace/
 
 The workspace `source/` directory contains provenance records, not the live source draft.
 
-## Inspect extraction quality
+## Consume the prepared manuscript
 
-Check whether extraction preserves every paragraph in order, punctuation, capitalization, italics, dialogue layout, intentional spacing, scene breaks, notes, chapter headings, and non-text anchors. Identify OCR errors, missing pages, duplicated text, encoding problems, and ambiguous boundaries.
+Read the sibling [prepare-manuscript skill](../../prepare-manuscript/SKILL.md) and
+its [preparation contract](../../prepare-manuscript/references/preparation-contract.md).
+Delegate discovery within the user's designated location, extraction to chapter
+Markdown, source-quality inspection, coverage verification, and preparation
+provenance to that skill. Reuse an unchanged verified revision when available.
 
-Resolve objective extraction corruption against the source. Report uncertain cases rather than silently normalizing them.
+Require `work.json` preparation status `ready` for the requested editorial scope.
+A complete-manuscript assessment requires a `whole_work` manifest; a verified
+selection supports only the selected chapters. Preserve and report preparation
+warnings. Do not silently repair the prepared package inside an editorial job.
 
-## Import and normalize without editing
+Copy the requested prepared chapter files into the editable
+`manuscript/chapters/` workspace, preserving text and order. Copy necessary assets
+without changing their relative chapter references. Verify each initial copy
+against the prepared hash, and record the stable chapter-ID-to-working-file map.
+Later approved editorial changes belong only to these working files and, when
+authorized by the existing source-sync contract, the original source.
 
-If the source is not already a verified chapter set:
-
-1. extract it with the appropriate document or PDF workflow;
-2. identify real chapter boundaries from headings and structure, not arbitrary length;
-3. save one UTF-8 Markdown file per chapter under `manuscript/chapters/`;
-4. use stable sortable filenames;
-5. preserve exact wording, paragraphing, punctuation, order, and intentional irregularities;
-6. preserve scene and section breaks using the project convention;
-7. compare the ordered chapter files with the source;
-8. verify that their bodies reproduce the complete manuscript exactly once.
-
-Normalization may fix extraction errors only when the source makes the intended characters or layout objectively clear. It must not improve grammar, spelling, style, continuity, or story.
+For legacy workspaces, use preparation's migration rules. Preserve existing
+working filenames and approved editorial changes; record their mapping rather
+than replacing them with a fresh extraction.
 
 ## Write provenance and project records
 
@@ -76,6 +82,10 @@ Record in `source/source-record.md`:
 - whether a workspace reference snapshot exists;
 - permission and source-update constraints.
 
+Reference the shared work-record locator and prepared revision. Use the
+preparation manifest as the authoritative extraction/provenance record; the
+editorial source record adds editorial permissions and repository identities.
+
 Record in `source/manuscript-manifest.md`:
 
 - work, author, and manuscript identity;
@@ -85,6 +95,11 @@ Record in `source/manuscript-manifest.md`:
 - operating mode and workspace identity;
 - source and workspace baselines in Git mode;
 - source and workspace fingerprints in artifact mode.
+
+Include the prepared chapter IDs, source hashes, and working-file mapping.
+Maintain only `workflows.literary-editing` in the shared work record, with the
+actual operation, scope, prepared basis revision, and editorial state locator.
+Detailed findings and approvals remain in editorial records.
 
 Record known values in `editorial/editorial-brief.md`: audience, genre, goals, concerns, service, scope, language variety, style references, intervention level, protected features, target medium, exclusions, and constraints. Mark unknowns instead of inventing them.
 
@@ -99,3 +114,8 @@ In `artifact-workspace` mode, fingerprint the source and normalized workspace ch
 ## Resume an existing project
 
 Verify the source record against the current source, confirm the workspace mode and identity, inspect active job state, preserve established filenames and approvals, and resume from the recorded next action. If the source changed independently, preserve prior reports, import a new workspace revision, and mark affected proposals stale. Do not regenerate settled artifacts without a demonstrated integrity problem.
+
+Verify the prepared revision as well. If the original source changes, including
+after an approved editorial source update, mark the preparation and dependent
+workflow summaries stale and obtain a new prepared revision before a new
+source-dependent operation. Preserve completed editorial job records as history.

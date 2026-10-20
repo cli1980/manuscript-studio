@@ -12,6 +12,7 @@ from pathlib import Path
 from .models import JudgmentCreate
 
 SKILLS = {
+    "prepare-manuscript": "Prepare manuscript",
     "literary-editing": "Literary editing",
     "literary-translation": "Literary translation",
     "literary-agent-querying": "Literary agent querying",

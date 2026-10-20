@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "work_id": "example-work",
+  "record_revision": 1,
+  "updated_at": "2026-01-01T00:00:00Z",
+  "metadata": {
+    "title": null,
+    "authors": [],
+    "source_language": null,
+    "work_type": null,
+    "genre": null,
+    "edition": null
+  },
+  "discovery": {
+    "location_kind": "directory",
+    "location": "REPLACE_WITH_USER_DESIGNATED_LOCATION",
+    "recursive": false,
+    "selection_status": "unresolved",
+    "notes": []
+  },
+  "preparation": {
+    "status": "not_started",
+    "current_revision": null,
+    "blockers": []
+  },
+  "workflows": {
+    "literary-editing": {
+      "status": "not_started",
+      "basis_revision": null,
+      "scope": null,
+      "operation": null,
+      "state_locator": null,
+      "updated_at": null
+    },
+    "literary-translation": {
+      "status": "not_started",
+      "basis_revision": null,
+      "scope": null,
+      "operation": null,
+      "state_locator": null,
+      "updated_at": null
+    },
+    "literary-agent-querying": {
+      "status": "not_started",
+      "basis_revision": null,
+      "scope": null,
+      "operation": null,
+      "state_locator": null,
+      "updated_at": null
+    },
+    "format-manuscript": {
+      "status": "not_started",
+      "basis_revision": null,
+      "scope": null,
+      "operation": null,
+      "state_locator": null,
+      "updated_at": null
+    }
+  }
+}
