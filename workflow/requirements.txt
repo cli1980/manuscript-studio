@@ -1,0 +1,1 @@
+-r ../plugins/manuscript-studio/skills/prepare-manuscript/requirements.txt

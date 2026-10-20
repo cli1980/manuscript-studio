@@ -3,3 +3,5 @@
 !/evals/results/.gitkeep
 /.venv-evals/
 __pycache__/
+/.workflow-runs/
+/.venv-workflow/

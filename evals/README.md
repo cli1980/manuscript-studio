@@ -20,6 +20,19 @@ separate human judgments. Its Chinese source and English translation are
 populated, and submitted human reviews are preserved separately. Remaining
 dataset metadata must be completed before inclusion in training or evaluation datasets.
 
+The [《刺秦》 quality case](cases/literary-translation/zh-en-ciqing-001/README.md)
+compares a complete English candidate against a hash-bound Chinese text fixture.
+Its candidate and human judgments remain empty until supplied. DOCX intake,
+approval/recovery behavior, and final export are tested by the
+[separate workflow case](../workflow/tests/cases/translation-ciqing-001/README.md).
+The two case formats have different inputs, outputs, and success criteria.
+
+The `literary-translation-quality` cases assess translation output; they do not
+execute the production skill. Direct skill-execution tests would bind a verified
+prepared-manuscript package and continuity context to approved chapter outputs
+and domain records. Workflow cases instead begin with raw manuscripts and cover
+orchestration across skills; their manifests live under `workflow/tests/cases/`.
+
 The [contemporary corpus cases](cases/literary-translation/CONTEMPORARY_CORPUS.md)
 add 50 Chinese–English pairs from 29 source works, with shared Chinese fixtures,
 published English translations, preserved CC BY-SA 3.0 attribution, and initially

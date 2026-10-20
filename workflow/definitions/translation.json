@@ -1,0 +1,17 @@
+{
+  "id": "literary-translation-v1",
+  "target_language": "en-US",
+  "agents": {
+    "prepare": {
+      "skill": "prepare-manuscript",
+      "skills": ["prepare-manuscript"],
+      "model": null
+    },
+    "translate": {
+      "skill": "literary-translation",
+      "skills": ["prepare-manuscript", "literary-translation", "review-approval-sheet"],
+      "model": null
+    }
+  },
+  "stages": ["prepare", "translate", "accept", "export"]
+}

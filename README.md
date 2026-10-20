@@ -164,6 +164,18 @@ Inspects a project draft, recommends and confirms a reusable genre- and purpose-
 
 Provides a shared interactive review interface for stable-ID approval sheets. It validates revision-bound state, presents compact navigation and item-specific decisions, parses explicit submissions, and preserves each literary skill's own authoritative records, domain rules, and separate action gates.
 
+## Workflow prototype
+
+The [workflow CLI](workflow/README.md) provides an initial orchestration implementation:
+verified preparation, translation with source-grounded review and human gates,
+explicit artifact acceptance, and Markdown export. It persists run state and review
+receipts in SQLite and uses a Codex App Server adapter. General line editing is not
+part of the default translation flow.
+
+This prototype is separate from the distributed skills plugin. See its README for
+setup, tests, recovery, and current limits, and the
+[architecture](workflow/docs/architecture.md) for the planned web application.
+
 ## Development and verification
 
 Edit skill content only under `plugins/manuscript-studio/skills/`. The plugin and
