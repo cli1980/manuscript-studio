@@ -93,6 +93,16 @@ validate deterministic utilities. See the
 [development instructions](../README.md#development-and-verification) for their
 commands.
 
+## Evaluate literary editing
+
+The [editing scenario catalogue](cases/literary-editing/README.md) preserves twelve
+planned skill-execution evaluations: routing and scope, preparation handoff,
+partial approval, stale proposals, proofreading readiness, whole-book completion,
+Git/artifact operating modes, score reconsideration, and paragraph-boundary edits.
+The scenarios follow the current skill contracts; fixtures, an execution harness,
+and observed results are still needed. They are not translation-quality cases or
+tests of the application's orchestration engine.
+
 ## Evaluate manuscript preparation
 
 For manuscript preparation, use the separate

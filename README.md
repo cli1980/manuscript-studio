@@ -148,6 +148,11 @@ use `--check-sources` to verify accessible local originals as well.
 
 Runs manuscript assessment, developmental editing, line editing, copyediting, specialist review, proofreading, and final QA. It keeps the manuscript source separate from the editorial workspace, presents proposed changes for approval, and applies only decisions the author accepts.
 
+Contributor context is in the [design rationale](docs/literary-editing-rationale.md);
+planned skill-execution checks are in the
+[editing evaluation scenarios](evals/cases/literary-editing/README.md).
+The skill and its references remain the authoritative operating instructions.
+
 ### `literary-translation`
 
 Translates literary works chapter by chapter using source analysis, a living glossary, systematic passage division, alternative drafts, and source-grounded review. Its goal is natural literary English that preserves the source's meaning, voice, rhythm, and reader experience.
