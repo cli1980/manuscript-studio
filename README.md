@@ -176,6 +176,8 @@ verified preparation, translation with source-grounded review and human gates,
 explicit artifact acceptance, and Markdown export. It persists run state and review
 receipts in SQLite and uses a Codex App Server adapter. General line editing is not
 part of the default translation flow.
+An optional final manuscript formatter can consolidate accepted English chapters
+into a readable DOCX after format-specification approval and document/render QA.
 
 This prototype is separate from the distributed skills plugin. See its README for
 setup, tests, recovery, and current limits, and the

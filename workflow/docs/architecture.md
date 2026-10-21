@@ -1,11 +1,11 @@
 # High-Level Design: Agentic Workflow Orchestration Framework
 
-**Status:** Draft v0.4 — fidelity-governed translation; first CLI iteration implemented\
+**Status:** Draft v0.5 — fidelity-governed translation with optional final DOCX formatting\
 **Initial use case:** Literary translation\
 **Initial target market:** United States\
 **Architecture:** Deterministic workflow orchestration with pluggable LLM-agent runtimes
 
-**Implementation:** [Iteration 1](../README.md) provides a Python CLI, SQLite state, pinned skill bundles, a Codex App Server stdio adapter, revision-bound review receipts, and Markdown export. The web application and full deterministic domain-record validation remain planned; this document describes the target architecture unless an implementation limit is stated.
+**Implementation:** The [CLI implementation](../README.md) provides SQLite state, pinned skill bundles, a Codex App Server stdio adapter, revision-bound review receipts, Markdown export, and an optional final formatting job over accepted English snapshots. The web application and full deterministic domain-record validation remain planned; this document describes the target architecture unless an implementation limit is stated.
 
 ## 1. Overview
 
@@ -40,6 +40,7 @@ The framework follows five principles:
 - Provide a web application for workflow initiation, monitoring, manuscript inspection, and human intervention.
 - Support versioned artifacts and agent-specific execution contexts.
 - Implement manuscript preparation, translation into English with integrated fidelity and prose review, human artifact acceptance, and Markdown export.
+- Support an optional or manually triggered final `format-manuscript` agent for one readable DOCX, subject to specification approval and available construction/rendering capabilities.
 
 **Future phases**
 
@@ -429,8 +430,9 @@ The canonical skill source is [`plugins/manuscript-studio/skills/`](../../plugin
 | `literary_editor` | [literary-editing](../../plugins/manuscript-studio/skills/literary-editing/SKILL.md), line-edit service | `prepare-manuscript`, `review-approval-sheet` | English prose review, verdicts, proposals, approved revisions, and whole-book consistency when requested |
 | `literary_copyeditor` | `literary-editing`, copyedit service | `prepare-manuscript`, `review-approval-sheet` | Correctness and consistency review, proposals, approved revisions, and a final global pass |
 | Markdown export | No agent required | None | Package the selected reviewed Markdown artifacts and provenance without changing their text |
+| Optional final formatter | [format-manuscript](../../plugins/manuscript-studio/skills/format-manuscript/SKILL.md) | `prepare-manuscript`, `review-approval-sheet`, configured document adapter | Approved edition design, consolidation of accepted English chapters, DOCX generation, and rendered-page verification |
 
-Only preparation and translation are agent stages in the default literary-translation template. The editing/copyediting rows describe reusable services for separate, explicitly requested workflows; they are not required post-translation passes.
+Only preparation and translation are mandatory agent stages in the default literary-translation template. The formatter is an optional final operation after artifact acceptance/export, and can be requested later without rerunning translation. The editing/copyediting rows describe reusable services for separate, explicitly requested workflows; they are not required post-translation passes.
 
 The [review-approval-sheet](../../plugins/manuscript-studio/skills/review-approval-sheet/SKILL.md) skill is a shared interface helper. It validates and renders review state and parses dispositions; it does not authorize or apply domain changes. Document/PDF/OCR adapters are additional environment capabilities, not supplied by `prepare-manuscript`. Missing extraction capabilities leave preparation blocked.
 
@@ -480,6 +482,16 @@ Upload and Designate Source / Scope
                  │
                  ▼
              Markdown Export
+                 │ optional or manually triggered
+                 ▼
+       Manuscript Format Specification
+          FM item review → final closure
+                 │
+                 ▼
+     DOCX Construction + Render/Visual QA
+                 │
+                 ▼
+        Readable Consolidated DOCX
 ```
 
 Mandatory domain gates occur within translation. The later workflow acceptance gate does not replace them. Revision requests return to the relevant translation phase; changed upstream artifacts invalidate dependent reviews. There is no default English line-editing or copyediting stage.
@@ -595,11 +607,23 @@ Feedback about awkwardness or readability also returns to translation review: it
 
 Iteration 1 supports pending domain feedback and final accept/export. Reopening completed chapters from final acceptance, manual editing with dependency invalidation, and cross-run revision routing remain future iterations.
 
-### 5.6 Stage 4 — Final export and formatting boundary
+### 5.6 Stage 4 — Markdown export and optional final formatter
 
 The MVP exports the selected accepted Markdown chapters and provenance without modifying their content. This is an orchestrator operation, not an assumed formatting-agent capability.
 
-Proofreading, typesetting, and formatted DOCX/PDF/EPUB delivery remain outside the initial scope. A future [format-manuscript](../../plugins/manuscript-studio/skills/format-manuscript/SKILL.md) agent must bundle `prepare-manuscript` and `review-approval-sheet`, obtain approval of the manuscript-bound format specification, and provide the required Documents/output-format skill and rendering tools. Missing construction or visual-verification capabilities produce `blocked-adapter`, not an ad hoc unverified edition.
+After export, the optional [format-manuscript](../../plugins/manuscript-studio/skills/format-manuscript/SKILL.md) agent consolidates the accepted English chapters into one readable DOCX. The CLI's `format` command creates or reuses an isolated job; the E2E launcher's `--format-docx` flag triggers the same job after export. Both require a configured document adapter and its generation/render environment.
+
+The job pins the accepted chapter order, contents, and acceptance record. It uses a separate input manifest, immutable English snapshots, and `manuscript-formatting/` workspace. It does not re-extract the original-language source, alter translation decisions, or replace the completed translation run's state. Its own definition is [`formatting.json`](../definitions/formatting.json).
+
+The formatter first presents the manuscript-bound design, edition profile, classification, and consequential settings as revision-bound `FM###` items. Item dispositions and separate final closure precede generation. Corrections reopen affected choices and invalidate closure. `reader-facing` is the default purpose for a readable consolidated edition; `editorial-review` and `submission` are alternatives with their own approved conventions.
+
+Construction and rendering have independent interfaces. The built-in builder uses `python-docx` on both Windows and in the cloud. A Windows Word renderer updates fields and exports PDF through a dedicated COM instance; the cloud renderer uses headless LibreOffice with an isolated profile. PDFium generates page images for either backend. Fonts must exist in the selected environment. An external Documents skill can be selected instead, retaining its own capability requirements.
+
+The settings JSON is bound to the specification's approval along with its readable proposal. After closure, deterministic host code builds the DOCX and renders it; model turns are reserved for design and visual review. The host derives actual heading pages from the rendered PDF outline, rebuilds the linked TOC until pagination converges, and verifies the displayed entries before emitting page evidence. It records adapter/code versions, renderer, settings, and source identities. Switching renderers invalidates pagination evidence and creates a new edition requiring fresh review.
+
+The formatter inspects every emitted page and records visual QA. The driver verifies source/specification/settings/output identities, manuscript paragraph text and order, semantic headings, and complete hashed page evidence before publishing `export/manuscript.docx` in the formatting job. Generated DOCX/PDF/PNG files are immutable within a reviewed build. Design corrections require new approval and a fresh build. Visual layout assessment remains an agent attestation; file existence alone does not establish literary or visual quality.
+
+Missing construction or render/visual-verification capabilities produce `blocked-adapter`, not an ad hoc unverified edition. General proofreading services and PDF/EPUB editions remain outside this implementation. Unsupported manuscript structures require additional deterministic audit support rather than lossy conversion.
 
 ### 5.7 Optional publication preparation outside the default flow
 
@@ -952,7 +976,7 @@ For the MVP:
 | Workflow metadata | SQLite initially; PostgreSQL later |
 | Artifact storage | Versioned local filesystem initially |
 | Workflow definition | YAML |
-| Document conversion | Preflighted import adapters; unchanged Markdown export in the MVP |
+| Document conversion | Preflighted import adapters; Markdown export and optional skill-backed DOCX formatting/render QA |
 | Domain review | Existing approval-sheet validator/parser and renderer, with host bridge or permitted text fallback |
 
 The implementation should avoid coupling domain logic to the chosen web framework or database.
@@ -1040,7 +1064,7 @@ Future workflow templates may include:
 
 Agents and skills should be reusable across these workflows wherever responsibilities overlap.
 
-The repository already supplies `literary-agent-querying` and `format-manuscript`; these are optional future workflow integrations, not missing MVP agents. Querying retains its own designated-input restrictions, story-ledger review, named-agent package authorization, and source-evidence rules; it must not automatically consume edited workspace manuscripts or editorial reports. Formatting retains specification approval, output-adapter dependencies, and visual verification. The separate cover-design prototype is not part of the six-skill distributed plugin or this MVP.
+The repository already supplies `literary-agent-querying`; its future integration retains designated-input restrictions, story-ledger review, named-agent package authorization, and source-evidence rules. It must not automatically consume edited workspace manuscripts or editorial reports. The optional `format-manuscript` integration described in Section 5.6 retains specification approval, output-adapter dependencies, and visual verification. The separate cover-design prototype is not part of the six-skill distributed plugin or this MVP.
 
 ### 10.3 Runtime extensibility
 
@@ -1076,7 +1100,7 @@ Implement:
 
 **Milestone:** Prepare a complete chapter, translate it through the required human gates, and export an explicitly accepted English artifact with traceable source and review records.
 
-Iteration 1 implements the CLI lifecycle, Codex stdio transport, preparation validation, review receipts, artifact snapshots, and final export. Tests use synthetic fixtures and a protocol subprocess. A live installed-Codex smoke run and deterministic parsing of all domain completion records are still required; see the implementation README for precise limits.
+The implementation provides the CLI lifecycle, Codex stdio transport, preparation validation, review receipts, artifact snapshots, final Markdown export, and an optional formatting job. Tests use synthetic fixtures and a protocol subprocess. A live Windows Codex run completed the ten-section translation case; it does not replace deterministic domain-record validation or verify formatted-document quality. See the implementation README for precise limits.
 
 ### Phase 1B — Web-based interaction
 
@@ -1122,7 +1146,7 @@ Explore:
 - Agentic planning and orchestration
 - Multi-market localization
 - Non-English target-language skills
-- Formatted editions with explicit construction and rendering dependencies
+- Additional PDF/EPUB editions beyond the optional DOCX formatter, with explicit construction and rendering dependencies
 - Publishing and submission integrations
 - Automated quality evaluation
 
@@ -1142,7 +1166,7 @@ The Phase 1 implementation is successful when:
 8. Reader/editor feedback returns to source-grounded translation review; no general line-editing or copyediting stage silently polishes an accepted translation.
 9. Pending human input pauses an operation without timeout retries; recovery preserves settled choices and resumes the verified phase.
 10. Backend restart reconciles database, domain records, pending review receipts, and shared summaries without duplicate application or lost approvals.
-11. The application exports the selected accepted Markdown manuscript without claiming formatted publication delivery or completed manual source synchronization.
+11. The application exports the selected accepted Markdown manuscript. An explicitly requested final formatter can produce a consolidated DOCX only after design closure, content-integrity checks, and complete render/visual-QA evidence; it does not claim manual source synchronization.
 12. A second workflow definition or agent runtime can be introduced without major modifications to the orchestration core.
 13. Review submissions are revision-bound; stale or duplicate submissions cannot apply changes or clear a gate. The inline bridge or permitted text fallback uses the existing parser.
 14. Glossary/voice state and user changes survive context replacement; upstream edits invalidate affected preparations, proposals, and acceptances.

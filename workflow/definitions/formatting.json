@@ -1,0 +1,17 @@
+{
+  "id": "manuscript-formatting-v1",
+  "target_format": "docx",
+  "document_backend": {
+    "builder": "python-docx",
+    "renderer": "platform-default",
+    "require_visual_review": true
+  },
+  "agents": {
+    "format": {
+      "skill": "format-manuscript",
+      "skills": ["format-manuscript", "prepare-manuscript", "review-approval-sheet", "documents"],
+      "model": null
+    }
+  },
+  "stages": ["format"]
+}

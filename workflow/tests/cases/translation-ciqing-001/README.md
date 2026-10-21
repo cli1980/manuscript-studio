@@ -71,7 +71,42 @@ PM001 approve
 This approves that item only. Separate closure and chapter approval requests
 still need their own responses. Use `/file PATH` to read a UTF-8 response file,
 `/refresh` to request a new review revision, `/pause` to retain the current gate,
-or `/cancel` to cancel the run. No option auto-approves editorial decisions.
+or `/cancel` to cancel the run. By default, every editorial decision is interactive.
+
+### Opt-in acceptance of recommendations
+
+To delegate acceptance of the agent's recommended choices and run without stdin:
+
+```powershell
+python workflow/tests/run_e2e.py --setup --auto-approve-recommended
+```
+
+The agent must return a structured `accept` recommendation, exact response, and
+reason bound to its current successful turn. The launcher validates that response
+against the current sheet/revision and then submits it through the normal gate.
+Item dispositions and final closure still happen in separate turns; empty-diff
+chapter approval and final artifact acceptance also require explicit recommendations.
+Single translation choices and passage continuation can use the recommended
+response under this same delegation.
+
+After complete passage drafting/review, independent editorial choices should be
+presented in one review sheet and accepted as one revision-bound batch of explicit
+item responses. The launcher asks for all independently recommended acceptances
+in that batch. Dependent choices remain sequential, and passage-map approval
+still precedes drafting. Separate closure does not require a separate model call
+in principle, but the current domain-record implementation still uses one; the
+performance monitor identifies that model bookkeeping separately from local approval.
+
+The mode stops on `needs_review`, missing information, non-accepting dispositions,
+invalid/stale responses, or execution blockers. It does not silently approve them
+or relax runtime tool permissions. Supply the flag again on resume to continue
+delegated operation; omitting it returns to interactive review.
+
+Receipts and artifact acceptance are labeled `delegated-automation`, with the
+recommendations and opt-in recorded in the event log. These are not human reviews.
+Human evidence checks and literary-quality assessment remain `not-checked`, so an
+autonomously completed workflow normally exits **2** with E2E status `needs-review`
+until a reviewer supplies the missing evidence.
 
 Resume using the printed directory:
 
@@ -86,6 +121,16 @@ Failures/blockers are not blindly retried: resolve their cause, then choose
 Codex processes before choosing `recover-stopped`. Human waits do not consume the
 active-turn `--timeout` (default 900 seconds). `--max-turns` defaults to 100 new
 turns per invocation; reaching it pauses advancement until resume.
+
+To request the optional final DOCX formatter on Windows, add
+`--format-docx --renderer word` (with `--setup` to install its Python dependencies).
+Cloud deployments can select `--renderer libreoffice` with the required runtime/fonts.
+An external Documents adapter can instead be selected with `--documents-skill PATH`.
+The same flags with `--resume COMPLETED-RUN` format an existing accepted translation
+without repeating it. `--format-purpose reader-facing` is the default; the job
+has its own specification review and separate closure. Formatting status and its
+document path are reported separately under `formatting_jobs`, leaving this
+translation case's original stage sequence and assessment results intact.
 
 Preflight without model calls:
 

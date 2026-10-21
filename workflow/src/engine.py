@@ -81,6 +81,21 @@ def item_signature(sheet, item, binding_hash):
 
 
 class Engine:
+    agent_stages = ("prepare", "translate")
+    result_schema = RESULT_SCHEMA
+
+    @classmethod
+    def open(cls, root):
+        store = Store(root)
+        try:
+            kind = store.load()[1].get("kind")
+        finally:
+            store.close()
+        if kind == "manuscript-formatting":
+            from .formatting import FormattingEngine
+            return FormattingEngine(root)
+        return cls(root)
+
     def __init__(self, root):
         self.store = Store(root)
         self.root = self.store.root
@@ -247,7 +262,7 @@ class Engine:
             self.verify(state)
             if state["stage"] == "export":
                 return self._export(revision, state)
-            if state["stage"] not in ("prepare", "translate"):
+            if state["stage"] not in self.agent_stages:
                 raise ValueError("This stage does not execute an agent.")
             state.update(status="RUNNING", attempts=state["attempts"] + 1, error=None)
             revision = self.store.save(revision, state, "execution.started", {"stage": state["stage"]})
@@ -261,9 +276,9 @@ class Engine:
                 result = runtime.run(Request(
                     self.workspace, self.prompt(state),
                     state["definition"]["agents"][state["stage"]].get("model"),
-                    state["thread_id"], RESULT_SCHEMA,
+                    state["thread_id"], self.result_schema,
                 ), self.store.event, on_thread)
-                error = next(Draft202012Validator(RESULT_SCHEMA).iter_errors(result), None)
+                error = next(Draft202012Validator(self.result_schema).iter_errors(result), None)
                 if error:
                     raise ValueError(f"Invalid runtime result: {error.message}")
                 self.verify(state)
@@ -400,7 +415,9 @@ class Engine:
                     or latest["note"] != item["response"]["note"]):
                 raise ValueError(f"Resolved item {item['id']} has no matching human disposition.")
 
-    def reply(self, gate_id, text):
+    def reply(self, gate_id, text, *, decision_source="human"):
+        if decision_source not in ("human", "delegated-automation"):
+            raise ValueError("Unknown decision source.")
         with self.store.locked():
             revision, state = self.store.load()
             if state["status"] != "WAITING_FOR_HUMAN" or not state["gate"] or state["gate"]["id"] != gate_id:
@@ -409,8 +426,8 @@ class Engine:
                 raise ValueError("A response is required.")
             self.verify(state)
             gate = state["gate"]
-            for key in ("binding", "sheet"):
-                if gate[key] and digest(read_bytes(self.file(gate[key]["path"]))) != gate[key]["sha256"]:
+            for key in ("binding", "sheet", "settings"):
+                if gate.get(key) and digest(read_bytes(self.file(gate[key]["path"]))) != gate[key]["sha256"]:
                     raise ValueError("Review changed after presentation; recover and request a new revision.")
             if gate["sheet"]:
                 sheet = json.loads(self.store.content(gate["sheet"]))
@@ -425,16 +442,20 @@ class Engine:
             else:
                 parsed = {"type": "feedback", "text": text}
             receipt = {"id": str(uuid.uuid4()), "created_at": now(),
-                       "gate": gate, "text": text, "parsed": parsed}
+                       "gate": gate, "text": text, "parsed": parsed,
+                       "decision_source": decision_source}
             state["receipts"].append(receipt)
             if parsed["type"] == "final-closure":
-                if gate["kind"] == "passage_map":
-                    state["map_approval"] = gate["binding"]
-                elif gate["kind"] == "chapter_sanity":
-                    state["sanity_approval"] = gate["binding"]
+                self._record_closure(state, gate)
             state.update(next_input=receipt, status="READY", gate=None)
             self.store.save(revision, state, "review.received", {"receipt_id": receipt["id"], "gate_id": gate_id})
             return state
+
+    def _record_closure(self, state, gate):
+        if gate["kind"] == "passage_map":
+            state["map_approval"] = gate["binding"]
+        elif gate["kind"] == "chapter_sanity":
+            state["sanity_approval"] = gate["binding"]
 
     def _translated(self, state, relative):
         if not state["map_approval"] or not state["sanity_approval"]:
@@ -464,14 +485,16 @@ class Engine:
         else:
             state["status"] = "READY"
 
-    def accept(self, acceptance_id):
+    def accept(self, acceptance_id, *, decision_source="human"):
+        if decision_source not in ("human", "delegated-automation"):
+            raise ValueError("Unknown decision source.")
         with self.store.locked():
             revision, state = self.store.load()
             if state["status"] != "WAITING_FOR_ACCEPTANCE" or state.get("acceptance_id") != acceptance_id:
                 raise ValueError("Stale or unavailable artifact acceptance.")
             self.verify(state)
             state.update(stage="export", status="READY",
-                         acceptance={"id": acceptance_id, "created_at": now(),
+                         acceptance={"id": acceptance_id, "created_at": now(), "decision_source": decision_source,
                                      "hashes": [a["sha256"] for a in state["outputs"]]})
             self.store.save(revision, state, "artifacts.accepted", state["acceptance"])
             return state

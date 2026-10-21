@@ -1,8 +1,9 @@
-"""Launch the live workflow E2E case; all editorial decisions remain interactive."""
+"""Launch the workflow E2E case, with interactive or explicitly delegated approvals."""
 
 from __future__ import annotations
 
 import argparse
+import copy
 from dataclasses import replace
 from datetime import datetime, timezone
 import hashlib
@@ -12,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -119,9 +121,22 @@ def bind_case(engine, case, runtime_info, model=None, *, resume=False):
         engine.store.event("e2e.launch", {"runtime": runtime_info, "resume": resume})
 
 
+RECOMMENDATION_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "required": ["action", "response", "reason"],
+    "properties": {
+        "action": {"enum": ["accept", "needs_review"]},
+        "response": {"type": "string"},
+        "reason": {"type": "string", "minLength": 1},
+    },
+}
+
+
 class CaseRuntime:
-    def __init__(self, runtime, task):
+    def __init__(self, runtime, task, *, auto_approve_recommended=False, operation="translation"):
         self.runtime, self.task = runtime, task
+        self.auto_approve_recommended = auto_approve_recommended
+        self.operation = operation
 
     def run(self, request, on_event, on_thread):
         prompt = (
@@ -130,7 +145,89 @@ class CaseRuntime:
             "snapshot/workspace paths in the execution context, while original fixture paths "
             "below are provenance rather than additional file-access requests):\n" + self.task
         )
-        return self.runtime.run(replace(request, prompt=prompt), on_event, on_thread)
+        schema = copy.deepcopy(request.output_schema)
+        if self.auto_approve_recommended:
+            schema["required"].append("approval_recommendation")
+            schema["properties"]["approval_recommendation"] = RECOMMENDATION_SCHEMA
+            prompt += (
+                "\n\nThe user explicitly enabled --auto-approve-recommended for this run. "
+                "They delegate acceptance of your recommended editorial choices to the launcher. "
+                "Keep every existing gate and separate final closure; do not self-approve in domain files. "
+                "Return approval_recommendation with action='accept' only when accepting the current "
+                "proposal/choice is your actual recommendation, and explain why in reason. response must "
+                "be the EXACT response to the current gate: explicit item IDs and allowed resolve commands "
+                "(with required notes), the separate closure command when available, 'approve chapter' "
+                "for an empty sanity diff, 'continue' for passage continuation, or the explicit recommended "
+                "choice for a single translation issue. Never recommend reject/defer/reopen as acceptance. "
+                "Use action='needs_review' for missing information, uncertainty requiring user judgment, "
+                "or a recommendation to revise/reject. For a completed translation, recommend response='accept' "
+                "only when you recommend accepting that exact final artifact. For preparation completion "
+                "or a blocked result use needs_review with an explanatory reason. This is a user-authorized "
+                "automation policy, not evidence that a human reviewed the text. Continue to use source-grounded "
+                "fidelity review, not general stylistic polishing."
+                " Finish the complete current passage's drafting and review before requesting editorial "
+                "dispositions. When there are multiple independent issues, present one revision-bound issue "
+                "sheet and include ALL independently recommended accepting dispositions in one response. "
+                "Do not request a separate model exchange for each independent sheet item. Batch processing "
+                "does not merge item dispositions with final closure, postpone passage-map approval until "
+                "after drafting, or treat dependent choices as independent."
+            )
+            if self.operation == "formatting":
+                prompt += (
+                    "\nFor this formatting job, translation-only phase instructions do not apply. "
+                    "Recommend all independently acceptable FM items in one response, then request "
+                    "separate format-specification closure. Never generate before closure or modify "
+                    "the accepted prose. Missing adapter or render capability requires needs_review "
+                    "and a blocked result, not a recommendation to accept an unverified file."
+                )
+        result = self.runtime.run(replace(request, prompt=prompt, output_schema=schema), on_event, on_thread)
+        if self.auto_approve_recommended:
+            from jsonschema import Draft202012Validator
+            error = next(Draft202012Validator(schema).iter_errors(result), None)
+            require(error is None, f"Invalid recommendation result: {error.message if error else ''}")
+            result = dict(result)
+            recommendation = result.pop("approval_recommendation")
+            on_event("e2e.recommendation", {"result_sha256": fingerprint(result), **recommendation})
+        return result
+
+
+def recommended_response(engine):
+    """Only use a recommendation from the current successfully committed turn."""
+    events = engine.store.events()
+    completed = next((e for e in reversed(events) if e["kind"] == "execution.result"), None)
+    require(completed is not None, "No successful turn recommendation is available.")
+    started = max(e["id"] for e in events if e["kind"] == "execution.started" and e["id"] < completed["id"])
+    suggestion = next((e["payload"] for e in reversed(events)
+                       if started < e["id"] < completed["id"] and e["kind"] == "e2e.recommendation"), None)
+    require(suggestion and suggestion["result_sha256"] == fingerprint(completed["payload"]),
+            "No recommendation bound to the current result; resume interactively.")
+    require(suggestion["action"] == "accept", "Recommendation requires review: " + suggestion["reason"])
+    response = suggestion["response"].strip()
+    require(response, "Acceptance recommendation has no explicit response.")
+    state = engine.state()
+    if state["status"] == "WAITING_FOR_ACCEPTANCE":
+        require(response == "accept" and completed["payload"]["outcome"] == "completed",
+                "Final artifact acceptance was not recommended.")
+    else:
+        gate = state["gate"]
+        require(gate["kind"] == completed["payload"]["gate"], "Recommendation belongs to a different gate.")
+        if gate["sheet"]:
+            sheet = json.loads(engine.store.content(gate["sheet"]))
+            parsed = engine.approval.parse_response(sheet, response)
+            if parsed["type"] == "dispositions":
+                for disposition in parsed["dispositions"]:
+                    require(disposition["effect"] == "resolve"
+                            and not re.search(r"\b(reject|defer|revise|reopen|decline)\b",
+                                              disposition["decision"] + " " + disposition["command"], re.I),
+                            "Recommendation contains a non-accepting disposition.")
+        elif gate["kind"] == "chapter_sanity":
+            require(response == "approve chapter", "Chapter completion approval was not recommended.")
+        elif gate["kind"] == "continuation":
+            require(response == "continue", "Passage continuation was not recommended.")
+        else:
+            require(gate["kind"] == "translation_issue",
+                    "Questions require a real user response; automation will not invent missing input.")
+    return response, suggestion
 
 
 def observation(engine, check_id, status, evidence, *, method):
@@ -300,8 +397,26 @@ def write_report(engine, case):
             "runtime": state.get("e2e", {}).get("runtime"),
             "agents": state["definition"]["agents"], "checks": checks, "automated_checks": automated,
             "literary_quality": {"status": "not-checked", "evidence": "Separate bilingual assessment; no model quality score generated."},
+            "delegated_decisions": sum(r.get("decision_source") == "delegated-automation" for r in state["receipts"]),
+            "artifact_acceptance_source": state.get("acceptance", {}).get("decision_source"),
             "error": state.get("error"),
         }
+        report["formatting_jobs"] = {}
+        for job in state.get("format_jobs", []):
+            try:
+                database = local_file(engine.root, job["path"] + "/state.sqlite3")
+                connection = sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)
+                try:
+                    job_state = json.loads(connection.execute("SELECT state FROM run WHERE id=1").fetchone()[0])
+                finally:
+                    connection.close()
+                report["formatting_jobs"][job["job_id"]] = {
+                    "path": str(database.parent), "status": job_state["status"],
+                    "backend": job_state.get("backend"), "document_path": job_state.get("document_path"),
+                    "error": job_state.get("error"),
+                }
+            except (OSError, ValueError, sqlite3.Error) as exc:
+                report["formatting_jobs"][job["job_id"]] = {"status": "UNAVAILABLE", "error": str(exc)}
         atomic_json(engine.root / "e2e-report.json", report)
         return report
 
@@ -361,7 +476,7 @@ def review_checks(engine, case, input_fn):
                         evidence, method="human-review")
 
 
-def drive(engine, case, runtime, *, max_turns=100, input_fn=input):
+def drive(engine, case, runtime, *, max_turns=100, input_fn=input, auto_approve_recommended=False):
     from workflow.src.cli import display
     turns = 0
     try:
@@ -373,7 +488,8 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input):
             print(f"\n[{state['stage']}] {state['status']} — completed units {len(state['outputs'])}/{len(state['chapters'])}")
             if state["status"] == "COMPLETED":
                 collect_candidate(engine, report)
-                review_checks(engine, case, input_fn)
+                if not auto_approve_recommended:
+                    review_checks(engine, case, input_fn)
                 report = write_report(engine, case)
                 print(f"E2E result: {report['e2e_status']}\nExport: {engine.root / 'export'}")
                 return 0 if report["e2e_status"] == "passed" else 1 if report["e2e_status"] == "failed" else 2
@@ -400,7 +516,17 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input):
                         raise
                 display(engine, state, review=True)
                 try:
-                    action, response = read_response(input_fn)
+                    if auto_approve_recommended:
+                        try:
+                            response, suggestion = recommended_response(engine)
+                        except ValueError as exc:
+                            print(f"Automation stopped: {exc}")
+                            return 2
+                        action = "reply"
+                        print("Delegated acceptance: " + suggestion["reason"])
+                        engine.store.event("e2e.delegated_approval", {"gate_id": state["gate"]["id"], **suggestion})
+                    else:
+                        action, response = read_response(input_fn)
                     if action == "/pause":
                         return 2
                     if action == "/cancel":
@@ -408,7 +534,8 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input):
                     elif action == "/refresh":
                         engine.recover(refresh_gate=True)
                     else:
-                        engine.reply(state["gate"]["id"], response)
+                        engine.reply(state["gate"]["id"], response,
+                                     decision_source="delegated-automation" if auto_approve_recommended else "human")
                         try:
                             replay_probe(engine, state["gate"]["id"], response)
                         except (ValueError, OSError) as exc:
@@ -421,9 +548,18 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input):
                 continue
             if state["status"] == "WAITING_FOR_ACCEPTANCE":
                 display(engine, state, review=True)
-                action = input_fn("Type 'accept' for these exact artifacts, 'cancel', or 'pause': ").strip()
+                if auto_approve_recommended:
+                    try:
+                        action, suggestion = recommended_response(engine)
+                    except ValueError as exc:
+                        print(f"Automation stopped: {exc}")
+                        return 2
+                    engine.store.event("e2e.delegated_approval", {"acceptance_id": state["acceptance_id"], **suggestion})
+                else:
+                    action = input_fn("Type 'accept' for these exact artifacts, 'cancel', or 'pause': ").strip()
                 if action == "accept":
-                    engine.accept(state["acceptance_id"])
+                    engine.accept(state["acceptance_id"],
+                                  decision_source="delegated-automation" if auto_approve_recommended else "human")
                 elif action == "cancel":
                     engine.cancel()
                 elif action == "pause":
@@ -431,6 +567,9 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input):
                 continue
             if state["status"] in ("FAILED", "BLOCKED", "PAUSED", "RUNNING"):
                 print(state.get("error") or "An earlier execution needs reconciliation.")
+                if auto_approve_recommended:
+                    print("Automation stopped; resolve the failure/blocker before recovery.")
+                    return 1 if state["status"] == "FAILED" else 2
                 print("Resolve the cause before recovery. For RUNNING, stop any surviving Codex processes first.")
                 action = input_fn("recover / recover-stopped / cancel / pause: ").strip()
                 if action == "pause":
@@ -460,6 +599,16 @@ def parser():
     destination.add_argument("--resume", type=Path, help="Resume a run created by this launcher.")
     result.add_argument("--codex", default="codex", help="Codex executable, not a shell command.")
     result.add_argument("--model", help="Override both agents' models on creation.")
+    result.add_argument("--format-docx", action="store_true",
+                        help="After translation export, run the optional final manuscript-formatting agent.")
+    backend = result.add_mutually_exclusive_group()
+    backend.add_argument("--documents-skill", type=Path, help="Optional external Documents skill instead of built-in adapters.")
+    backend.add_argument("--renderer", choices=("word", "libreoffice"),
+                         help="DOCX renderer; defaults to Word on Windows, LibreOffice elsewhere.")
+    result.add_argument("--format-purpose", choices=("reader-facing", "editorial-review", "submission"),
+                        default="reader-facing")
+    result.add_argument("--auto-approve-recommended", action="store_true",
+                        help="Explicitly delegate acceptance of structured accept recommendations; stop on review/blockers.")
     result.add_argument("--timeout", type=float, default=900, help="Active-turn timeout; human waits do not count.")
     result.add_argument("--max-turns", type=int, default=100, help="Maximum new turns per invocation.")
     result.add_argument("--setup", action="store_true", help="Create .venv-workflow, install requirements, and relaunch.")
@@ -467,6 +616,66 @@ def parser():
     checks.add_argument("--check-case", action="store_true", help="Validate fixture/manifest only; no Codex or run creation.")
     checks.add_argument("--preflight", action="store_true", help="Also check Python dependencies, Codex CLI and login; no model call.")
     return result
+
+
+def format_document(parent, runtime, *, documents_skill=None, renderer=None, purpose="reader-facing", model=None,
+                    auto_approve_recommended=False, max_turns=100, input_fn=input):
+    """Optional final operation; the translation run's result remains independently recorded."""
+    from workflow.src.formatting import FormattingEngine
+    from workflow.src.cli import display
+    job = FormattingEngine.create_from_run(parent, documents_skill=documents_skill, renderer=renderer,
+                                          purpose=purpose, model=model)
+    print(f"Formatting job: {job.root}")
+    try:
+        for _ in range(max_turns):
+            state = job.state()
+            display(job, state, review=state["status"] == "WAITING_FOR_HUMAN")
+            if state["status"] == "COMPLETED":
+                print(f"Verified DOCX: {state['document_path']}")
+                return 0
+            if state["status"] == "READY":
+                job.advance(runtime)
+            elif state["status"] == "WAITING_FOR_HUMAN":
+                if auto_approve_recommended:
+                    try:
+                        response, suggestion = recommended_response(job)
+                    except ValueError as exc:
+                        print(f"Formatting needs review: {exc}")
+                        return 2
+                    job.store.event("e2e.delegated_approval", {"gate_id": state["gate"]["id"], **suggestion})
+                    action = "reply"
+                else:
+                    action, response = read_response(input_fn)
+                if action == "/pause":
+                    return 2
+                if action == "/cancel":
+                    job.cancel()
+                    return 2
+                if action == "/refresh":
+                    job.recover(refresh_gate=True)
+                else:
+                    job.reply(state["gate"]["id"], response,
+                              decision_source="delegated-automation" if auto_approve_recommended else "human")
+            else:
+                print(f"Formatting stopped: {state.get('error') or state['status']}")
+                print(f'Recover/review the job with: python -m workflow status "{job.root}"')
+                return 1 if state["status"] == "FAILED" else 2
+        print("Formatting turn limit reached; resume the same parent with --format-docx.")
+        return 2
+    except EOFError:
+        return 2
+    finally:
+        report_path = parent.root / "e2e-report.json"
+        if report_path.exists():
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            state = job.state()
+            report.setdefault("formatting_jobs", {}).setdefault(state["id"], {}).update({
+                "path": str(job.root), "status": state["status"],
+                "document_path": state.get("document_path"), "error": state.get("error"),
+                "backend": state.get("backend"),
+            })
+            atomic_json(report_path, report)
+        job.close()
 
 
 def main(argv=None):
@@ -481,7 +690,8 @@ def main(argv=None):
             python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
             if not python.is_file():
                 subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
-            subprocess.run([str(python), "-m", "pip", "install", "-r", str(REPO / "workflow/requirements.txt")], check=True)
+            requirements = "requirements-docx.txt" if args.format_docx and args.documents_skill is None else "requirements.txt"
+            subprocess.run([str(python), "-m", "pip", "install", "-r", str(REPO / "workflow" / requirements)], check=True)
             return subprocess.call([str(python), str(Path(__file__).resolve()),
                                     *[arg for arg in argv if arg != "--setup"]])
         case = load_case(args.case)
@@ -491,9 +701,19 @@ def main(argv=None):
             return 0
         from workflow.src.engine import Engine
         from workflow.src.runtime import CodexRuntime
+        if args.format_docx:
+            from workflow.src.formatting import manuscript_paragraphs
+            manuscript_paragraphs("# Dependency preflight\n\nText.\n")
+            if args.documents_skill:
+                adapter = args.documents_skill if args.documents_skill.is_dir() else args.documents_skill.parent
+                require((adapter / "SKILL.md").is_file(), "Documents skill is unavailable.")
+            else:
+                from workflow.src.document_adapters import preflight as document_preflight
+                from workflow.src.formatting import select_renderer
+                document_preflight(select_renderer(args.renderer))
         if args.resume:
             engine = Engine(args.resume)
-        needs_runtime = not engine or engine.state()["status"] not in ("COMPLETED", "CANCELLED")
+        needs_runtime = args.format_docx or not engine or engine.state()["status"] not in ("COMPLETED", "CANCELLED")
         runtime_info = preflight(case, args.codex) if needs_runtime or args.preflight else engine.state()["e2e"]["runtime"]
         if args.preflight:
             print(f"Preflight passed: {runtime_info['version']}. DOCX extraction capability is verified by the preparation stage.")
@@ -511,9 +731,26 @@ def main(argv=None):
         else:
             bind_case(engine, case, runtime_info, args.model, resume=True)
         print(f"Run: {engine.root}\nResume: python workflow/tests/run_e2e.py --case \"{case['case_path']}\" --resume \"{engine.root}\"")
+        engine.store.event("e2e.approval_policy", {"auto_approve_recommended": args.auto_approve_recommended,
+                                                "authorization": "explicit command-line opt-in"})
         runtime = CaseRuntime(CodexRuntime([runtime_info["executable"], "app-server"], args.timeout),
-                              engine.state()["e2e"]["case"]["task"])
-        return drive(engine, case, runtime, max_turns=args.max_turns)
+                              engine.state()["e2e"]["case"]["task"],
+                              auto_approve_recommended=args.auto_approve_recommended)
+        code = drive(engine, case, runtime, max_turns=args.max_turns,
+                     auto_approve_recommended=args.auto_approve_recommended)
+        if args.format_docx and engine.state()["status"] == "COMPLETED" and code != 1:
+            format_runtime = CaseRuntime(
+                CodexRuntime([runtime_info["executable"], "app-server"], args.timeout),
+                "Consolidate the accepted English chapters into one readable DOCX without editorial changes.",
+                auto_approve_recommended=args.auto_approve_recommended, operation="formatting",
+            )
+            formatted = format_document(
+                engine, format_runtime, documents_skill=args.documents_skill, renderer=args.renderer, purpose=args.format_purpose,
+                model=args.model, auto_approve_recommended=args.auto_approve_recommended, max_turns=args.max_turns,
+            )
+            if formatted:
+                return formatted
+        return code
     except ModuleNotFoundError as exc:
         print(f"Missing Python dependency: {exc.name}. Rerun with --setup.", file=sys.stderr)
         return 1

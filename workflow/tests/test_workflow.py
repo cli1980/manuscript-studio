@@ -3,15 +3,20 @@
 import json
 import contextlib
 import io
+import importlib.util
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from ..src.engine import DEFAULT_DEFINITION, Engine, RESULT_SCHEMA, definition_at
 from ..src.runtime import CodexRuntime, Request
 from ..src.storage import digest, now
+from ..src.formatting import FormattingEngine
+from ..src import document_adapters
 from . import run_e2e
+from . import monitor_performance
 
 
 def result(outcome="completed", **fields):
@@ -426,6 +431,435 @@ class WorkflowTests(unittest.TestCase):
         self.source.write_bytes(b"Changed source")
         with self.assertRaisesRegex(ValueError, "manuscript hash"):
             run_e2e.load_case(Path(case["case_path"]))
+
+    def test_recommended_approvals_complete_without_claiming_human_review(self):
+        case = self.e2e_case()
+        actions = iter([
+            (self.preparation, "needs_review", ""),
+            (lambda r: self.map_gate(), "accept", "PM001 approve"),
+            (lambda r: self.map_gate("2", True), "accept", "confirm final closure"),
+            (self.sanity_gate, "accept", "approve chapter"),
+            (self.translation, "accept", "accept"),
+        ])
+
+        def action(request):
+            operation, recommended, response = next(actions)
+            self.assertIn("approval_recommendation", request.output_schema["required"])
+            return operation(request) | {"approval_recommendation": {
+                "action": recommended, "response": response, "reason": "Synthetic fixture recommendation",
+            }}
+
+        runtime = run_e2e.CaseRuntime(ScriptedRuntime(action), case["task"], auto_approve_recommended=True)
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = run_e2e.drive(self.engine, case, runtime, auto_approve_recommended=True,
+                                 input_fn=lambda _: self.fail("Automation must not read stdin."))
+        self.assertEqual(code, 2)
+        state = self.engine.state()
+        self.assertEqual(state["status"], "COMPLETED")
+        self.assertTrue(all(r["decision_source"] == "delegated-automation" for r in state["receipts"]))
+        self.assertEqual(state["acceptance"]["decision_source"], "delegated-automation")
+        report = json.loads((self.engine.root / "e2e-report.json").read_text(encoding="utf-8"))
+        self.assertEqual(report["e2e_status"], "needs-review")
+        self.assertEqual(report["delegated_decisions"], 3)
+        self.assertEqual(report["literary_quality"]["status"], "not-checked")
+
+    def test_automation_stops_on_review_or_nonaccepting_recommendation(self):
+        case = self.e2e_case()
+        self.prepare()
+        for recommendation in [
+            {"action": "needs_review", "response": "", "reason": "Ambiguous source needs user input"},
+            {"action": "accept", "response": "PM001 revise: move boundary", "reason": "Invalid accepting action"},
+        ]:
+            with self.subTest(recommendation=recommendation):
+                if self.engine.state()["status"] == "WAITING_FOR_HUMAN":
+                    self.engine.recover(refresh_gate=True)
+                runtime = run_e2e.CaseRuntime(
+                    ScriptedRuntime(lambda r: self.map_gate() | {"approval_recommendation": recommendation}),
+                    case["task"], auto_approve_recommended=True,
+                )
+                with contextlib.redirect_stdout(io.StringIO()):
+                    code = run_e2e.drive(self.engine, case, runtime, auto_approve_recommended=True,
+                                         input_fn=lambda _: self.fail("Must stop without reading stdin."))
+                self.assertEqual(code, 2)
+                self.assertEqual(self.engine.state()["status"], "WAITING_FOR_HUMAN")
+                self.assertEqual(self.engine.state()["receipts"], [])
+
+    def formatting_job(self):
+        self.complete_translation()
+        self.engine.accept(self.engine.state()["acceptance_id"])
+        self.engine.advance(None)
+        adapter = self.base / "documents"
+        adapter.mkdir()
+        (adapter / "SKILL.md").write_text("# Synthetic Documents adapter for tests\n", encoding="utf-8")
+        job = FormattingEngine.create_from_run(self.engine, documents_skill=adapter)
+        self.addCleanup(job.close)
+        return job, adapter
+
+    def format_gate(self, job, *, revision="1", resolved=False):
+        folder = job.workspace / "manuscript-formatting"
+        folder.mkdir(exist_ok=True)
+        (folder / "format-spec.md").write_text("# Proposed format\n- Status: proposed\nReadable fiction edition.\n", encoding="utf-8")
+        (folder / "proposal.md").write_text("# Proposed format\nReadable fiction edition.\n", encoding="utf-8")
+        sheet = self.sheet(revision, resolved)
+        sheet["sheet_id"] = "format-fixture"
+        sheet["items"][0]["id"] = "FM001"
+        sheet["items"][0]["summary"] = "Use the proposed reader-facing edition."
+        sheet["items"][0]["details"] = [{"label": "Design", "value": "Readable fiction edition."}]
+        (folder / "format-review.json").write_text(json.dumps(sheet), encoding="utf-8")
+        output = result("needs_human_input", gate="format_spec",
+                      state_path="manuscript-formatting/format-spec.md",
+                      binding_path="manuscript-formatting/proposal.md",
+                      review_path="manuscript-formatting/format-review.json", qa_path=None)
+        if job.state().get("backend"):
+            (folder / "format-settings.json").write_text(json.dumps(document_adapters.DEFAULT_SETTINGS), encoding="utf-8")
+            output["settings_path"] = "manuscript-formatting/format-settings.json"
+        return output
+
+    def approve_format(self, job):
+        job.advance(ScriptedRuntime(lambda r: self.format_gate(job)))
+        job.reply(job.state()["gate"]["id"], "FM001 approve")
+        job.advance(ScriptedRuntime(lambda r: self.format_gate(job, revision="2", resolved=True)))
+        job.reply(job.state()["gate"]["id"], "confirm final closure")
+
+    def format_result(self, job, *, text="He came back.", pages=True):
+        from zipfile import ZipFile
+        import struct
+        import zlib
+        from xml.sax.saxutils import escape
+        folder = job.workspace / "manuscript-formatting/outputs/docx"
+        folder.mkdir(parents=True, exist_ok=True)
+        document = folder / "manuscript.docx"
+        with ZipFile(document, "w") as archive:
+            archive.writestr("[Content_Types].xml",
+                             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                             '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+                             '</Types>')
+            archive.writestr("_rels/.rels",
+                             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                             '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+                             '</Relationships>')
+            archive.writestr("word/document.xml", (
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                f'<w:body><w:p><w:r><w:t>{escape(text)}</w:t></w:r></w:p></w:body></w:document>'
+            ))
+            archive.writestr("word/styles.xml",
+                             '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
+        render = folder / "render"
+        render.mkdir(exist_ok=True)
+
+        def chunk(kind, data):
+            return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+        png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+               + chunk(b"IDAT", zlib.compress(b"\0\xff\xff\xff")) + chunk(b"IEND", b""))
+        (render / "page-1.png").write_bytes(png)
+        qa = {
+            "schema_version": 1, "input_manifest_sha256": job.state()["input_manifest_sha256"],
+            "approved_spec_sha256": (job.state().get("format_approval") or {}).get("sha256", "0" * 64),
+            "docx_sha256": digest(document.read_bytes()), "adapter_skill_sha256": job.state()["adapter_sha256"],
+            "visual_review_passed": True, "specification_matches": True, "page_count": 1,
+            "content_paragraph_indexes": [0],
+            "pages": [{"page": 1, "image": "manuscript-formatting/outputs/docx/render/page-1.png",
+                       "sha256": digest(png), "reviewed": True, "findings": []}] if pages else [],
+        }
+        (folder / "qa.json").write_text(json.dumps(qa), encoding="utf-8")
+        # Fixtures exercise the contract, not a real render or human visual assessment.
+        return result(state_path="manuscript-formatting/format-spec.md",
+                      output_path="manuscript-formatting/outputs/docx/manuscript.docx",
+                      qa_path="manuscript-formatting/outputs/docx/qa.json")
+
+    def test_formatter_requires_closure_and_preserves_accepted_inputs(self):
+        job, adapter = self.formatting_job()
+        accepted = self.engine.state()["acceptance"]
+        original = self.source.read_bytes()
+        self.approve_format(job)
+        job.advance(ScriptedRuntime(lambda r: self.format_result(job)))
+        state = job.state()
+        self.assertEqual(state["status"], "COMPLETED")
+        self.assertTrue(Path(state["document_path"]).is_file())
+        self.assertTrue((job.root / "export/manifest.json").is_file())
+        self.assertEqual(self.engine.state()["status"], "COMPLETED")
+        self.assertEqual(self.engine.state()["acceptance"], accepted)
+        self.assertEqual(self.source.read_bytes(), original)
+        reopened = Engine.open(job.root)
+        self.addCleanup(reopened.close)
+        self.assertIsInstance(reopened, FormattingEngine)
+        reused = FormattingEngine.create_from_run(self.engine, documents_skill=adapter)
+        self.addCleanup(reused.close)
+        self.assertEqual(reused.root, job.root)
+        self.assertEqual(len(self.engine.state()["format_jobs"]), 1)
+        separate = FormattingEngine.create_from_run(self.engine, documents_skill=adapter, new_edition=True)
+        self.addCleanup(separate.close)
+        self.assertNotEqual(separate.root, job.root)
+
+    def test_formatter_does_not_publish_before_approval(self):
+        job, _ = self.formatting_job()
+        self.format_gate(job)
+        with self.assertRaisesRegex(ValueError, "not been approved"):
+            job.advance(ScriptedRuntime(lambda r: self.format_result(job)))
+        self.assertFalse((job.root / "export").exists())
+
+    def test_formatter_rejects_prose_changes_even_with_successful_qa_claim(self):
+        job, _ = self.formatting_job()
+        self.approve_format(job)
+        with self.assertRaisesRegex(ValueError, "changes accepted manuscript text"):
+            job.advance(ScriptedRuntime(lambda r: self.format_result(job, text="He returned triumphantly.")))
+        self.assertEqual(job.state()["outputs"], [])
+        self.assertFalse((job.root / "export").exists())
+
+    def test_formatter_rejects_missing_page_evidence_and_stale_specification(self):
+        job, _ = self.formatting_job()
+        job.advance(ScriptedRuntime(lambda r: self.format_gate(job)))
+        (job.workspace / "manuscript-formatting/proposal.md").write_text("Changed proposal", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Review changed"):
+            job.reply(job.state()["gate"]["id"], "FM001 approve")
+        job.recover(refresh_gate=True)
+        self.approve_format(job)
+        with self.assertRaisesRegex(ValueError, "page coverage"):
+            job.advance(ScriptedRuntime(lambda r: self.format_result(job, pages=False)))
+
+    def test_formatter_rejects_incomplete_translation_and_missing_adapter(self):
+        adapter = self.base / "documents"
+        adapter.mkdir()
+        (adapter / "SKILL.md").write_text("# Test adapter", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "completed translation"):
+            FormattingEngine.create_from_run(self.engine, documents_skill=adapter)
+        with self.assertRaisesRegex(ValueError, "unavailable"):
+            FormattingEngine.create_from_run(self.engine, documents_skill=self.base / "missing")
+
+    def test_optional_formatter_block_does_not_invalidate_translation_result(self):
+        case = self.e2e_case()
+        job, adapter = self.formatting_job()
+        run_e2e.write_report(self.engine, case)
+        runtime = ScriptedRuntime(lambda request: result(
+            "blocked", message="blocked-adapter: renderer unavailable", qa_path=None,
+        ))
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = run_e2e.format_document(
+                self.engine, runtime, documents_skill=adapter, auto_approve_recommended=True,
+            )
+        self.assertEqual(code, 2)
+        self.assertEqual(self.engine.state()["status"], "COMPLETED")
+        self.assertEqual(job.state()["status"], "BLOCKED")
+        report = json.loads((self.engine.root / "e2e-report.json").read_text(encoding="utf-8"))
+        self.assertEqual(report["workflow_status"], "COMPLETED")
+        self.assertEqual(report["formatting_jobs"][job.state()["id"]]["status"], "BLOCKED")
+        self.assertFalse((job.root / "export/manuscript.docx").exists())
+
+    def test_native_formatter_uses_approved_settings_and_waits_for_visual_qa(self):
+        self.formatting_job()  # Complete the parent translation using synthetic fixtures.
+        with patch.object(document_adapters, "preflight", return_value={"renderer": "word", "version": "test"}):
+            job = FormattingEngine.create_from_run(self.engine, renderer="word")
+        self.addCleanup(job.close)
+        self.approve_format(job)
+        self.assertIsNotNone(job.state()["approved_settings"])
+
+        def render(markdown, settings, directory, renderer):
+            self.assertEqual(markdown, "He came back.\n")
+            self.assertEqual(renderer, "word")
+            directory.mkdir(parents=True)
+            self.format_result(job)
+            folder = job.workspace / "manuscript-formatting/outputs/docx"
+            pdf = folder / "fixture.pdf"
+            pdf.write_bytes(b"%PDF synthetic fixture; not an actual renderer result")
+            image = folder / "render/page-1.png"
+            return {
+                "docx": str(folder / "manuscript.docx"), "pdf": str(pdf),
+                "pages": [{"page": 1, "path": str(image), "sha256": digest(image.read_bytes())}],
+                "renderer": "word", "renderer_version": "fixture", "builder": "python-docx",
+                "builder_version": "fixture", "toc_pages": {}, "layout_passes": 1,
+            }
+
+        with patch.object(document_adapters, "build_and_render", side_effect=render) as renderer:
+            job.advance(None)
+            self.assertEqual(renderer.call_count, 1)
+        self.assertEqual(job.state()["status"], "READY")
+        generated = job.state()["generated"]
+        qa_path = job.file(generated["qa_path"])
+        qa = json.loads(qa_path.read_text(encoding="utf-8"))
+        self.assertFalse(qa["visual_review_passed"])
+        self.assertFalse((job.root / "export/manuscript.docx").exists())
+        self.assertIn("- Status: approved", job.file("manuscript-formatting/format-spec.md").read_text())
+        completion = result(
+            state_path="manuscript-formatting/format-spec.md", output_path=generated["document"]["path"],
+            qa_path=generated["qa_path"], settings_path="manuscript-formatting/format-settings.json",
+        )
+        with self.assertRaisesRegex(ValueError, "Visual/specification QA"):
+            job.advance(ScriptedRuntime(lambda r: completion))
+        job.recover()
+        qa["visual_review_passed"] = qa["specification_matches"] = True
+        for page in qa["pages"]:
+            page.update(reviewed=True, findings=[])
+        qa_path.write_text(json.dumps(qa), encoding="utf-8")
+        job.advance(ScriptedRuntime(lambda r: completion))
+        self.assertEqual(job.state()["status"], "COMPLETED")
+        self.assertTrue(Path(job.state()["document_path"]).is_file())
+
+    def test_native_settings_are_revision_bound_and_renderer_switch_creates_an_edition(self):
+        self.formatting_job()
+        with patch.object(document_adapters, "preflight", side_effect=lambda name: {"renderer": name, "version": "test"}):
+            word = FormattingEngine.create_from_run(self.engine, renderer="word")
+            cloud = FormattingEngine.create_from_run(self.engine, renderer="libreoffice")
+        self.addCleanup(word.close)
+        self.addCleanup(cloud.close)
+        self.assertNotEqual(word.root, cloud.root)
+        word.advance(ScriptedRuntime(lambda r: self.format_gate(word)))
+        settings = word.file("manuscript-formatting/format-settings.json")
+        changed = dict(document_adapters.DEFAULT_SETTINGS, font_size=12)
+        settings.write_text(json.dumps(changed), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Review changed"):
+            word.reply(word.state()["gate"]["id"], "FM001 approve")
+
+
+class DocumentAdapterTests(unittest.TestCase):
+    @unittest.skipUnless(importlib.util.find_spec("docx"), "Install workflow/requirements-docx.txt for builder tests.")
+    def test_builder_preserves_text_emphasis_headings_and_page_fields(self):
+        from docx import Document
+        from ..src.formatting import docx_paragraphs
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "manuscript.docx"
+            source = "# A Story\n\n## 1\n\nHe **came** *back*.\n\n## 2\n\nShe stayed.\n"
+            settings = dict(document_adapters.DEFAULT_SETTINGS, include_toc=False)
+            document_adapters.PythonDocxBuilder().build(source, settings, target, {})
+            paragraphs, folios = docx_paragraphs(target)
+            self.assertEqual([p["text"] for p in paragraphs], ["A Story", "1", "He came back.", "2", "She stayed."])
+            self.assertTrue(paragraphs[0]["title"])
+            self.assertTrue(paragraphs[1]["heading"])
+            self.assertTrue(folios)
+            runs = Document(target).paragraphs[2].runs
+            self.assertTrue(next(r for r in runs if r.text == "came").bold)
+            self.assertTrue(next(r for r in runs if r.text == "back").italic)
+            from docx.oxml.ns import qn
+            document = Document(target)
+            for name in ("Title", "Heading 1"):
+                style = document.styles[name]
+                self.assertIsNone(style.element.find(qn("w:pPr") + "/" + qn("w:pBdr")))
+                fonts = style.element.find(qn("w:rPr") + "/" + qn("w:rFonts"))
+                self.assertFalse(any("theme" in key.lower() for key in fonts.attrib))
+                self.assertEqual(fonts.get(qn("w:ascii")), settings["body_font"])
+            self.assertEqual(document.paragraphs[2].paragraph_format.first_line_indent, 0)
+            settings["indent_opening_paragraphs"] = True
+            document_adapters.PythonDocxBuilder().build(source, settings, target, {})
+            self.assertIsNone(Document(target).paragraphs[2].paragraph_format.first_line_indent)
+
+    def test_bad_settings_and_unsupported_content_are_not_silently_converted(self):
+        with self.assertRaisesRegex(ValueError, "text width"):
+            document_adapters.validate_settings(dict(document_adapters.DEFAULT_SETTINGS, margin_inches=2.5))
+        with self.assertRaisesRegex(ValueError, "Unsupported manuscript block"):
+            document_adapters.content_blocks("# Title\n\n![illustration](image.png)\n")
+
+    def test_cloud_renderer_uses_isolated_libreoffice_profile(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "book.docx"
+            source.write_bytes(b"test input")
+
+            def run(command, **kwargs):
+                if "--convert-to" in command:
+                    self.assertIn("--headless", command)
+                    self.assertTrue(any(arg.startswith("-env:UserInstallation=file:") for arg in command))
+                    self.assertIn("pdf:writer_pdf_Export", command)
+                    (root / "book.pdf").write_bytes(b"%PDF fixture")
+                return SimpleNamespace(returncode=0, stdout="LibreOffice test", stderr="")
+
+            with patch.object(document_adapters.shutil, "which", return_value="/usr/bin/soffice"), \
+                    patch.object(document_adapters.subprocess, "run", side_effect=run):
+                result = document_adapters.LibreOfficeRenderer().render(source, root)
+            self.assertEqual(result.renderer, "libreoffice")
+            self.assertEqual(result.pdf.name, "book.pdf")
+
+
+class PerformanceTests(unittest.TestCase):
+    def test_approval_submission_and_followup_work_are_separate(self):
+        from datetime import datetime, timezone, timedelta
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        data = [
+            (0, "execution.started", {"stage": "translate"}),
+            (10, "execution.result", {"outcome": "needs_human_input", "gate": "passage_map"}),
+            (10.2, "e2e.delegated_approval", {"gate_id": "g1"}),
+            (10.5, "review.received", {"receipt_id": "r1", "gate_id": "g1"}),
+            (11, "execution.started", {"stage": "translate"}),
+            (31, "execution.result", {"outcome": "needs_human_input", "gate": "passage_map"}),
+            (31.2, "e2e.delegated_approval", {"gate_id": "g2"}),
+            (31.4, "review.received", {"receipt_id": "r2", "gate_id": "g2"}),
+            (32, "execution.started", {"stage": "translate"}),
+            (92, "execution.result", {"outcome": "needs_human_input", "gate": "continuation"}),
+        ]
+        events = [{"created_at": (base + timedelta(seconds=second)).isoformat(),
+                   "kind": kind, "payload": payload} for second, kind, payload in data]
+        state = {
+            "id": "test", "status": "WAITING_FOR_HUMAN", "stage": "translate",
+            "outputs": [], "chapters": [{}],
+            "receipts": [
+                {"id": "r1", "decision_source": "delegated-automation",
+                 "gate": {"kind": "passage_map"},
+                 "parsed": {"type": "dispositions", "dispositions": [{}, {}]}},
+                {"id": "r2", "decision_source": "delegated-automation",
+                 "gate": {"kind": "passage_map"}, "parsed": {"type": "final-closure"}},
+            ],
+        }
+        report = monitor_performance.analyze(events, state, base + timedelta(seconds=93))
+        self.assertEqual(report["work_groups"]["map_decision_recording"]["wall_seconds"], 20)
+        self.assertEqual(report["work_groups"]["drafting_and_source_review"]["wall_seconds"], 60)
+        self.assertEqual(report["delegated_approval_timing"]["submission_seconds"], .5)
+        self.assertEqual(report["delegated_approval_timing"]["result_to_receipt_seconds"], .9)
+        self.assertEqual(report["delegated_approval_timing"]["batches"][0]["item_count"], 2)
+        self.assertEqual(monitor_performance.work_category(
+            "translate", "translation_issue", "feedback", "continuation"),
+            "issue_application_and_finalization_mixed")
+        self.assertEqual(monitor_performance.work_category(
+            "translate", "continuation", "feedback", "chapter_sanity"), "chapter_sanity_review")
+
+    def test_timing_unions_tools_and_deduplicates_cumulative_usage(self):
+        from datetime import datetime, timezone, timedelta
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        events = []
+
+        def event(second, kind, payload):
+            events.append({"created_at": (base + timedelta(seconds=second)).isoformat(),
+                           "kind": kind, "payload": payload})
+
+        def usage(second, turn_id, inputs, cached, outputs, last_input):
+            event(second, "thread/tokenUsage/updated", {
+                "threadId": "thread", "turnId": turn_id,
+                "tokenUsage": {"total": {"inputTokens": inputs, "cachedInputTokens": cached,
+                                        "outputTokens": outputs, "reasoningOutputTokens": 3},
+                               "last": {"inputTokens": last_input}},
+            })
+
+        event(0, "execution.started", {"stage": "translate"})
+        event(.1, "execution.thread", {"thread_id": "thread"})
+        event(.2, "thread/started", {"thread": {"id": "thread", "model": "test-model"}})
+        event(1, "turn/started", {"turn": {"id": "turn-1"}})
+        event(2, "item/started", {"turnId": "turn-1", "item": {"id": "command", "type": "commandExecution"}})
+        event(3, "item/started", {"turnId": "turn-1", "item": {"id": "nested", "type": "fileChange"}})
+        usage(3.5, "turn-1", 100, 80, 10, 100)
+        event(4, "item/completed", {"turnId": "turn-1", "item": {"id": "nested", "type": "fileChange", "changes": []}})
+        usage(4.1, "turn-1", 100, 80, 10, 100)
+        event(6, "item/completed", {"turnId": "turn-1", "item": {
+            "id": "command", "type": "commandExecution", "exitCode": 0, "aggregatedOutput": "fixture",
+        }})
+        usage(8, "turn-1", 300, 230, 30, 200)
+        event(9, "turn/completed", {"turn": {"id": "turn-1"}})
+        event(10, "execution.result", {"outcome": "needs_human_input", "gate": "continuation"})
+        event(12, "execution.started", {"stage": "translate"})
+        event(12.1, "execution.thread", {"thread_id": "thread"})
+        usage(12.2, "turn-1", 300, 230, 30, 200)  # Resume notification repeats earlier usage.
+        event(13, "turn/started", {"turn": {"id": "turn-2"}})
+        usage(14, "turn-2", 450, 330, 45, 150)
+        state = {"id": "test", "status": "RUNNING", "stage": "translate", "outputs": [], "chapters": [{}]}
+        report = monitor_performance.analyze(events, state, base + timedelta(seconds=15))
+        first, active = report["attempts"]
+        self.assertEqual((first["startup_seconds"], first["tool_seconds"],
+                          first["runtime_non_tool_seconds"], first["post_turn_seconds"]), (1, 4, 4, 1))
+        self.assertEqual(first["usage_updates"], 2)
+        self.assertEqual(first["tokens"]["inputTokens"], 300)
+        self.assertEqual(first["model"], "test-model")
+        self.assertEqual(active["tokens"]["inputTokens"], 150)
+        self.assertFalse(active["finished"])
+        self.assertEqual(report["completed_attempt_totals"]["tokens"]["outputTokens"], 30)
+        self.assertEqual(report["completed_attempt_totals"]["wall_seconds"], 10)
 
 
 class CodexTransportTests(unittest.TestCase):

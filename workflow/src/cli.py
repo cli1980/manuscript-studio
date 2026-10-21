@@ -14,7 +14,9 @@ from .runtime import CodexRuntime
 
 def display(engine, state, *, review=False):
     summary = {key: state.get(key) for key in
-               ("id", "status", "stage", "chapter_index", "attempts", "error", "export_path")}
+               ("id", "status", "stage", "chapter_index", "attempts", "error", "export_path", "document_path")}
+    if state.get("format_jobs"):
+        summary["format_jobs"] = state["format_jobs"]
     if state.get("gate"):
         summary["gate_id"] = state["gate"]["id"]
         summary["gate_kind"] = state["gate"]["kind"]
@@ -65,6 +67,15 @@ def parser():
     create.add_argument("--source-language", required=True)
     create.add_argument("--definition", type=Path, default=DEFAULT_DEFINITION)
     create.add_argument("--model")
+    formatter = sub.add_parser("format", help="Create/reuse a final DOCX formatting job for an accepted translation.")
+    formatter.add_argument("run_dir", type=Path)
+    backend = formatter.add_mutually_exclusive_group()
+    backend.add_argument("--documents-skill", type=Path, help="Optional external Documents skill instead of the built-in adapters.")
+    backend.add_argument("--renderer", choices=("word", "libreoffice"),
+                         help="Built-in renderer; defaults to Word on Windows, LibreOffice elsewhere.")
+    formatter.add_argument("--purpose", choices=("reader-facing", "editorial-review", "submission"), default="reader-facing")
+    formatter.add_argument("--model")
+    formatter.add_argument("--new-edition", action="store_true", help="Create a distinct job instead of reusing an unchanged edition.")
     for command in ("step", "status", "review", "reply", "accept", "recover", "cancel", "events"):
         child = sub.add_parser(command)
         child.add_argument("run_dir", type=Path)
@@ -93,7 +104,20 @@ def main(argv=None):
                                    definition=args.definition, model=args.model)
             display(engine, engine.state())
             return 0
-        engine = Engine(args.run_dir)
+        engine = Engine.open(args.run_dir)
+        if args.command == "format":
+            from .formatting import FormattingEngine
+            job = FormattingEngine.create_from_run(
+                engine, documents_skill=args.documents_skill, renderer=args.renderer, purpose=args.purpose,
+                model=args.model, new_edition=args.new_edition,
+            )
+            try:
+                display(job, job.state())
+                print(f"\nFormatting job: {job.root}")
+                print(f'Next: python -m workflow step "{job.root}" --codex PATH-TO-CODEX')
+            finally:
+                job.close()
+            return 0
         if args.command == "step":
             if args.timeout <= 0:
                 raise ValueError("Timeout must be positive.")
@@ -116,6 +140,10 @@ def main(argv=None):
             state = engine.state()
         display(engine, state, review=args.command == "review")
         return 0
+    except ModuleNotFoundError as exc:
+        print(f"workflow: missing dependency ({exc}); install workflow/requirements-docx.txt for native formatting.",
+              file=sys.stderr)
+        return 1
     except (OSError, ValueError, RuntimeError, TimeoutError) as exc:
         print(f"workflow: {exc}", file=sys.stderr)
         return 1
