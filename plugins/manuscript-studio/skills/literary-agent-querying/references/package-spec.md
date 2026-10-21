@@ -43,6 +43,7 @@ Record:
 - book title and source identity;
 - manuscript path or attachment identity without relocating it;
 - manuscript version, modification time, or checksum when available, without inspecting Git;
+- shared work locator and prepared revision when supplied, plus metadata record revision and consumed shared metadata fields/values; changes to mutable workflow status alone do not invalidate manuscript evidence;
 - structured story-ledger identity, revision, approval status, synopsis readiness, bound manuscript identity, human-review artifact identity, gate status, approval-unit counts, and final closure date;
 - project-root or Codex artifact identity;
 - package creation and revision date;

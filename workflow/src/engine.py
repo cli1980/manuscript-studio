@@ -183,10 +183,14 @@ class Engine:
                 if digest(read_bytes(self.file(relative))) != artifact["sha256"]:
                     raise ValueError("Prepared source changed; cannot reuse approvals.")
             work = json.loads(self.file(prepared["work_record"]).read_text(encoding="utf-8"))
-            base = {key: work[key] for key in ("work_id", "metadata", "discovery", "preparation")}
-            if base != prepared["base"]:
+            source_keys = ("work_id", "discovery", "preparation")
+            base = {key: work[key] for key in source_keys}
+            if base != {key: prepared["base"][key] for key in source_keys}:
                 raise ValueError("Preparation identity changed.")
             self.preparation.validate(self.file(prepared["work_record"]), check_sources=True)
+            language_key = "source_language" if work["schema_version"] == 1 else "manuscript_language"
+            if work["metadata"][language_key] != state["source_language"]:
+                raise ValueError("Manuscript language metadata differs from the run; reconcile the configuration.")
         for artifact in state["outputs"]:
             self.store.content(artifact)
             if digest(read_bytes(self.file(artifact["path"]))) != artifact["sha256"]:
@@ -207,6 +211,11 @@ class Engine:
             "user_receipt": state["next_input"], "skills": bundle,
             "python_executable": sys.executable,
         }
+        if state["prepared"]:
+            work = json.loads(self.file(state["prepared"]["work_record"]).read_text(encoding="utf-8"))
+            context["metadata"] = work["metadata"]
+            context["metadata_record_revision"] = work["record_revision"]
+            context["metadata_provenance"] = work.get("metadata_provenance", {})
         return (
             "Execute only the current manuscript skill operation. Read the primary SKILL.md and "
             "its required references in the complete pinned sibling bundle below. User scope is "
@@ -220,12 +229,14 @@ class Engine:
             "Do not request runtime tool user input; persist a domain request and end the turn.\n\n"
             "PREPARATION: create prepared/<work-id>/work.json and the standard revision/chapter "
             "package using available adapters. Never claim readiness without source comparison "
+            "and evidence-bound inference of missing metadata under the shared metadata contract "
             "and successful existing validation. Return completed with work_record only when ready. "
             "Unavailable adapters or incomplete extraction return blocked.\n\n"
             "TRANSLATION: process only the supplied complete chapter. Use translation/ as project "
             "root, with glossary.md, voice.md, translated_english/, and the skill's internal "
             ".literary-translation-work/ layout. Reread continuity state and preceding chapter. "
-            "Maintain only your shared workflow summary and preserve preparation/source files. "
+            "Maintain your shared workflow summary; reuse current shared metadata and preserve user "
+            "edits under its contract. Preserve prepared source text and revision manifests. "
             "Do not add a general line edit. Follow chapter brief, approved passage map, complete "
             "two-path drafting, Step 3.2, passage continuation, and chapter sanity gates exactly. "
             "Domain state remains authoritative; user_receipt is a validated user response, not "
@@ -321,7 +332,8 @@ class Engine:
         source = str(self.root / "input" / state["source_name"])
         if work["discovery"]["location_kind"] != "file" or work["discovery"]["location"] != source:
             raise ValueError("Preparation must bind the designated input snapshot.")
-        if work["metadata"]["source_language"] != state["source_language"]:
+        language_key = "source_language" if work["schema_version"] == 1 else "manuscript_language"
+        if work["metadata"][language_key] != state["source_language"]:
             raise ValueError("Preparation source language differs from the run.")
         manifest_path = path.parent / "revisions" / work["preparation"]["current_revision"] / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -336,7 +348,7 @@ class Engine:
         files.extend(manifest_path.parent / asset["file"] for asset in manifest["assets"])
         state["prepared"] = {
             "work_record": relative,
-            "base": {key: work[key] for key in ("work_id", "metadata", "discovery", "preparation")},
+            "base": {key: work[key] for key in ("work_id", "discovery", "preparation")},
             "files": {p.relative_to(self.workspace).as_posix(): self.store.snapshot(p, "prepared")
                       for p in files},
         }

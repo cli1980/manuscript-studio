@@ -27,7 +27,7 @@
     "ground_truth_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "expected_metadata": {
       "type": "object",
-      "propertyNames": {"enum": ["title", "authors", "source_language", "work_type", "genre", "edition"]}
+      "propertyNames": {"enum": ["title", "subtitle", "authors", "contributors", "source_language", "original_language", "manuscript_language", "work_type", "form", "genre", "genres", "audience", "keywords", "description", "edition", "series", "extent"]}
     },
     "expected_preparation_status": {"enum": ["ready", "blocked"]},
     "expected_workflows": {

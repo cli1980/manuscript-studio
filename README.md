@@ -140,9 +140,21 @@ source locators, extraction quality, and file hashes. Editing and translation
 delegate preparation to this skill. Formatting and querying can consume the same
 contract while retaining their own source and approval rules.
 
+Shared metadata now includes title/subtitle, credited contributors and roles,
+original and manuscript languages, type/form, genres, audience, keywords,
+description, edition, series, and revision-scoped extent. Preparation infers missing
+descriptive values from textual evidence and records confidence and provenance;
+supplied values and user edits take precedence. All fields remain editable.
+See the [shared metadata contract](plugins/manuscript-studio/skills/prepare-manuscript/references/manuscript-metadata.md)
+for the structure, proposal format, and editing commands.
+
 The machine-readable schemas and validator are included in the skill. Install
 its `requirements.txt` to run `scripts/validate_preparation.py <work-root>/work.json`;
 use `--check-sources` to verify accessible local originals as well.
+New work records use schema version 2; version-1 records remain readable.
+`scripts/prepare_metadata.py migrate <work-root>/work.json` migrates a legacy
+record, and `enrich` computes missing extent and applies evidence-bound proposals
+from the preparation agent. Neither operation edits manuscript text.
 
 ### `literary-editing`
 

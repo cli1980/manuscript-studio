@@ -56,6 +56,7 @@ Record:
 - designated manuscript path or attachment identity;
 - manuscript checksum, modification time, and word count when available;
 - manuscript language and edition;
+- shared work locator and prepared revision when supplied, with chapter IDs connecting ledger locators to that revision; do not use a mutable `work.json` checksum as manuscript identity;
 - complete-manuscript coverage statement;
 - ledger creator and evidence method;
 - human-review artifact identity, queue revision, and bound ledger revision;

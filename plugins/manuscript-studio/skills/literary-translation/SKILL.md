@@ -23,6 +23,15 @@ For a new project, or an existing project missing a verified prepared source, `g
 
 Use the shared `work.json` and its current revision manifest as the source handoff. Read chapters in manifest order and preserve the prepared source files. Update only `workflows.literary-translation` under the [shared status contract](../prepare-manuscript/references/preparation-contract.md#downstream-status-and-ownership), pointing to the translation project's actual state location. Bind the operation and chapter scope to the prepared revision. Chapter completion is not whole-work completion.
 
+Read and reuse the [shared manuscript metadata](../prepare-manuscript/references/manuscript-metadata.md).
+Use `manuscript_language` for the designated input, not `original_language`.
+Preserve user edits and record the fields used; shared metadata may be enriched
+or explicitly corrected under that contract. Reconcile language changes with the
+translation configuration. A metadata-only edit does not replace source text or
+revoke unrelated passage approvals. Keep glossary, voice, and target-edition
+metadata in the translation records; do not relabel the source as English merely
+because an English translation was produced.
+
 Read [references/workflow-state.md](references/workflow-state.md) in full before creating, verifying, or resuming an internal chapter workspace, and follow it throughout the chapter workflow.
 
 For an existing active chapter, verify the required internal artifacts, then resume from the last verified workflow phase without repeating settled work.

@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 
 import validate_preparation as validator
+import prepare_metadata as metadata
 
 NOW = "2026-10-19T12:00:00Z"
 WORKFLOWS = ("literary-editing", "literary-translation", "literary-agent-querying", "format-manuscript")
@@ -232,6 +233,146 @@ class PreparationTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["work_id"], "example-work")
+
+    def proposal(self, field="/genres", value=None, **changes):
+        return {
+            "field": field, "value": ["Literary fiction"] if value is None else value,
+            "origin": "inferred", "confidence": "medium", "basis_revision": "r0001",
+            "evidence": [{"chapter_id": "chapter-1", "locator": "Paragraph 1", "quote": "原文第一段。"}],
+            "rationale": "Synthetic inference used to test persistence, not classification quality.",
+        } | changes
+
+    def read_work(self):
+        return validator.load_json(self.root / "work.json")
+
+    def test_metadata_migration_preserves_source_and_existing_workflow_state(self):
+        self.work["metadata"]["authors"] = ["作者甲", "Author B"]
+        self.work["metadata"]["genre"] = "Literary fiction"
+        self.work["metadata"]["edition"] = "Author revision"
+        self.workflow(status="completed")
+        self.save()
+        original_manifest = (self.revision / "manifest.json").read_bytes()
+        before = (self.root / "work.json").read_bytes()
+        result = metadata.update(self.root / "work.json", "migrate")
+        work = self.read_work()
+        self.assertTrue(result["written"])
+        self.assertEqual(work["schema_version"], 2)
+        self.assertEqual(validator.legacy_metadata(work), self.work["metadata"])
+        self.assertIsNone(work["metadata"]["original_language"])
+        self.assertEqual(work["workflows"], self.work["workflows"])
+        self.assertEqual((self.revision / "manifest.json").read_bytes(), original_manifest)
+        self.assertEqual(next((self.root / "metadata-history").iterdir()).read_bytes(), before)
+        self.assertFalse(metadata.update(self.root / "work.json", "migrate")["written"])
+
+    def test_inference_is_grounded_proposed_and_does_not_replace_existing_values(self):
+        proposals = [self.proposal(), self.proposal("/title", "Different title", origin="extracted")]
+        result = metadata.update(self.root / "work.json", "enrich", proposals=proposals, actor="prepare-manuscript")
+        work = self.read_work()
+        self.assertEqual(work["metadata"]["genres"], ["Literary fiction"])
+        self.assertEqual(work["metadata"]["title"], "Example work")
+        self.assertEqual(result["skipped"], ["/title"])
+        self.assertEqual(work["metadata_provenance"]["/genres"]["review_status"], "proposed")
+        self.assertIsNone(work["metadata"]["extent"]["word_count"])
+        self.assertGreater(work["metadata"]["extent"]["non_whitespace_character_count"], 0)
+        self.assertEqual(work["metadata"]["extent"]["scope"], self.manifest["scope"])
+        self.assertFalse(metadata.update(self.root / "work.json", "enrich", proposals=proposals)["written"])
+
+    def test_unfounded_metadata_proposals_leave_the_record_untouched(self):
+        before = (self.root / "work.json").read_bytes()
+        cases = [
+            self.proposal(evidence=[{"chapter_id": "chapter-1", "locator": "Paragraph 1", "quote": "Invented quote"}]),
+            self.proposal("/original_language", "zh"),
+            self.proposal("/contributors", [{"id": "narrator", "name": "Narrator", "roles": ["author"]}]),
+            self.proposal(basis_revision="r0009"),
+            self.proposal("/form", "not-a-form"),
+            self.proposal(confidence=None),
+        ]
+        for proposal in cases:
+            with self.subTest(proposal=proposal), self.assertRaises(ValueError):
+                metadata.update(self.root / "work.json", "enrich", proposals=[proposal])
+            self.assertEqual((self.root / "work.json").read_bytes(), before)
+        with self.assertRaisesRegex(ValueError, "JSON array"):
+            metadata.update(self.root / "work.json", "enrich", proposals={})
+
+    def test_direct_metadata_edits_and_deliberate_clearing_survive_enrichment(self):
+        path = self.root / "work.json"
+        metadata.update(path, "enrich", proposals=[self.proposal()])
+        work = self.read_work()
+        work["metadata"]["genres"] = ["User correction"]
+        write_json(path, work)
+        metadata.update(path, "enrich", proposals=[self.proposal()])
+        work = self.read_work()
+        self.assertEqual(work["metadata"]["genres"], ["User correction"])
+        self.assertEqual(work["metadata_provenance"]["/genres"]["origin"], "user_edit")
+        self.assertEqual(work["metadata_provenance"]["/genres"]["review_status"], "unreviewed")
+        metadata.update(path, "set", field="/genres", value=[])
+        metadata.update(path, "enrich", proposals=[self.proposal()])
+        self.assertEqual(self.read_work()["metadata"]["genres"], [])
+        self.assertEqual(self.read_work()["metadata_provenance"]["/genres"]["review_status"], "confirmed")
+
+    def test_revision_change_marks_metadata_stale_without_overwriting_it(self):
+        path = self.root / "work.json"
+        metadata.update(path, "enrich", proposals=[self.proposal()])
+        work = self.read_work()
+        target = self.root / "revisions/r0002"
+        shutil.copytree(self.revision, target)
+        manifest = copy.deepcopy(self.manifest)
+        manifest["revision"] = "r0002"
+        write_json(target / "manifest.json", manifest)
+        work["preparation"]["current_revision"] = "r0002"
+        write_json(path, work)
+        result = metadata.update(path, "enrich")
+        self.assertEqual(set(result["stale_fields"]), {"/genres", "/extent"})
+        self.assertEqual(self.read_work()["metadata"]["genres"], ["Literary fiction"])
+        self.assertEqual(self.read_work()["metadata"]["extent"]["basis_revision"], "r0001")
+
+    def test_partial_scope_cannot_infer_whole_work_form(self):
+        self.manifest["scope"]["kind"] = "selected_chapters"
+        self.save()
+        with self.assertRaisesRegex(ValueError, "whole-work coverage"):
+            metadata.update(self.root / "work.json", "enrich", proposals=[self.proposal("/form", "novel")])
+
+    def test_extent_counts_visible_text_without_markdown_urls_or_image_labels(self):
+        measured = metadata.measure(self.manifest, {
+            "chapter-1": "# A title\n\nOne *quiet* [word](https://example.com/hidden).\n\n![not counted](image.png)\n",
+        })
+        self.assertEqual(measured["word_count"], 5)
+        self.assertEqual(measured["non_whitespace_character_count"], len("AtitleOnequietword."))
+
+    def test_metadata_update_rejects_concurrent_edits(self):
+        path = self.root / "work.json"
+        before = path.read_bytes()
+        candidate = metadata.migrate(self.work)
+        self.work["metadata"]["title"] = "Concurrent correction"
+        self.save()
+        with self.assertRaisesRegex(ValueError, "concurrently"):
+            metadata.save(path, before, candidate)
+        self.assertEqual(self.read_work()["metadata"]["title"], "Concurrent correction")
+        self.assertFalse((self.root / ".metadata.lock").exists())
+
+    def test_extent_cannot_claim_unbound_units_or_whole_work_from_partial_source(self):
+        self.manifest["scope"]["kind"] = "selected_chapters"
+        self.save()
+        path = self.root / "work.json"
+        metadata.update(path, "enrich")
+        work = self.read_work()
+        extent = copy.deepcopy(work["metadata"]["extent"])
+        extent["scope"]["kind"] = "whole_work"
+        with self.assertRaisesRegex(ValueError, "whole-work coverage"):
+            metadata.update(path, "set", field="/extent", value=extent)
+        extent = copy.deepcopy(work["metadata"]["extent"])
+        extent["scope"]["chapter_ids"] = ["invented"]
+        with self.assertRaisesRegex(ValueError, "known units"):
+            metadata.update(path, "set", field="/extent", value=extent)
+        self.assertEqual(self.read_work(), work)
+
+    def test_metadata_cli_migrates_and_enriches_from_another_directory(self):
+        result = subprocess.run(
+            [sys.executable, "-B", str(Path(metadata.__file__).resolve()), "enrich", str(self.root / "work.json")],
+            cwd=self.base, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("/extent", json.loads(result.stdout)["applied"])
 
 
 if __name__ == "__main__":

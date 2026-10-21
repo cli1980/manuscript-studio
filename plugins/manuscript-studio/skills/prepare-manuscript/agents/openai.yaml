@@ -1,4 +1,4 @@
 interface:
   display_name: "Prepare Manuscript"
   short_description: "Prepare verified chapters and shared work metadata"
-  default_prompt: "Use $prepare-manuscript to discover manuscripts at the location I specify and create verified chapter Markdown with work metadata and downstream status."
+  default_prompt: "Use $prepare-manuscript to discover manuscripts at the location I specify, create verified chapter Markdown, infer missing shared metadata from textual evidence, preserve my metadata edits, and record downstream status."

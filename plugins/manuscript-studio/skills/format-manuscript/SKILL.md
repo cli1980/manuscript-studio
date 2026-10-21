@@ -45,6 +45,13 @@ edition scope, with `format-spec.md` as the state locator. If preparation is nee
 delegate it to [prepare-manuscript](../prepare-manuscript/SKILL.md). The shared
 status is a summary; design approval and output verification remain mandatory.
 
+Read and reuse the [shared manuscript metadata](../prepare-manuscript/references/manuscript-metadata.md)
+for title, credits, language, type/form, and edition context. Preserve user edits
+and the proposed/confirmed distinction; save explicit corrections under that
+contract. Record consumed fields in the format specification and refresh affected
+title pages, credits, or edition decisions if they change. Layout settings and
+design approvals remain formatting state, not shared descriptive metadata.
+
 ## Establish the Edition Profile
 
 Read [references/formatting-spec.md](references/formatting-spec.md) in full before creating or revising a specification.

@@ -1,16 +1,25 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "work_id": "example-work",
   "record_revision": 1,
   "updated_at": "2026-01-01T00:00:00Z",
   "metadata": {
     "title": null,
-    "authors": [],
-    "source_language": null,
+    "subtitle": null,
+    "contributors": [],
+    "original_language": null,
+    "manuscript_language": null,
     "work_type": null,
-    "genre": null,
-    "edition": null
+    "form": null,
+    "genres": [],
+    "audience": null,
+    "keywords": [],
+    "description": null,
+    "edition": {"label": null, "status": null},
+    "series": {"name": null, "position": null, "relationship": null},
+    "extent": null
   },
+  "metadata_provenance": {},
   "discovery": {
     "location_kind": "directory",
     "location": "REPLACE_WITH_USER_DESIGNATED_LOCATION",

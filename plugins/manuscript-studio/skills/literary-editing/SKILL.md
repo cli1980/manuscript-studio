@@ -44,6 +44,12 @@ Use the sibling [prepare-manuscript skill](../prepare-manuscript/SKILL.md) to ob
 
 Record the shared `work.json` locator, prepared revision, chapter mapping, and source/workspace identities in the editorial manifest and project state. Maintain only `workflows.literary-editing` under the [shared status contract](../prepare-manuscript/references/preparation-contract.md#downstream-status-and-ownership). Preparation readiness does not replace any editorial approval or source-sync gate.
 
+Read and reuse the [shared manuscript metadata](../prepare-manuscript/references/manuscript-metadata.md)
+before intake. Preserve supplied values and edits; treat inferred genre, form,
+audience, and description as proposals. Save explicit user corrections to the
+shared record under that contract and track the fields consumed by the editorial
+operation. Editorial judgments, style sheets, and proposals remain local.
+
 For an existing project, read [references/editorial-state.md](references/editorial-state.md) in full. Verify operating mode, both location identities, current review base, manuscript paths, active job, verdicts, proposals, approvals, exports, source-sync state, and shared records before resuming.
 
 If the necessary scope cannot be found, ask the user to provide it. A synopsis or sample cannot support a conclusive whole-manuscript verdict.

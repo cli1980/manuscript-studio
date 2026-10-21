@@ -235,6 +235,19 @@ class PreparationEvaluationTests(unittest.TestCase):
         self.assertEqual(self.statuses(report)["metadata"], "failed")
         self.assertEqual(self.statuses(report)["downstream_ownership"], "failed")
 
+    def test_v2_metadata_supports_legacy_expectations_and_common_fields(self):
+        template = checker.read_json(checker.SKILL / "references/work.example.json")
+        self.work["schema_version"] = 2
+        self.work["metadata"] = template["metadata"]
+        self.work["metadata"].update(title="Example", manuscript_language="en", genres=["Literary fiction"])
+        self.work["metadata_provenance"] = {}
+        self.case["expected_metadata"].update(
+            edition=None, contributors=[], manuscript_language="en", genres=["Literary fiction"],
+        )
+        self.assertEqual(self.statuses(self.evaluate())["metadata"], "passed")
+        self.case["expected_metadata"]["edition"] = {"label": None, "status": None}
+        self.assertEqual(self.statuses(self.evaluate())["metadata"], "passed")
+
     def test_resume_case_can_require_preservation_of_existing_workflow_state(self):
         existing = {
             "status": "completed", "basis_revision": "r0001", "scope": copy.deepcopy(self.manifest["scope"]),

@@ -67,12 +67,34 @@ def load_json(path):
 
 
 def validators():
-    schemas = [load_json(SCHEMAS / name) for name in ("work.schema.json", "revision.schema.json")]
+    schemas = [load_json(SCHEMAS / name) for name in (
+        "work.schema.json", "revision.schema.json", "manuscript-metadata.schema.json",
+    )]
     registry = Registry()
     for schema in schemas:
         Draft202012Validator.check_schema(schema)
         registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
-    return [Draft202012Validator(schema, registry=registry, format_checker=FormatChecker()) for schema in schemas]
+    return [Draft202012Validator(schema, registry=registry, format_checker=FormatChecker()) for schema in schemas[:2]]
+
+
+def manuscript_language(work):
+    key = "source_language" if work["schema_version"] == 1 else "manuscript_language"
+    return work["metadata"][key]
+
+
+def legacy_metadata(work):
+    """Compatibility view for existing evaluation expectations; never persisted."""
+    metadata = work["metadata"]
+    if work["schema_version"] == 1:
+        return metadata
+    return {
+        "title": metadata["title"],
+        "authors": [person["name"] for person in metadata["contributors"] if "author" in person["roles"]],
+        "source_language": metadata["manuscript_language"],
+        "work_type": metadata["work_type"],
+        "genre": metadata["genres"][0] if metadata["genres"] else None,
+        "edition": metadata["edition"]["label"],
+    }
 
 
 def schema_check(validator, value, label):
@@ -88,6 +110,9 @@ def validate(work_path, *, check_sources=False):
     work_validator, revision_validator = validators()
     work = load_json(work_path)
     schema_check(work_validator, work, "work")
+    if work["schema_version"] == 2:
+        ids = [person["id"] for person in work["metadata"]["contributors"]]
+        require(len(ids) == len(set(ids)), "Contributor IDs must be unique.")
     preparation = work["preparation"]
     current_revision = preparation["current_revision"]
     loaded = {}
@@ -144,6 +169,19 @@ def validate(work_path, *, check_sources=False):
         return manifest
 
     manifest = revision(current_revision) if current_revision else None
+    if work["schema_version"] == 2 and work["metadata"]["extent"] is not None:
+        extent = work["metadata"]["extent"]
+        basis = revision(extent["basis_revision"])
+        scope = extent["scope"]
+        ids = basis["scope"]["chapter_ids"]
+        require(all(chapter_id in ids for chapter_id in scope["chapter_ids"])
+                and scope["chapter_ids"] == [chapter_id for chapter_id in ids if chapter_id in scope["chapter_ids"]],
+                "Metadata extent must bind known units in source order.")
+        if scope["kind"] == "whole_work":
+            require(basis["scope"]["kind"] == "whole_work" and scope["chapter_ids"] == ids,
+                    "Metadata extent cannot claim whole-work coverage from a partial scope.")
+        require(extent["unit_count"] is None or extent["unit_count"] == len(scope["chapter_ids"]),
+                "Metadata extent unit count must match its scope.")
     if preparation["status"] == "not_started":
         require(current_revision is None, "Not-started preparation cannot claim a current revision.")
     if preparation["status"] == "ready":
@@ -151,7 +189,7 @@ def validate(work_path, *, check_sources=False):
                 "Ready preparation requires a verified revision manifest.")
         require(work["discovery"]["selection_status"] == "confirmed" and not preparation["blockers"],
                 "Ready preparation requires confirmed source selection and no blockers.")
-        require(work["metadata"]["source_language"] is not None, "Ready preparation requires the source language.")
+        require(manuscript_language(work) is not None, "Ready preparation requires the source language.")
     if preparation["status"] == "blocked":
         require(preparation["blockers"], "Blocked preparation must explain its blockers.")
     for name, state in work["workflows"].items():

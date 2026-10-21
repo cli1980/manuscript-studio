@@ -39,8 +39,13 @@ is not evidence that a work has been discovered or prepared.
 
 - `work_id`: stable lowercase identifier, independent of a filename or title edit.
 - `record_revision`, `updated_at`: revision and time of this shared metadata record.
-- `metadata`: title, author names, source language tag, work type, genre, edition.
-  Unknown values stay null or an empty author list; never invent them.
+- `metadata`: common editable descriptive fields defined by the
+  [shared metadata contract](manuscript-metadata.md), including credited contributors,
+  manuscript/original languages, type/form, genres, audience, edition, series,
+  and revision-scoped extent. Unknown values stay null or empty.
+- `metadata_provenance`: field-level evidence, inference/review status, confidence,
+  actor, and value hashes. New work records use schema version 2; legacy version-1
+  records remain readable and may be explicitly migrated with `prepare_metadata.py`.
 - `discovery`: the exact user-designated location, its kind, recursive permission,
   whether source selection is confirmed, and selection notes. A location may
   contain several works; each gets its own work record.
@@ -137,7 +142,10 @@ it cannot independently prove that an extraction faithfully reproduces a PDF.
 
 ## Downstream status and ownership
 
-Each workflow owns only its own summary entry:
+Each workflow owns only its own workflow summary entry. Any skill may also enrich
+missing shared metadata or persist explicit user edits under the
+[metadata update rules](manuscript-metadata.md#editability-provenance-and-updates);
+this does not authorize changing another workflow's state or approval records.
 
 - `status`: `not_started`, `in_progress`, `awaiting_approval`, `blocked`,
   `completed`, or `stale`.
@@ -185,6 +193,11 @@ workflows stale while retaining their old `basis_revision` and state locators.
 Create a new revision, re-extract or copy verified unchanged units, verify its
 coverage, and publish it before resuming affected work. Only the owning workflow
 may revalidate its decisions and move its status out of stale.
+
+Reassess source-bound metadata against the new revision and mark old inferences
+and counts stale until refreshed. Metadata-only edits increment the work record
+revision but do not create a source revision; consumers check the metadata fields
+they actually used and refresh affected outputs under the shared metadata contract.
 
 For an older project containing `original_chinese/`, `original_<language>/`,
 or `manuscript/chapters/`, verify those files against the designated original.

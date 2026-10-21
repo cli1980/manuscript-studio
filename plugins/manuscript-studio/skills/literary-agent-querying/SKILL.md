@@ -20,7 +20,7 @@ Build a truthful, manuscript-grounded query package through a short guided dialo
 9. Follow each named agent's current official submission requirements exactly. Browse official agency or agent sources when current requirements or market status matter.
 10. Treat agent rankings as evidence-based priorities, not guarantees of fit or representation. Use official agent or agency sources to verify identity, categories, exclusions, submission status, and requirements. Use reputable interviews or deal records only as supplementary fit evidence, and record source dates. Factor relevant, author-approved information into selection and ordering only when it was supplied or acquired with the manuscript at intake. Otherwise omit author-side factors rather than guessing, requesting disclosure solely for ranking, or treating missing credentials, platform, identity, or connections negatively.
 11. Prepare materials only. Do not submit a query, contact an agent, upload a form, or send a message without separate explicit authorization.
-12. In a writable project workspace, write all generated query artifacts beneath `<project-root>/query-package/`, creating that folder when needed. The designated shared `work.json` may receive only this workflow's status summary; it must not contain query prose or ledger content. Do not inspect or gate output on Git status, and do not stage or commit outputs unless the user separately asks. When no writable project root exists, including web chat, create Codex artifacts instead. Never write query outputs inside an editorial-process subfolder.
+12. In a writable project workspace, write all generated query artifacts beneath `<project-root>/query-package/`, creating that folder when needed. The designated shared `work.json` may receive this workflow's status summary and shared descriptive metadata updates under the metadata contract; it must not contain query prose or ledger content. Do not inspect or gate output on Git status, and do not stage or commit outputs unless the user separately asks. When no writable project root exists, including web chat, create Codex artifacts instead. Never write query outputs inside an editorial-process subfolder.
 13. Preserve the two output categories defined in [references/package-spec.md](references/package-spec.md): `query-package/static/` for reusable general information and `query-package/on-demand/` for terminal ZIP products authorized by a named-agent build, rebuild, or complete-regeneration request.
 14. Read manuscript and supporting inputs only from paths or attachments explicitly designated for this querying job. If a designated input is inside an editorial-process output folder, ask for an allowed source copy or attachment instead of reading it. Never use editorial assessments, normalized editorial manuscripts, proposals, style sheets, continuity records, reports, or exports as query evidence.
 15. Treat manuscript sources as read-only evidence. Existing static pitches, previous static query drafts, and model-generated summaries are leads to verify, not factual authorities. Treat every on-demand package as a terminal deliverable, never as evidence, prerequisite state, drafting input, or conversation context for later work.
@@ -61,6 +61,17 @@ and scope, with the static package manifest as the state locator. The ledger's
 evidence audit and human approval gate remain separate. If extraction is required,
 delegate it to [prepare-manuscript](../prepare-manuscript/SKILL.md) within the
 designated source location; do not introduce a Git preflight or broaden discovery.
+
+Read and reuse the [shared metadata contract](../prepare-manuscript/references/manuscript-metadata.md)
+before intake. Use its title, credited authors, languages, type/form, genres,
+audience, series, and revision-scoped extent instead of collecting them again.
+Check inferred positioning against the novel, preserve user edits, and save
+explicitly confirmed common corrections back to shared metadata. Query-specific
+emphasis and comparisons remain local. Shared descriptions never replace the
+approved story ledger. Record the shared locator, metadata record revision,
+prepared revision, and consumed metadata fields/values in the static manifest.
+Source extraction belongs to preparation; agent-specific sample selection and
+page-limit trimming remain querying operations.
 
 Read [references/questionnaire.md](references/questionnaire.md) in full before interviewing the author. Read [references/package-spec.md](references/package-spec.md) in full before drafting or validating outputs.
 

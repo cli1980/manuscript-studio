@@ -335,10 +335,14 @@ def evaluate(case_path, work_path, *, eval_root=ROOT, trace_path=None, visual_re
         add("package_contract", "failed", str(exc))
         manifest = None
     if isinstance(work, dict):
+        legacy = CONTRACT.legacy_metadata(work)
+        comparable_metadata = legacy | work["metadata"]
+        if "edition" in case["expected_metadata"] and not isinstance(case["expected_metadata"]["edition"], dict):
+            comparable_metadata["edition"] = legacy["edition"]
         matches = {
-            key: {"expected": value, "actual": work.get("metadata", {}).get(key)}
+            key: {"expected": value, "actual": comparable_metadata.get(key)}
             for key, value in case["expected_metadata"].items()
-            if work.get("metadata", {}).get(key) != value
+            if comparable_metadata.get(key) != value
         }
         add("metadata", "failed" if matches else "passed", matches or "Expected work metadata matches.")
         actual_status = work.get("preparation", {}).get("status")

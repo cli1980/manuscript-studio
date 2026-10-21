@@ -100,6 +100,34 @@ class WorkflowTests(unittest.TestCase):
     def prepare(self):
         self.engine.advance(ScriptedRuntime(self.preparation))
 
+    def test_editable_v2_metadata_does_not_change_prepared_source_identity(self):
+        def prepare_v2(request):
+            response = self.preparation(request)
+            path = self.workspace / response["work_record"]
+            work = json.loads(path.read_text(encoding="utf-8"))
+            template = self.engine.root / "skills/prepare-manuscript/references/work.example.json"
+            work["schema_version"] = 2
+            work["metadata"] = json.loads(template.read_text(encoding="utf-8"))["metadata"]
+            work["metadata"].update(title="Story", manuscript_language="zh")
+            work["metadata_provenance"] = {}
+            self.write(response["work_record"], work)
+            return response
+
+        self.engine.advance(ScriptedRuntime(prepare_v2))
+        state = self.engine.state()
+        relative = state["prepared"]["work_record"]
+        work = json.loads(self.engine.file(relative).read_text(encoding="utf-8"))
+        work["metadata"]["title"] = "Corrected title"
+        work["metadata"]["genres"] = ["Literary fiction"]
+        work["record_revision"] += 1
+        self.write(relative, work)
+        self.engine.verify(state)
+        self.assertIn("Corrected title", self.engine.prompt(state))
+        work["metadata"]["manuscript_language"] = "fr"
+        self.write(relative, work)
+        with self.assertRaisesRegex(ValueError, "language metadata differs"):
+            self.engine.verify(state)
+
     def sheet(self, revision="1", resolved=False):
         return {
             "schema_version": "1.0", "sheet_id": "map-story", "revision": revision,

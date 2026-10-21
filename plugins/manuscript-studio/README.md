@@ -15,6 +15,12 @@ The plugin does not include an MCP server or request access to external
 services. Each skill operates on files, attachments, project workspaces, or
 Codex artifacts made available by the active product surface.
 
+All manuscript workflows reuse the
+[shared metadata contract](skills/prepare-manuscript/references/manuscript-metadata.md).
+Preparation extracts explicit metadata and infers missing descriptive fields from
+the text with evidence and confidence. Values remain editable; subsequent
+enrichment preserves supplied values and user corrections.
+
 ## Install from GitHub
 
 Add the repository marketplace:

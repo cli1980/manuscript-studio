@@ -1,6 +1,6 @@
 ---
 name: prepare-manuscript
-description: Discover manuscripts within a user-designated location, identify the authoritative work and requested scope, extract verified chapter-based UTF-8 Markdown, and maintain a shared work metadata and downstream-status manifest. Use before literary editing or translation, when preparing a PDF, DOC, DOCX, text, or Markdown manuscript for downstream workflows, or when existing prepared source data must be verified or refreshed.
+description: Discover manuscripts within a user-designated location, identify the authoritative work and requested scope, extract verified chapter-based UTF-8 Markdown, and maintain editable shared manuscript metadata with evidence-bound inference of missing descriptive values and downstream status. Use before literary editing or translation, when preparing a PDF, DOC, DOCX, text, or Markdown manuscript for downstream workflows, or when existing prepared source data or shared metadata must be verified, enriched, or refreshed.
 ---
 
 # Prepare Manuscript
@@ -13,6 +13,8 @@ Read [the preparation contract](references/preparation-contract.md) before creat
 or changing project files. Use [work.schema.json](schemas/work.schema.json) for
 the shared work record and [revision.schema.json](schemas/revision.schema.json)
 for each prepared source revision.
+Read [the shared metadata contract](references/manuscript-metadata.md) before
+recording or inferring metadata. Use schema-version-2 work records for new packages.
 
 ## 1. Resolve the input location and output destination
 
@@ -44,8 +46,10 @@ file merely by filename or modification time when authority is ambiguous.
 For multiple works, create one package and stable `work_id` per work. Resolve
 ambiguous source selection with the user. Record `selection_status: confirmed`
 only after the choice follows an explicit designation or confirmation.
-Use null or empty values for unknown title, author, edition, genre, or language;
-do not infer facts from folder names alone.
+Preserve supplied metadata. Extract explicit credits and titles, and infer missing
+descriptive values from verified manuscript text under the shared metadata
+contract. Keep unsupported identities or edition claims null/empty; do not infer
+facts from folder names alone.
 
 Confirm whether the requested scope is the whole work or named complete chapters.
 An incomplete excerpt is not a complete chapter. Record missing material as a
@@ -74,7 +78,7 @@ source makes the correct representation objectively clear, and record the repair
 Do not silently copyedit, modernize, translate, expand, or improve the prose.
 Keep unresolved OCR, missing-page, boundary, or structural problems as blockers.
 
-## 4. Verify and publish the prepared revision
+## 4. Verify, enrich metadata, and publish the prepared revision
 
 Compare every extracted unit with its source locators. Verify that the requested
 scope is represented exactly once, with no missing, duplicated, or reordered
@@ -85,6 +89,17 @@ Record the extraction tool and method, source fingerprints or provider versions,
 ordered chapter IDs and paths, source spans, chapter and asset hashes, verification
 evidence, and unresolved issues in the revision manifest. Use `verified` only
 after the source comparison and coverage checks pass.
+
+While preparation remains `in_progress`, analyze the verified text for missing
+language, type, form, genre, audience, keywords, and description; extract other
+fields only where explicitly supported. Write the evidence-bound proposal JSON
+specified in the metadata contract and run `scripts/prepare_metadata.py enrich`
+with that file. The helper computes missing extent and preserves supplied values
+and edits. Inference is part of this skill's reading task, not a keyword-based
+guess in the validator. Report unsupported fields as unknown and inferred values
+as proposed; do not fabricate values or require an extra blanket approval.
+When the user edits metadata, save the correction through the helper or reconcile
+their direct edits; do not re-extract unchanged chapters.
 
 Validate before marking preparation ready:
 

@@ -8,6 +8,14 @@ Before starting the rounds, inspect the current conversation and allowed query-p
 
 Do not make the author repeat established answers. If changed source identity or broken provenance makes reuse unsafe, mark the artifacts `not-ready` and ask the author to authorize a refresh instead of starting one. Do not let reuse preserve time-sensitive agent research; always reverify current agent and agency submission facts for an on-demand package.
 
+A designated shared `work.json` is also reusable intake even when no query package
+exists. Read its metadata and provenance first. Reuse title/subtitle, author-role
+contributors, language, type/form, genres, audience, series, and current extent.
+Present inferred classifications as proposals and resolve only missing,
+conflicting, or consequential unconfirmed values. Do not mistake extraction
+readiness for manuscript finality, an inferred audience for confirmed positioning,
+or stale/partial extent for the current complete manuscript's word count.
+
 ## Interview sequence
 
 ### Round 1: Goal and source
