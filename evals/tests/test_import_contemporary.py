@@ -78,16 +78,19 @@ class CorpusImportTests(unittest.TestCase):
             source = (directory / case["source_file"]).resolve()
             passage = json.loads((directory / case["source_metadata_file"]).read_text(encoding="utf-8"))
             self.assertEqual(source.read_bytes(), record["chinese"].encode("utf-8"))
-            self.assertEqual((directory / "translation.en.txt").read_bytes(), record["english"].encode("utf-8"))
+            self.assertEqual((directory / case["candidates"][0]["translation_file"]).read_bytes(), record["english"].encode("utf-8"))
             self.assertEqual((directory / "judgments.jsonl").read_bytes(), b"")
             self.assertEqual(case["group_id"], "contemporary-test-story")
             self.assertEqual(passage["group_id"], case["group_id"])
             self.assertEqual(passage["passage_id"], case["passage_id"])
-            self.assertEqual(case["provenance"]["attribution"], record["rights"]["attribution"])
-            self.assertEqual(case["provenance"]["source_credits"], ["Credited translator"])
+            self.assertEqual(case["schema_version"], 2)
+            candidate = case["candidates"][0]
+            self.assertRegex(candidate["candidate_id"], r"^c-[a-f0-9]{16}$")
+            self.assertEqual(candidate["provenance"]["attribution"], record["rights"]["attribution"])
+            self.assertEqual(candidate["provenance"]["source_credits"], ["Credited translator"])
             self.assertEqual(passage["provenance"]["source_credits"], ["Original author"])
-            self.assertEqual(case["provenance"]["usage_rights"], "permitted")
-            self.assertEqual(case["provenance"]["corpus_review"], record["review"])
+            self.assertEqual(candidate["provenance"]["usage_rights"], "permitted")
+            self.assertEqual(candidate["provenance"]["corpus_review"], record["review"])
         self.assertTrue((self.output / "imports/contemporary-corpus/manifest.json").is_file())
 
     def test_repeat_import_preserves_new_human_judgments(self):
@@ -98,6 +101,22 @@ class CorpusImportTests(unittest.TestCase):
         report = importer.import_corpus(self.corpus, self.output)
         self.assertEqual(report["new_directories"], 0)
         self.assertEqual(path.read_bytes(), review)
+
+    def test_repeat_import_preserves_added_candidates(self):
+        importer.import_corpus(self.corpus, self.output)
+        directory = self.output / "cases/literary-translation/zh-en-contemporary-001"
+        path = directory / "case.json"
+        case = json.loads(path.read_text(encoding="utf-8"))
+        case["candidates"].append({
+            "candidate_id": "variant", "revision": 1, "translation_file": "variant.en.txt",
+            "status": "placeholder", "provenance": {},
+        })
+        path.write_text(json.dumps(case, ensure_ascii=False), encoding="utf-8")
+        (directory / "variant.en.txt").write_text("Additional candidate.")
+        before = path.read_bytes()
+        importer.import_corpus(self.corpus, self.output)
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual((directory / "variant.en.txt").read_text(), "Additional candidate.")
 
     def test_dry_run_does_not_create_files(self):
         report = importer.import_corpus(self.corpus, self.output, dry_run=True)

@@ -167,11 +167,19 @@ port directly on an untrusted network.
 
 ## Review behavior
 
+- Review is blind to candidate origin: IDs are opaque, their order does not encode
+  an arm, and model names, filenames, provenance, derivation links, reference
+  English titles, and case hints are excluded from API responses. Legacy labels
+  receive opaque session aliases. Private authoring files retain audit metadata.
+- Each source case contains zero or more translation candidates. Select a candidate
+  above the comparison to view its text, your current scores, and its own history.
+  Switching asks before discarding unsaved edits. Source text stays shared.
+  Multiple-candidate case cards show completed-candidate counts.
 - Original texts, translations, case context, and the session's reviewer label
   are read-only. The editable form contains overall and dimension scores,
   comments, issue annotations, and draft/complete assessment status.
 - **Your review** automatically loads your latest current assessment for the
-  case, source revision, and assigned rubric. If you have not reviewed that version,
+  case, candidate/revision, source revision, and assigned rubric. If you have not reviewed that version,
   it starts with an empty form. There is no assessment-selection dropdown.
 - Case cards and the open case's subtitle show **Not reviewed**, **Draft**, or
   **Completed** for this judge, using the same current-review rules as the form.
@@ -189,8 +197,9 @@ port directly on an untrusted network.
   score from 1 to 5. Optional
   dimensions and evidence-backed issues are supported. Overall scores are not
   calculated automatically.
-- **Mark complete** saves the review, collapses the completed case, and opens the
-  next unfinished case in the selected skill for the signed-in judge. It skips that judge's completed current
+- **Mark complete** saves the review and opens the next unfinished candidate in
+  the same case before moving to the next case for the signed-in judge. It skips
+  empty candidates and that judge's completed current
   reviews and wraps to earlier unfinished cases when needed. A newer draft,
   another judge's score, or a review for an old revision or rubric does not count
   as completed. When none remain, the case stays collapsed and the page announces
@@ -208,7 +217,7 @@ port directly on an untrusted network.
   change rubric versions. A maintainer can set `rubric_id` in `case.json`; otherwise
   the server uses the sole matching rubric for the case's language pair. If the
   assignment is missing or ambiguous, drafts are allowed but completion is blocked.
-- Completed judgments remain associated with their case and source revisions.
+- Completed judgments remain associated with their case, candidate, and source revisions.
   Historical or superseded assessments are inspectable but cannot be amended.
   A changed rubric requires a new assessment. Judges cannot change the brief,
   identity, source binding, revisions, or provenance.
@@ -219,7 +228,8 @@ port directly on an untrusted network.
   without saving. The interface keeps the local form edits and shows **Load latest
   review** only after a conflict. Loading the latest review asks before discarding
   unsaved edits. There is no permanent reload button. Versions cover case
-  metadata, source metadata, both texts, the assigned rubric, and judgment history.
+  metadata, source metadata, all candidate texts, the assigned rubric, and judgment history.
+  A concurrent edit to another candidate therefore also requires reloading.
 - Writes use a process lock and staged replacement. Submission shares the
   same lock, so API edits cannot race with publication. This is a single-process
   file workspace, not a database transaction across multiple independent servers.

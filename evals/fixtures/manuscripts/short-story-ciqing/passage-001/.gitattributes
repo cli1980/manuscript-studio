@@ -1,2 +1,0 @@
-# Preserve the hash-bound extraction, including source-authored trailing spaces.
-source.zh.txt text eol=lf whitespace=-blank-at-eol

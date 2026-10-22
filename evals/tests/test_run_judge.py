@@ -15,6 +15,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import run_judge as judge
+from translation_cases import migrate_case, candidates, discover_cases
+from prepare_translation import prepare_tasks
+from migrate_translation_cases import migrate
+import generate_translation_candidates as generator
+from anonymize_translation_candidates import anonymize
 
 CASE_ID = "zh-en-modern-001"
 REVIEWER = "private-human-label"
@@ -37,6 +42,17 @@ class JudgeTests(unittest.TestCase):
         ):
             shutil.copytree(judge.ROOT / relative, self.root / relative)
         self.case_root = self.root / f"cases/literary-translation/{CASE_ID}"
+        # Keep legacy coverage explicit even after repository fixtures migrate.
+        path = self.case_root / "case.json"
+        case = json.loads(path.read_text(encoding="utf-8"))
+        if case.get("schema_version") == 2:
+            baseline = next(c for c in case.pop("candidates") if c["provenance"]["translation_origin"] == "user-provided")
+            original = (self.case_root / baseline["translation_file"]).read_bytes()
+            (self.case_root / "translation.en.txt").write_bytes(original)
+            case.update(schema_version=1, translation_file="translation.en.txt",
+                        provenance=baseline["provenance"])
+            case.pop("translation_instructions", None)
+            path.write_text(json.dumps(case), encoding="utf-8")
         self.history = self.case_root / "judgments.jsonl"
         self.older = {
             "judgment_id": "older", "case_id": CASE_ID, "case_revision": 1,
@@ -255,6 +271,232 @@ class JudgeTests(unittest.TestCase):
         self.assertIn("LLM score", output.getvalue())
         self.assertNotIn("Human reference reviewer", output.getvalue())
         self.assertNotIn("MAE", output.getvalue())
+
+    def multi_candidate(self):
+        path = self.case_root / "case.json"
+        case, history = migrate_case(json.loads(path.read_text(encoding="utf-8")), [self.older, self.latest])
+        case["candidates"].append({
+            "candidate_id": "adverse", "revision": 1, "translation_file": "adverse.en.txt",
+            "status": "ready", "derived_from": "baseline",
+            "provenance": {"usage_rights": "permitted", "intended_defect": "SECRET_VARIANT_LABEL"},
+        })
+        (self.case_root / "adverse.en.txt").write_text("A distinct synthetic candidate for isolation tests.", encoding="utf-8")
+        path.write_text(json.dumps(case), encoding="utf-8")
+        history.append({
+            **self.latest, "judgment_id": "adverse-review", "candidate_id": "adverse",
+            "candidate_revision": 1, "overall_score": 1, "supersedes_judgment_id": None,
+        })
+        self.write_history(history)
+        return case
+
+    def test_each_candidate_is_judged_independently_and_bound_to_its_human_scores(self):
+        self.multi_candidate()
+        response = {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(PREDICTION)}}]}
+        with patch.dict(os.environ, {"EVAL_TEST_KEY": "fake"}):
+            with patch.object(judge, "call_model", return_value=response) as model:
+                destination, manifest = judge.run(self.args(prepare_only=False))
+        self.assertEqual(model.call_count, 2)
+        inputs = [json.loads(call.args[0]["messages"][1]["content"]) for call in model.call_args_list]
+        self.assertEqual(inputs[0]["source_text"], inputs[1]["source_text"])
+        self.assertNotEqual(inputs[0]["translation_text"], inputs[1]["translation_text"])
+        self.assertNotIn("SECRET_VARIANT_LABEL", json.dumps([call.args[0] for call in model.call_args_list]))
+        self.assertNotIn("SECRET_HUMAN", json.dumps([call.args[0] for call in model.call_args_list]))
+        for cid, human in (("baseline", "latest"), ("adverse", "adverse-review")):
+            comparison = json.loads((destination / CASE_ID / cid / "comparison.json").read_text())
+            self.assertEqual(comparison["human_judgment_id"], human)
+            self.assertEqual(comparison["candidate_id"], cid)
+        self.assertEqual(manifest["status"], "completed")
+        summary = json.loads((destination / "summary.json").read_text())
+        self.assertEqual(summary["unique_case_count"], 1)
+        self.assertEqual(summary["cases_requested"], 1)
+        self.assertEqual(summary["cases_compared"], 1)
+        self.assertEqual(summary["candidates_compared"], 2)
+        self.assertEqual(summary["candidates_requested"], 2)
+        self.assertEqual(summary["case_macro_metrics"]["overall_score"]["count"], 1)
+
+    def test_candidate_filter_and_cross_candidate_amendments(self):
+        self.multi_candidate()
+        destination, manifest = judge.run(self.args(candidate="adverse"))
+        self.assertEqual(len(manifest["cases"]), 1)
+        self.assertEqual(manifest["cases"][0]["candidate_id"], "adverse")
+        self.assertTrue((destination / CASE_ID / "adverse/request.json").exists())
+        records = [json.loads(line) for line in self.history.read_text().splitlines()]
+        records[-1]["supersedes_judgment_id"] = "latest"
+        self.write_history(records)
+        with self.assertRaisesRegex(judge.EvaluationError, "cross candidate"):
+            judge.human_reference(self.prepared(candidate_id="adverse"), REVIEWER)
+
+    def test_case_macro_metrics_do_not_overweight_cases_with_more_candidates(self):
+        case = self.multi_candidate()
+        other_id = "another-task"
+        directory = self.case_root.parent / other_id
+        directory.mkdir()
+        case["case_id"] = other_id
+        case["translation_instructions"] = "A different translation task."
+        case["candidates"] = case["candidates"][:1]
+        (directory / "case.json").write_text(json.dumps(case))
+        (directory / "translation.en.txt").write_text("Another synthetic candidate.")
+        review = {
+            **self.latest, "case_id": other_id, "judgment_id": "other-review",
+            "candidate_id": "baseline", "candidate_revision": 1,
+            "overall_score": 3, "supersedes_judgment_id": None,
+        }
+        (directory / "judgments.jsonl").write_text(json.dumps(review) + "\n")
+        response = {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(PREDICTION)}}]}
+        with patch.dict(os.environ, {"EVAL_TEST_KEY": "fake"}):
+            with patch.object(judge, "call_model", return_value=response):
+                destination, _ = judge.run(self.args(prepare_only=False, case=[CASE_ID, other_id]))
+        summary = json.loads((destination / "summary.json").read_text())
+        self.assertEqual(summary["cases_requested"], 2)
+        self.assertEqual(summary["candidates_requested"], 3)
+        self.assertEqual(summary["metrics"]["overall_score"]["mean_absolute_error"], 1)
+        self.assertEqual(summary["case_macro_metrics"]["overall_score"]["mean_absolute_error"], .75)
+
+    def test_translator_inputs_are_source_only_and_shared_variants_do_not_duplicate_tasks(self):
+        self.multi_candidate()
+        self.history.unlink()
+        (self.case_root / "translation.en.txt").unlink()
+        (self.case_root / "adverse.en.txt").unlink()
+        tasks = prepare_tasks(self.root, [CASE_ID])
+        self.assertEqual(len(tasks), 1)
+        self.assertEqual(set(tasks[0]["input"]), {"source_text", "source_language", "target_language", "translation_instructions"})
+        self.assertNotIn("SECRET_", json.dumps(tasks))
+        duplicate_id = "same-source-another-case"
+        duplicate = self.case_root.parent / duplicate_id
+        duplicate.mkdir()
+        case = json.loads((self.case_root / "case.json").read_text())
+        case["case_id"] = duplicate_id
+        (duplicate / "case.json").write_text(json.dumps(case))
+        self.assertEqual(len(prepare_tasks(self.root, [CASE_ID, duplicate_id])), 1)
+        case["translation_instructions"] = "Use British English."
+        (duplicate / "case.json").write_text(json.dumps(case))
+        self.assertEqual(len(prepare_tasks(self.root, [CASE_ID, duplicate_id])), 2)
+
+    def test_local_only_case_is_excluded_from_batches_but_can_be_selected_explicitly(self):
+        cid = "local-long-case"
+        directory = self.case_root.parent / cid
+        shutil.copytree(self.case_root, directory)
+        path = directory / "case.json"
+        case = json.loads(path.read_text(encoding="utf-8"))
+        case["case_id"] = cid
+        path.write_text(json.dumps(case), encoding="utf-8")
+        (directory / ".local-only").write_text("Manual testing only.")
+        self.assertEqual([p.parent.name for p in discover_cases(self.case_root.parent)], [CASE_ID])
+        _, manifest = judge.run(self.args(case=None, all=True))
+        self.assertEqual([item["case_id"] for item in manifest["cases"]], [CASE_ID])
+        self.assertEqual(judge.prepare_case(self.root, cid, smoke_test=True)["case"]["case_id"], cid)
+        self.assertEqual(prepare_tasks(self.root, [cid])[0]["case_id"], cid)
+
+    def test_empty_candidate_collection_still_supports_external_translation(self):
+        case = self.multi_candidate()
+        case["candidates"] = []
+        (self.case_root / "case.json").write_text(json.dumps(case))
+        external = self.root.parent / "new.en.txt"
+        external.write_text("A newly generated candidate.")
+        prepared = self.prepared(purpose="judge", translation_file=external)
+        self.assertIsNone(prepared["candidate"])
+        self.assertEqual(json.loads(prepared["request"]["messages"][1]["content"])["translation_text"],
+                         external.read_text())
+
+    def test_candidate_contract_rejects_duplicates_and_derivation_cycles(self):
+        case = self.multi_candidate()
+        case["candidates"][0]["derived_from"] = "adverse"
+        with self.assertRaisesRegex(ValueError, "cycles"):
+            candidates(case)
+        case["candidates"][0].pop("derived_from")
+        case["candidates"][1]["candidate_id"] = "baseline"
+        with self.assertRaisesRegex(ValueError, "unique"):
+            candidates(case)
+
+    def test_case_migration_preserves_text_scores_history_and_is_idempotent(self):
+        source_path = self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt"
+        source = source_path.read_bytes()
+        english = (self.case_root / "translation.en.txt").read_bytes()
+        old = self.history.read_bytes()
+        self.assertEqual(migrate(self.root)["files"], 2)
+        self.assertEqual(self.history.read_bytes(), old)
+        report = migrate(self.root, write=True)
+        self.assertTrue(Path(report["backup"]).is_dir())
+        history = [json.loads(line) for line in self.history.read_text().splitlines()]
+        for before, after in zip((self.older, self.latest), history):
+            self.assertEqual({key: after[key] for key in before}, before)
+            self.assertEqual(after["candidate_id"], "baseline")
+            self.assertEqual(after["candidate_revision"], before["case_revision"])
+        self.assertEqual(source_path.read_bytes(), source)
+        self.assertEqual((self.case_root / "translation.en.txt").read_bytes(), english)
+        self.assertEqual(migrate(self.root, write=True)["files"], 0)
+
+    def test_anonymization_preserves_text_ratings_and_private_mapping(self):
+        case = self.multi_candidate()
+        before_text = {c["candidate_id"]: (self.case_root / c["translation_file"]).read_bytes() for c in case["candidates"]}
+        before_ratings = [json.loads(line) for line in self.history.read_text().splitlines()]
+        result = anonymize(self.root, write=True)
+        self.assertEqual(result["candidates"], 2)
+        mappings = json.loads(Path(result["private_mapping"]).read_text(encoding="utf-8"))
+        by_old = {item["old_id"]: item for item in mappings}
+        current = json.loads((self.case_root / "case.json").read_text(encoding="utf-8"))
+        for item in mappings:
+            self.assertRegex(item["new_id"], r"^c-[a-f0-9]{16}$")
+            self.assertEqual((self.case_root / item["new_file"]).read_bytes(), before_text[item["old_id"]])
+        variant = next(c for c in current["candidates"] if c["candidate_id"] == by_old["adverse"]["new_id"])
+        self.assertEqual(variant["derived_from"], by_old["baseline"]["new_id"])
+        after_ratings = [json.loads(line) for line in self.history.read_text(encoding="utf-8").splitlines()]
+        for old, new in zip(before_ratings, after_ratings):
+            self.assertEqual(new["candidate_id"], by_old[old["candidate_id"]]["new_id"])
+            self.assertEqual({k:v for k,v in new.items() if k!="candidate_id"}, {k:v for k,v in old.items() if k!="candidate_id"})
+        self.assertEqual(anonymize(self.root, write=True)["candidates"], 0)
+        # Private identity and provenance still never enter judge requests.
+        prepared = self.prepared(candidate_id=variant["candidate_id"])
+        self.assertNotIn("SECRET_VARIANT_LABEL", json.dumps(prepared["request"]))
+
+    def test_minimal_generation_preserves_other_candidates_and_reviews_and_resumes(self):
+        self.multi_candidate()
+        history = self.history.read_bytes()
+        baseline = (self.case_root / "translation.en.txt").read_bytes()
+        task = prepare_tasks(self.root, [CASE_ID], instructions=generator.PROMPT)[0]
+        request = generator.request_for(task, "azure/openai/gpt-4.1-mini")
+        self.assertEqual(request["messages"], [
+            {"role": "system", "content": "translate the Chinese to English"},
+            {"role": "user", "content": task["input"]["source_text"]},
+        ])
+        response = {
+            "model": "gpt-4.1-mini", "created": 1,
+            "usage": {"completion_tokens_details": {"reasoning_tokens": 0}},
+            "choices": [{"finish_reason": "stop", "message": {"content": "Synthetic transport fixture, not an actual translation."}}],
+        }
+        destination = self.root / "results/generation-test"
+        destination.mkdir(parents=True)
+        args = Namespace(model="azure/openai/gpt-4.1-mini", candidate_id=None)
+        with patch.object(generator, "call_model", return_value=response) as model:
+            first = generator.generate(task, args, self.root, destination, "https://example.test/v1/chat/completions", "fake")
+            # Older run artifacts lack an ID assignment; recover the published
+            # opaque identity from request/source provenance rather than duplicate it.
+            (destination / CASE_ID / "candidate-id.json").unlink()
+            args.resume = destination
+            second = generator.generate(task, args, self.root, destination, "https://example.test/v1/chat/completions", "fake")
+        self.assertEqual(model.call_count, 1)
+        self.assertEqual(first["published"][CASE_ID], "published")
+        self.assertEqual(second["published"][CASE_ID], "unchanged")
+        self.assertEqual(self.history.read_bytes(), history)
+        self.assertEqual((self.case_root / "translation.en.txt").read_bytes(), baseline)
+        case = json.loads((self.case_root / "case.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(case["candidates"]), 3)
+        self.assertRegex(first["candidate_id"], r"^c-[a-f0-9]{16}$")
+        self.assertEqual(first["candidate_id"], second["candidate_id"])
+        generated = next(c for c in case["candidates"] if c["candidate_id"] == first["candidate_id"])
+        self.assertEqual(generated["provenance"]["instruction"], generator.PROMPT)
+
+    def test_minimal_generator_rejects_reasoning_models_and_truncated_responses(self):
+        task = prepare_tasks(self.root, [CASE_ID])[0]
+        with self.assertRaisesRegex(judge.EvaluationError, "non-reasoning"):
+            generator.request_for(task, "reasoning-model")
+        with self.assertRaisesRegex(judge.EvaluationError, "Incomplete"):
+            generator.output_text({"choices": [{"finish_reason": "length", "message": {"content": "Partial"}}]})
+        with self.assertRaisesRegex(judge.EvaluationError, "reasoning tokens"):
+            generator.output_text({
+                "choices": [{"finish_reason": "stop", "message": {"content": "Text"}}],
+                "usage": {"completion_tokens_details": {"reasoning_tokens": 10}},
+            })
 
     def test_judge_only_can_prepare_case_candidate_without_human_file(self):
         self.history.unlink()

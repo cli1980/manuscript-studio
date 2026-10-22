@@ -1,0 +1,2 @@
+# Candidate text is verbatim evaluation evidence; preserve its bytes on checkout.
+*/candidates/*.en.txt -text

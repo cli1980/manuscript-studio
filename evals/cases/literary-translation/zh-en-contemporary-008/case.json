@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "case_id": "zh-en-contemporary-008",
   "revision": 1,
   "status": "ready",
@@ -9,44 +9,108 @@
   "source_file": "../../../fixtures/manuscripts/contemporary-ambrose-hair-salon-but-story/passage-008/source.zh.txt",
   "source_metadata_file": "../../../fixtures/manuscripts/contemporary-ambrose-hair-salon-but-story/passage-008/passage.json",
   "source_revision": 1,
-  "translation_file": "translation.en.txt",
   "group_id": "contemporary-ambrose-hair-salon-but-story",
   "passage_id": "contemporary-ambrose-hair-salon-but-story-passage-008",
   "rubric_id": "literary-translation-quality-v1",
   "context": {
     "brief": null
   },
-  "provenance": {
-    "usage_rights": "permitted",
-    "license": "CC BY-SA 3.0",
-    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
-    "attribution": "安布罗斯发廊奇遇记 / The Wonderful Adventure at the Ambrose Restaurant, by Lynyiee , Containment Breacher. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/ambrose-hair-salon-but-story and https://scp-int.wikidot.com/ambrose-hair-salon-but-story.",
-    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
-    "corpus_collection": "contemporary_corpus",
-    "corpus_record_id": "contemporary-008",
-    "source_work_id": "ambrose-hair-salon-but-story",
-    "retrieved_date": "2026-10-19",
-    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
-    "translation_origin": "published English translation",
-    "translator": "Not separately named in the retrieved credit box; see linked English page history and retained credits.",
-    "title_en": "The Wonderful Adventure at the Ambrose Restaurant",
-    "source_url": "https://scp-int.wikidot.com/ambrose-hair-salon-but-story",
-    "english_history_url": "https://scp-int.wikidot.com/ambrose-hair-salon-but-story/history",
-    "source_credits": [],
-    "source_snapshot_sha256": "9c0e8721a7e50a9980fea695521d11ce6bdc4dbc5da74ba9850534c53fa5847c",
-    "extracted_block_range_exclusive": [
-      145,
-      162
-    ],
-    "english_word_count": 603,
-    "selection_type": "complete_scene_or_story",
-    "corpus_review": {
-      "reviewer": "Codex (AI)",
-      "date": "2026-10-19",
-      "boundary_rationale": "Punke's haircut episode proceeds from choosing a style to the barber's comic failure.",
-      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
-      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
-      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  "candidates": [
+    {
+      "candidate_id": "c-37d176d76c6d447f",
+      "revision": 1,
+      "translation_file": "candidates/c-37d176d76c6d447f.en.txt",
+      "status": "ready",
+      "provenance": {
+        "translation_origin": "synthetic model translation",
+        "purpose": "minimal-prompt adverse-candidate pool",
+        "quality_status": "unreviewed; degradation is not assumed",
+        "requested_model": "azure/openai/gpt-4.1-mini",
+        "returned_model": "azure/openai/gpt-4.1-mini",
+        "non_reasoning_model": true,
+        "instruction": "translate the Chinese to English",
+        "generation_settings": {
+          "temperature": 0,
+          "max_tokens": 6000
+        },
+        "request_sha256": "39812c5bfce1a5afb0513909f24f5c32be5b4253a3bce49e486aafbad3ef94cc",
+        "response_id": "chatcmpl-EbbDo6owg7z9xUeOfxFOEvFxdq9kP",
+        "generated_at": "2026-10-22T00:45:24+00:00",
+        "usage": {
+          "completion_tokens": 713,
+          "prompt_tokens": 843,
+          "total_tokens": 1556,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          },
+          "latency_checkpoint": {
+            "engine_tbt_ms": 8,
+            "engine_ttft_ms": 41,
+            "engine_ttlt_ms": 5764,
+            "pre_inference_ms": 104,
+            "service_tbt_ms": 8,
+            "service_ttft_ms": 374,
+            "service_ttlt_ms": 6089,
+            "user_visible_ttft_ms": 270
+          }
+        },
+        "generation_artifacts": "results/synthetic-translations-p_5iw50i/zh-en-contemporary-008",
+        "task_id": "269840ba8de0f9c76ce40336065129d4f53753a882c93327dc010c1308b421cf",
+        "source_revision": 1,
+        "source_sha256": "c452df5f6c02ce4142f3f5912cb1eeddede28c798074fc261d4055fbe56b4b41",
+        "translation_sha256": "2b74c5288214e1efda28671d0f07080c7f07fe8af36a0081835aa57c2dcd9afc",
+        "usage_rights": "permitted",
+        "attribution": "Chinese source: 安布罗斯发廊奇遇记; author: Lynyiee , Containment Breacher; https://scp-cn.wiki/ambrose-hair-salon-but-story. Synthetic English translation generated with azure/openai/gpt-4.1-mini.",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/"
+      }
+    },
+    {
+      "candidate_id": "c-6b3779833a804481",
+      "revision": 1,
+      "translation_file": "candidates/c-6b3779833a804481.en.txt",
+      "status": "ready",
+      "provenance": {
+        "usage_rights": "permitted",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "attribution": "安布罗斯发廊奇遇记 / The Wonderful Adventure at the Ambrose Restaurant, by Lynyiee , Containment Breacher. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/ambrose-hair-salon-but-story and https://scp-int.wikidot.com/ambrose-hair-salon-but-story.",
+        "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+        "corpus_collection": "contemporary_corpus",
+        "corpus_record_id": "contemporary-008",
+        "source_work_id": "ambrose-hair-salon-but-story",
+        "retrieved_date": "2026-10-19",
+        "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+        "translation_origin": "published English translation",
+        "translator": "Not separately named in the retrieved credit box; see linked English page history and retained credits.",
+        "title_en": "The Wonderful Adventure at the Ambrose Restaurant",
+        "source_url": "https://scp-int.wikidot.com/ambrose-hair-salon-but-story",
+        "english_history_url": "https://scp-int.wikidot.com/ambrose-hair-salon-but-story/history",
+        "source_credits": [],
+        "source_snapshot_sha256": "9c0e8721a7e50a9980fea695521d11ce6bdc4dbc5da74ba9850534c53fa5847c",
+        "extracted_block_range_exclusive": [
+          145,
+          162
+        ],
+        "english_word_count": 603,
+        "selection_type": "complete_scene_or_story",
+        "corpus_review": {
+          "reviewer": "Codex (AI)",
+          "date": "2026-10-19",
+          "boundary_rationale": "Punke's haircut episode proceeds from choosing a style to the barber's comic failure.",
+          "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+          "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+          "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+        }
+      }
     }
-  }
+  ],
+  "translation_instructions": null
 }

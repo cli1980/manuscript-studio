@@ -1,0 +1,65 @@
+Although Connor was transferred to the protein synthesis project, he was only responsible for one part of it—synthesizing short peptides from amino acids. He had mastered the part he was in charge of, but beyond that, he knew nothing.
+
+In fact, he had anticipated this situation before coming. Proteins have complex structures, and synthesizing proteins should be like an assembly line in industry, with each person responsible for only one part of the process.
+
+But he knew that Whitmore’s computer contained the complete information.
+
+So, one evening, he knocked on Whitmore’s office door.
+
+“Come in.”
+
+Connor opened the door and walked in.
+
+“Oh, it’s you... I should have told you not to bother me when it’s nothing important—so you better have something important to say.”
+
+Connor walked to the side of his desk and glanced at the computer screen. Sure enough, it was GOCOS.
+
+When he was at the Foundation, he had chatted briefly with an agent retired from the GOC. During that conversation, he learned that the computers storing important files in the GOC used a self-developed operating system called GOCOS. Its security was extremely strong—to the extent that every wrong password attempt was recorded. Even if you got the password, you still needed fingerprint and facial recognition. But he, a biologist, after understanding the situation and discussing with an AI worker, had learned how to “crack” this operating system in one morning.
+
+“I want to apply for a week off,” Connor said.
+
+“Impossible,” Whitmore replied curtly.
+
+“My wife’s birthday is coming up soon...”
+
+“I should have told you not to bother me when it’s nothing important.”
+
+Connor left Whitmore’s office—he knew his request would definitely be denied, but that wasn’t his real purpose. He had timed it precisely: that night, the cameras in this area would be under maintenance, and no one would notice him.
+
+That night, Connor left the dormitory, avoided the patrolling security guards, and carried his laptop into Whitmore’s office. Whitmore’s office should have been locked, but when he visited in the evening, he had stuck the gum Carter gave him onto the lock.
+
+He knew the closer he got to success, the more careful he had to be. He tiptoed toward the computer, afraid that the sound of his footsteps would cause unnecessary trouble.
+
+Finally, he reached the computer case and hid behind the desk.
+
+Next, he was going to use the skills he had learned from the AI worker that morning to crack this computer.
+
+Connor was panting, trying to calm himself. The power button on the case was right there, but he couldn’t press it—he didn’t know the password, and the moment he pressed the button, his fingerprint would be recorded.
+
+He took out the tool to crack the computer from his pocket—a screwdriver.
+
+He unscrewed the screws on the case, clenched them in his hand, then gently placed the case cover on the floor. He didn’t dare to turn on a flashlight, so he groped in the dark and pulled out the hard drive.
+
+He opened his laptop—the screen brightness was already set to the lowest. He took out a small device from his bag, inserted the hard drive into it, and connected the device’s USB to his laptop.
+
+The files were small; it took less than a minute to copy them.
+
+He closed the laptop, reinserted the hard drive into its original slot, picked up the screwdriver, and screwed the case cover back on. Suddenly, footsteps sounded outside—it was probably a patrolling security guard. He quickly lowered his body, kept his hands still, and didn’t move until the footsteps faded away.
+
+With trembling hands, he finished screwing the screws and put the case back in place. Then, he tiptoed back to the dormitory as quietly as when he came.
+
+His work was not finished yet. The data contained a lot of content, and it was difficult to take it all back. So, he had to master every detail in the data and rewrite a concise document himself.
+
+* * *
+
+Site-18, Site Director’s Office.
+
+“The deadline is approaching,” Hayes said, “Do you think he’ll come back?”
+
+“He will,” Serena replied.
+
+“I don’t doubt his will, but the GOC’s supervision might really be flawless.”
+
+“That’s why he’s going. Only he can complete this mission. I know what kind of person he is. If he’s trapped behind an impenetrable wall, he’ll dig a hole through it.”
+
+“I believe in him,” Hayes said, looking out the window.

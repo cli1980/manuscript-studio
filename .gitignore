@@ -5,3 +5,12 @@
 __pycache__/
 /.workflow-runs/
 /.venv-workflow/
+
+# Long manuscript cases are local-only manual tests.
+/evals/cases/literary-translation/zh-en-ciqing-001/
+/evals/cases/prepare-manuscript/docx-novel-001/
+/evals/fixtures/manuscripts/short-story-ciqing/
+/evals/fixtures/manuscripts/novel-sample/
+/evals/fixtures/reference-outputs/prepare-manuscript/docx-novel-001/
+/workflow/tests/cases/translation-ciqing-001/
+/workflow/tests/fixtures/short-story-ciqing/

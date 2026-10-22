@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "case_id": "zh-en-contemporary-012",
   "revision": 1,
   "status": "ready",
@@ -9,46 +9,110 @@
   "source_file": "../../../fixtures/manuscripts/contemporary-hecatolite/passage-012/source.zh.txt",
   "source_metadata_file": "../../../fixtures/manuscripts/contemporary-hecatolite/passage-012/passage.json",
   "source_revision": 1,
-  "translation_file": "translation.en.txt",
   "group_id": "contemporary-hecatolite",
   "passage_id": "contemporary-hecatolite-passage-012",
   "rubric_id": "literary-translation-quality-v1",
   "context": {
     "brief": null
   },
-  "provenance": {
-    "usage_rights": "permitted",
-    "license": "CC BY-SA 3.0",
-    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
-    "attribution": "月长石 / Hecatolite, by Lumina Mio. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/hecatolite and https://scp-int.wikidot.com/hecatolite.",
-    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
-    "corpus_collection": "contemporary_corpus",
-    "corpus_record_id": "contemporary-012",
-    "source_work_id": "hecatolite",
-    "retrieved_date": "2026-10-19",
-    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
-    "translation_origin": "published English translation",
-    "translator": "Not separately named in the retrieved credit box; see linked English page history and retained credits.",
-    "title_en": "Hecatolite",
-    "source_url": "https://scp-int.wikidot.com/hecatolite",
-    "english_history_url": "https://scp-int.wikidot.com/hecatolite/history",
-    "source_credits": [
-      "rating: +1 + – x close Credits Author: Lumina Mio Plastering her fingertips with the scattered moonlight, she drew a magnificent cloak for her scarred heart. See here for more works. close"
-    ],
-    "source_snapshot_sha256": "27e1bcda4dbd01541ba1ae618a1f1a495d34877e7a9eabcdde25f3ec0d365473",
-    "extracted_block_range_exclusive": [
-      7,
-      16
-    ],
-    "english_word_count": 587,
-    "selection_type": "complete_scene_or_story",
-    "corpus_review": {
-      "reviewer": "Codex (AI)",
-      "date": "2026-10-19",
-      "boundary_rationale": "A complete recollection of testing and accepting Shiina's magical-girl claim.",
-      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
-      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
-      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  "candidates": [
+    {
+      "candidate_id": "c-2ae560a710fd4bb2",
+      "revision": 1,
+      "translation_file": "candidates/c-2ae560a710fd4bb2.en.txt",
+      "status": "ready",
+      "provenance": {
+        "usage_rights": "permitted",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "attribution": "月长石 / Hecatolite, by Lumina Mio. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/hecatolite and https://scp-int.wikidot.com/hecatolite.",
+        "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+        "corpus_collection": "contemporary_corpus",
+        "corpus_record_id": "contemporary-012",
+        "source_work_id": "hecatolite",
+        "retrieved_date": "2026-10-19",
+        "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+        "translation_origin": "published English translation",
+        "translator": "Not separately named in the retrieved credit box; see linked English page history and retained credits.",
+        "title_en": "Hecatolite",
+        "source_url": "https://scp-int.wikidot.com/hecatolite",
+        "english_history_url": "https://scp-int.wikidot.com/hecatolite/history",
+        "source_credits": [
+          "rating: +1 + – x close Credits Author: Lumina Mio Plastering her fingertips with the scattered moonlight, she drew a magnificent cloak for her scarred heart. See here for more works. close"
+        ],
+        "source_snapshot_sha256": "27e1bcda4dbd01541ba1ae618a1f1a495d34877e7a9eabcdde25f3ec0d365473",
+        "extracted_block_range_exclusive": [
+          7,
+          16
+        ],
+        "english_word_count": 587,
+        "selection_type": "complete_scene_or_story",
+        "corpus_review": {
+          "reviewer": "Codex (AI)",
+          "date": "2026-10-19",
+          "boundary_rationale": "A complete recollection of testing and accepting Shiina's magical-girl claim.",
+          "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+          "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+          "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+        }
+      }
+    },
+    {
+      "candidate_id": "c-ef356f63d3d34e04",
+      "revision": 1,
+      "translation_file": "candidates/c-ef356f63d3d34e04.en.txt",
+      "status": "ready",
+      "provenance": {
+        "translation_origin": "synthetic model translation",
+        "purpose": "minimal-prompt adverse-candidate pool",
+        "quality_status": "unreviewed; degradation is not assumed",
+        "requested_model": "azure/openai/gpt-4.1-mini",
+        "returned_model": "azure/openai/gpt-4.1-mini",
+        "non_reasoning_model": true,
+        "instruction": "translate the Chinese to English",
+        "generation_settings": {
+          "temperature": 0,
+          "max_tokens": 6000
+        },
+        "request_sha256": "b6af37ad0efa3117155709f75d466b8d6658de36133c910211ed843c8ee64db2",
+        "response_id": "chatcmpl-EbbDyrV7nAAoygBILp77n8oLoifaM",
+        "generated_at": "2026-10-22T00:45:34+00:00",
+        "usage": {
+          "completion_tokens": 732,
+          "prompt_tokens": 941,
+          "total_tokens": 1673,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          },
+          "latency_checkpoint": {
+            "engine_tbt_ms": 7,
+            "engine_ttft_ms": 31,
+            "engine_ttlt_ms": 5066,
+            "pre_inference_ms": 107,
+            "service_tbt_ms": 7,
+            "service_ttft_ms": 230,
+            "service_ttlt_ms": 5260,
+            "user_visible_ttft_ms": 123
+          }
+        },
+        "generation_artifacts": "results/synthetic-translations-p_5iw50i/zh-en-contemporary-012",
+        "task_id": "36843d5360c93f604fb0d277f03495d0b57d8422c158a61c6cff4c7b33995b60",
+        "source_revision": 1,
+        "source_sha256": "c7df1d9531b777ef38fcf86cb055f7d68138088eebcb33342876830601b0ba93",
+        "translation_sha256": "cb428663decb3f10372d9a3df2a04ec0e81cadfccf4af60ac4ee3c42f1c8b4d8",
+        "usage_rights": "permitted",
+        "attribution": "Chinese source: 月长石; author: Lumina Mio; https://scp-cn.wiki/hecatolite. Synthetic English translation generated with azure/openai/gpt-4.1-mini.",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/"
+      }
     }
-  }
+  ],
+  "translation_instructions": null
 }

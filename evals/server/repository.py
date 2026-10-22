@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .models import JudgmentCreate
+from ..translation_cases import candidates, judgment_candidate, OPAQUE_CANDIDATE, new_candidate_id
 
 SKILLS = {
     "prepare-manuscript": "Prepare manuscript",
@@ -70,6 +71,84 @@ class Repository:
             if not directory.is_dir():
                 raise DataError("Required evaluation data directories are missing.")
         self.lock = threading.RLock()
+        self.review_aliases = {}
+
+    def review_id(self, case_id, kind, original):
+        if original is None:
+            return None
+        if kind == "candidate" and OPAQUE_CANDIDATE.fullmatch(original):
+            return original
+        with self.lock:
+            aliases = self.review_aliases.setdefault(case_id, {})
+            key = (kind, original)
+            if key not in aliases:
+                aliases[key] = new_candidate_id() if kind == "candidate" else "j-" + uuid.uuid4().hex[:16]
+            return aliases[key]
+
+    def resolve_review_id(self, case_id, kind, supplied):
+        if supplied is None:
+            return None
+        with self.lock:
+            for (entry_kind, original), alias in self.review_aliases.get(case_id, {}).items():
+                if entry_kind == kind and alias == supplied:
+                    return original
+        if kind == "candidate" and OPAQUE_CANDIDATE.fullmatch(supplied):
+            return supplied
+        raise DataError("Use an ID from the current review interface; reload if needed.", 404)
+
+    @staticmethod
+    def review_source(metadata):
+        # Do not expose English titles, credits, URLs, or evaluation notes.
+        return {key: metadata[key] for key in ("passage_id", "group_id", "revision", "source_language") if key in metadata}
+
+    @staticmethod
+    def review_case_metadata(metadata):
+        return {key: metadata[key] for key in (
+            "case_id", "revision", "status", "source_language", "target_language",
+            "passage_id", "group_id", "source_revision", "rubric_id",
+        ) if key in metadata}
+
+    def review_view(self, case):
+        """Public evaluator view; filesystem/provenance records stay private."""
+        cid = case["metadata"]["case_id"]
+        def candidate_metadata(item):
+            return {"candidate_id": self.review_id(cid, "candidate", item["candidate_id"]),
+                    "revision": item["revision"], "status": item["status"]}
+        def judgment(item):
+            result = {key: item[key] for key in (
+                "case_id", "case_revision", "passage_id", "source_revision", "rubric_version",
+                "rater_id", "status", "overall_score", "dimension_scores", "rationale", "issues", "created_at",
+            ) if key in item}
+            candidate_id, revision = judgment_candidate(item, case["metadata"])
+            result.update(candidate_id=self.review_id(cid, "candidate", candidate_id),
+                          candidate_revision=revision,
+                          judgment_id=self.review_id(cid, "judgment", item["judgment_id"]),
+                          supersedes_judgment_id=self.review_id(cid, "judgment", item.get("supersedes_judgment_id")))
+            return result
+        visible = [
+            {"metadata": candidate_metadata(item["metadata"]), "translation": item["translation"],
+             "judgments": [judgment(j) for j in item["judgments"]]}
+            for item in case["candidates"]
+        ]
+        # Opaque lexical order is stable and independent of original/AI ordering.
+        visible.sort(key=lambda item: item["metadata"]["candidate_id"])
+        return {
+            "skill": case["skill"], "metadata": self.review_case_metadata(case["metadata"]),
+            "source": {"metadata": self.review_source(case["source"]["metadata"]), "text": case["source"]["text"]},
+            "candidates": visible,
+            "candidate": candidate_metadata(case["candidate"]) if case["candidate"] else None,
+            "translation": case["translation"], "judgments": [judgment(j) for j in case["judgments"]],
+            "all_judgments": [judgment(j) for j in case["all_judgments"]],
+            "rubric": case["rubric"], "version": case["version"],
+        }
+
+    def get_review_case(self, case_id, candidate_id=None):
+        raw_id = self.resolve_review_id(case_id, "candidate", candidate_id)
+        result = self.review_view(self.get_case(case_id, raw_id))
+        if candidate_id is None and result["candidates"]:
+            first = result["candidates"][0]
+            result.update(candidate=first["metadata"], translation=first["translation"], judgments=first["judgments"])
+        return result
 
     def guarded(self, path, area):
         path = Path(os.path.abspath(path))
@@ -214,7 +293,7 @@ class Repository:
         ]
         return candidates[0] if len(candidates) == 1 else None
 
-    def get_case(self, case_id):
+    def get_case(self, case_id, candidate_id=None):
         skill, path = self.case_path(case_id)
         if skill != "literary-translation":
             raise DataError("This skill does not yet have a case editor.", 409)
@@ -232,10 +311,22 @@ class Repository:
             raise DataError("Case and source revisions do not match.")
         if self.reference(path.parent, metadata.get("source_file"), self.passages) != source_path:
             raise DataError("Case and passage source references disagree.")
-        translation_path = self.reference(path.parent, metadata.get("translation_file"), path.parent)
-        if translation_path.name != "translation.en.txt" and translation_path.name != "translation.txt":
-            raise DataError("Unsupported translation filename.")
-        translation = self.text(translation_path, self.cases)
+        try:
+            candidate_metadata = candidates(metadata)
+        except ValueError as exc:
+            raise DataError(str(exc)) from exc
+        candidate_data = []
+        for candidate in candidate_metadata:
+            translation_path = self.reference(path.parent, candidate["translation_file"], path.parent)
+            if translation_path.suffix.lower() not in {".txt", ".md"}:
+                raise DataError("Candidates must reference UTF-8 text or Markdown.")
+            translation = self.text(translation_path, self.cases)
+            candidate_data.append({"metadata": candidate, "translation": translation})
+        selected = next((item for item in candidate_data if item["metadata"]["candidate_id"] == candidate_id), None)
+        if candidate_id is not None and selected is None:
+            raise DataError("Candidate not found.", 404)
+        if candidate_id is None:
+            selected = candidate_data[0] if candidate_data else None
         judgments_path = self.guarded(path.parent / "judgments.jsonl", self.cases)
         raw_judgments = self.read(judgments_path, self.cases) if judgments_path.exists() else b""
         try:
@@ -243,6 +334,7 @@ class Repository:
         except (ValueError, UnicodeError) as exc:
             raise DataError("Invalid judgment records.") from exc
         ids = set()
+        bindings = {}
         for judgment in judgments:
             if not isinstance(judgment, dict) or judgment.get("case_id") != case_id:
                 raise DataError("Judgment identity does not match the case.")
@@ -250,18 +342,35 @@ class Repository:
             if jid in ids:
                 raise DataError("Duplicate judgment identifier.")
             ids.add(jid)
+            try:
+                binding = judgment_candidate(judgment, metadata)
+            except ValueError as exc:
+                raise DataError(str(exc)) from exc
+            if binding[0] not in {item["candidate_id"] for item in candidate_metadata}:
+                raise DataError("Judgment references an unknown candidate.")
+            parent = judgment.get("supersedes_judgment_id")
+            if parent and bindings.get(parent) != binding:
+                raise DataError("Judgment amendments must stay within the same candidate revision.")
+            bindings[jid] = binding
+        for item in candidate_data:
+            cid = item["metadata"]["candidate_id"]
+            item["judgments"] = [j for j in judgments if bindings[j["judgment_id"]][0] == cid]
         rubric = self.assigned_rubric(metadata)
         digest = hashlib.sha256()
         for content in (
             encoded(metadata), encoded(source),
-            passage["text"].encode("utf-8"), translation.encode("utf-8"),
+            passage["text"].encode("utf-8"), encoded(candidate_data),
             raw_judgments, encoded(rubric),
         ):
             digest.update(len(content).to_bytes(8, "big"))
             digest.update(content)
         return {
             "skill": skill, "metadata": metadata, "source": passage,
-            "translation": translation, "judgments": judgments, "rubric": rubric, "version": digest.hexdigest(),
+            "candidates": candidate_data,
+            "candidate": selected["metadata"] if selected else None,
+            "translation": selected["translation"] if selected else "",
+            "judgments": selected["judgments"] if selected else [],
+            "all_judgments": judgments, "rubric": rubric, "version": digest.hexdigest(),
         }
 
     def list_cases(self, skill):
@@ -276,6 +385,8 @@ class Repository:
                 continue
             self.guarded(path, directory)
             if not path.is_dir():
+                continue
+            if (path / ".local-only").exists():
                 continue
             identifier(path.name)
             metadata = self.json(path / "case.json", directory)
@@ -306,16 +417,23 @@ class Repository:
             if os.path.exists(temporary):
                 os.unlink(temporary)
 
-    def current(self, case_id, version):
-        case = self.get_case(case_id)
+    def current(self, case_id, version, candidate_id=None):
+        case = self.get_case(case_id, candidate_id)
         if case["version"] != version:
             raise DataError("This case changed since you opened it. Reload before saving.", 409)
         return case
 
     def add_judgment(self, case_id, data: JudgmentCreate, *, rater_id: str):
         with self.lock:
-            case = self.current(case_id, data.version)
+            case = self.current(case_id, data.version, data.candidate_id)
             metadata = case["metadata"]
+            candidate = case["candidate"]
+            if candidate is None or (len(case["candidates"]) > 1 and data.candidate_id is None):
+                raise DataError("Choose the candidate being reviewed.")
+            if data.candidate_revision is not None and data.candidate_revision != candidate["revision"]:
+                raise DataError("Candidate revision changed; reload before saving.", 409)
+            if data.status == "complete" and not case["translation"].strip():
+                raise DataError("An empty candidate cannot receive a completed assessment.")
             rubric_id = case["rubric"]["rubric_id"] if case["rubric"] else None
             if data.status == "complete" and (
                 not rubric_id or data.overall_score is None
@@ -328,6 +446,7 @@ class Repository:
                     j["judgment_id"] not in superseded and j.get("rater_id") == rater_id
                     and j.get("case_revision") == metadata["revision"]
                     and j.get("source_revision") == metadata["source_revision"]
+                    and judgment_candidate(j, metadata) == (candidate["candidate_id"], candidate["revision"])
                     and j.get("rubric_version") == rubric_id), None)
                 supersedes = latest["judgment_id"] if latest else None
             if supersedes:
@@ -340,6 +459,8 @@ class Repository:
                     raise DataError("This assessment belongs to another reviewer. Start an independent assessment.", 403)
                 if previous.get("case_revision") != metadata["revision"] or previous.get("source_revision") != metadata["source_revision"]:
                     raise DataError("Start a new assessment for the current text revision.", 409)
+                if judgment_candidate(previous, metadata) != (candidate["candidate_id"], candidate["revision"]):
+                    raise DataError("Start a new assessment for the current candidate revision.", 409)
                 if previous.get("rubric_version") and previous["rubric_version"] != rubric_id:
                     raise DataError("Start a new assessment for the configured rubric.", 409)
                 if (
@@ -358,12 +479,13 @@ class Repository:
                 "supersedes_judgment_id": supersedes,
                 "judgment_id": "judgment-" + uuid.uuid4().hex,
                 "case_id": case_id, "case_revision": metadata["revision"],
+                "candidate_id": candidate["candidate_id"], "candidate_revision": candidate["revision"],
                 "passage_id": metadata["passage_id"], "source_revision": metadata["source_revision"],
                 "rubric_version": rubric_id,
                 "rater_id": rater_id,
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
-            content = "".join(json.dumps(j, ensure_ascii=False) + "\n" for j in [*case["judgments"], judgment]).encode("utf-8")
-            self.current(case_id, data.version)
+            content = "".join(json.dumps(j, ensure_ascii=False) + "\n" for j in [*case["all_judgments"], judgment]).encode("utf-8")
+            self.current(case_id, data.version, candidate["candidate_id"])
             self.atomic(self.case_path(case_id)[1].parent / "judgments.jsonl", content, self.cases)
-            return self.get_case(case_id)
+            return self.get_case(case_id, candidate["candidate_id"])

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "case_id": "zh-en-contemporary-045",
   "revision": 1,
   "status": "ready",
@@ -9,44 +9,108 @@
   "source_file": "../../../fixtures/manuscripts/contemporary-dig/passage-045/source.zh.txt",
   "source_metadata_file": "../../../fixtures/manuscripts/contemporary-dig/passage-045/passage.json",
   "source_revision": 1,
-  "translation_file": "translation.en.txt",
   "group_id": "contemporary-dig",
   "passage_id": "contemporary-dig-passage-045",
   "rubric_id": "literary-translation-quality-v1",
   "context": {
     "brief": null
   },
-  "provenance": {
-    "usage_rights": "permitted",
-    "license": "CC BY-SA 3.0",
-    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
-    "attribution": "挖 / Dig, by Freedom Koo. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/dig and https://scp-int.wikidot.com/dig.",
-    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
-    "corpus_collection": "contemporary_corpus",
-    "corpus_record_id": "contemporary-045",
-    "source_work_id": "dig",
-    "retrieved_date": "2026-10-19",
-    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
-    "translation_origin": "published English translation",
-    "translator": "Not separately named in the retrieved credit box; see linked English page history and retained credits.",
-    "title_en": "Dig",
-    "source_url": "https://scp-int.wikidot.com/dig",
-    "english_history_url": "https://scp-int.wikidot.com/dig/history",
-    "source_credits": [],
-    "source_snapshot_sha256": "ac7cb9e6d0937b2606ad3b8a9d8da08b26aa5120498b775ad237d6a9f73ef250",
-    "extracted_block_range_exclusive": [
-      2,
-      24
-    ],
-    "english_word_count": 610,
-    "selection_type": "complete_scene_or_story",
-    "corpus_review": {
-      "reviewer": "Codex (AI)",
-      "date": "2026-10-19",
-      "boundary_rationale": "The continuous working-day action, from beginning to gnaw the rock to the catastrophe and final sentence.",
-      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
-      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
-      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  "candidates": [
+    {
+      "candidate_id": "c-d84d9b7cd4934bf1",
+      "revision": 1,
+      "translation_file": "candidates/c-d84d9b7cd4934bf1.en.txt",
+      "status": "ready",
+      "provenance": {
+        "translation_origin": "synthetic model translation",
+        "purpose": "minimal-prompt adverse-candidate pool",
+        "quality_status": "unreviewed; degradation is not assumed",
+        "requested_model": "azure/openai/gpt-4.1-mini",
+        "returned_model": "azure/openai/gpt-4.1-mini",
+        "non_reasoning_model": true,
+        "instruction": "translate the Chinese to English",
+        "generation_settings": {
+          "temperature": 0,
+          "max_tokens": 6000
+        },
+        "request_sha256": "37cf0396b980bd46af505d123059f31957c85c061b35ed28902f663db33d4e63",
+        "response_id": "chatcmpl-EbbF7fK12XWEoT6XQ1BYTe5Ec52OY",
+        "generated_at": "2026-10-22T00:46:45+00:00",
+        "usage": {
+          "completion_tokens": 832,
+          "prompt_tokens": 1158,
+          "total_tokens": 1990,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          },
+          "latency_checkpoint": {
+            "engine_tbt_ms": 8,
+            "engine_ttft_ms": 34,
+            "engine_ttlt_ms": 6309,
+            "pre_inference_ms": 401,
+            "service_tbt_ms": 7,
+            "service_ttft_ms": 586,
+            "service_ttlt_ms": 6791,
+            "user_visible_ttft_ms": 185
+          }
+        },
+        "generation_artifacts": "results/synthetic-translations-p_5iw50i/zh-en-contemporary-045",
+        "task_id": "c2ffedcae2aedf17a005f1b6c973e5f562bfc60092021d81af053d1b1021b00f",
+        "source_revision": 1,
+        "source_sha256": "31898b14fd924727f3e9504ec5a9c40dbb9407fc6d7e6245a8937b35fafee77c",
+        "translation_sha256": "1d5f44259e8fb76b11f88ecd088171458bd9e47c85f48715422bda6fce3bfd99",
+        "usage_rights": "permitted",
+        "attribution": "Chinese source: 挖; author: Freedom Koo; https://scp-cn.wiki/dig. Synthetic English translation generated with azure/openai/gpt-4.1-mini.",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/"
+      }
+    },
+    {
+      "candidate_id": "c-dbeba46aab83405a",
+      "revision": 1,
+      "translation_file": "candidates/c-dbeba46aab83405a.en.txt",
+      "status": "ready",
+      "provenance": {
+        "usage_rights": "permitted",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "attribution": "挖 / Dig, by Freedom Koo. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/dig and https://scp-int.wikidot.com/dig.",
+        "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+        "corpus_collection": "contemporary_corpus",
+        "corpus_record_id": "contemporary-045",
+        "source_work_id": "dig",
+        "retrieved_date": "2026-10-19",
+        "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+        "translation_origin": "published English translation",
+        "translator": "Not separately named in the retrieved credit box; see linked English page history and retained credits.",
+        "title_en": "Dig",
+        "source_url": "https://scp-int.wikidot.com/dig",
+        "english_history_url": "https://scp-int.wikidot.com/dig/history",
+        "source_credits": [],
+        "source_snapshot_sha256": "ac7cb9e6d0937b2606ad3b8a9d8da08b26aa5120498b775ad237d6a9f73ef250",
+        "extracted_block_range_exclusive": [
+          2,
+          24
+        ],
+        "english_word_count": 610,
+        "selection_type": "complete_scene_or_story",
+        "corpus_review": {
+          "reviewer": "Codex (AI)",
+          "date": "2026-10-19",
+          "boundary_rationale": "The continuous working-day action, from beginning to gnaw the rock to the catastrophe and final sentence.",
+          "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+          "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+          "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+        }
+      }
     }
-  }
+  ],
+  "translation_instructions": null
 }

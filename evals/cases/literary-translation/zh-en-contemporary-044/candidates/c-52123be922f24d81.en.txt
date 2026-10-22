@@ -1,0 +1,55 @@
+Hey you, come over here for a second—take a look at this project file you organized, and can you tell me how you managed to produce something like this?
+
+Huh? Let me see...
+There’s nothing wrong with this, right? I remember that pine tree giant was indeed like this, right? Hairless surface, 13.2 meters long.
+
+The content is definitely fine—the entire document was written by 7-Sleeping Lotus alone. But if I remember correctly, I asked you yesterday to add tags according to the tagging guidelines, right? You went overboard with the tags, and I’m speechless.
+
+Wait a moment, let me check...
+No, is there a problem with this?
+goc keter scp uiu China neutralization living wood biological population
+
+...
+Alright, I guess you probably tore up the tagging guidelines and threw them like darts. First of all, where are your original tags?
+
+What’s this?
+
+Let me put it this way. This tag is used to mark anomalies that were discovered and archived independently by a certain branch. Sometimes, anomalies managed by other branches require our assistance in containment, and our documentation staff will translate their documents into Chinese—for the sake of distinguishing this type of document, we set an “original” tag. By the way, the “China” tag can only be used on this type of translated document. The anomalies described in documents with this tag sometimes are active in China, so they require extra attention.
+
+goc keter scp uiu original neutralization living wood biological population
+Fixed it. I thought that thing was a branch tag.
+
+That’s something used by the translation relay station, and they use “cn.”
+Also, why do you have two project level tags?
+
+Wasn’t that thing assigned to the GOC people? It should be neutralized then.
+
+That’s not the issue.
+You need to know that too much redundant information doesn’t help our containment efforts—for example, an anomaly whose classification has been changed but the old classification is still listed. Therefore, each document only needs one unique project level tag, and in most cases, this tag represents the anomaly’s final status.
+
+Next is “goc.” Although the abbreviation is easy to say, when adding tags, you need to use “Global Occult Coalition.” This rule is said to exist because “goc” might cause some, uh, subtle abbreviation issues, which “uiu” does not have.
+By the way, if “uiu” only appears in the sponsorship section of a GOC blue header file, you don’t need to add the corresponding tag.
+
+scp global occult coalition original neutralization wood living biological population
+This should be fine now (.
+
+Don’t rush, it’s still early. Who told you that “living” and “biological” can be used together?
+
+Wha—aren’t biological things living things?
+
+“Biological,” as the name implies, refers to anomalies composed of biological components. Therefore, “living” is a subset of “biological,” so generally the former replaces the latter.
+Of course, there’s another case where they conflict and cannot coexist: for example, “autonomous” is used to mark dead objects that have gained self-activation ability for various reasons, so it actually conflicts with “living.”
+
+Finally, you also used a seemingly appropriate former tag—“wood.” These tags are under the “uncategorized” section of the tagging guidelines. This tag was split in 2021 into household items, trees, and some other smaller tags. The articles still using this tag are old documents gathering dust in the archives. If you’re not an old-timer, replace this thing for me.
+
+scp global occult coalition original neutralization tree living population
+Done!
+
+Wait, I just saw something really cool, hold on a second.
+
+?
+
+scp global occult coalition original comedy neutralization tree living population absurdist fiction black comedy
+
+???
+Get back here!

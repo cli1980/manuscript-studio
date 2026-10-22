@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "case_id": "zh-en-modern-001",
   "revision": 1,
   "status": "placeholder",
@@ -9,14 +9,76 @@
   "source_file": "../../../fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt",
   "source_metadata_file": "../../../fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json",
   "source_revision": 1,
-  "translation_file": "translation.en.txt",
   "group_id": "modern-lu-xun-guxiang",
   "passage_id": "modern-lu-xun-guxiang-passage-001",
   "context": {
     "brief": null
   },
-  "provenance": {
-    "translation_origin": "user-provided",
-    "usage_rights": "pending"
-  }
+  "candidates": [
+    {
+      "candidate_id": "c-0ec25f69e693482b",
+      "revision": 1,
+      "translation_file": "candidates/c-0ec25f69e693482b.en.txt",
+      "status": "placeholder",
+      "provenance": {
+        "translation_origin": "synthetic model translation",
+        "purpose": "minimal-prompt adverse-candidate pool",
+        "quality_status": "unreviewed; degradation is not assumed",
+        "requested_model": "azure/openai/gpt-4.1-mini",
+        "returned_model": "azure/openai/gpt-4.1-mini",
+        "non_reasoning_model": true,
+        "instruction": "translate the Chinese to English",
+        "generation_settings": {
+          "temperature": 0,
+          "max_tokens": 6000
+        },
+        "request_sha256": "ae1b4b4692d90252895103c2eb538de7e45e6d3bf62e30e729e5be9c5ee05427",
+        "response_id": "chatcmpl-EbbFFV6dsaFIvInVP8Fca3zGG9vzI",
+        "generated_at": "2026-10-22T00:46:53+00:00",
+        "usage": {
+          "completion_tokens": 681,
+          "prompt_tokens": 745,
+          "total_tokens": 1426,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          },
+          "latency_checkpoint": {
+            "engine_tbt_ms": 7,
+            "engine_ttft_ms": 39,
+            "engine_ttlt_ms": 4633,
+            "pre_inference_ms": 118,
+            "service_tbt_ms": 7,
+            "service_ttft_ms": 518,
+            "service_ttlt_ms": 5176,
+            "user_visible_ttft_ms": 400
+          }
+        },
+        "generation_artifacts": "results/synthetic-translations-p_5iw50i/zh-en-modern-001",
+        "task_id": "e228683895a87ab9177804fc08e3634389d01e8dcb48fa9503ded3bd1a0d6db5",
+        "source_revision": 1,
+        "source_sha256": "53a2c854aa47567fe528bc5da8c04bcc595cb7845cbd0185cea53b3a2e340128",
+        "translation_sha256": "d1f678f94fe2555688208405bcb4903c85a29f94c9c1d658734777485ec0bf03",
+        "usage_rights": "pending",
+        "attribution": "Chinese source: 故乡; author: Lu Xun (鲁迅); user-provided source. Synthetic English translation generated with azure/openai/gpt-4.1-mini."
+      }
+    },
+    {
+      "candidate_id": "c-a6d5073edf634788",
+      "revision": 1,
+      "translation_file": "candidates/c-a6d5073edf634788.en.txt",
+      "status": "placeholder",
+      "provenance": {
+        "translation_origin": "user-provided",
+        "usage_rights": "pending"
+      }
+    }
+  ],
+  "translation_instructions": null
 }

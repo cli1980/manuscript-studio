@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 
 from .repository import DataError, Repository, SKILLS
+from ..translation_cases import candidates
 
 MAX_WORKSPACE = 16 * 1024 * 1024
 
@@ -33,8 +34,9 @@ def snapshot(repository):
             include(path, repository.cases)
             if skill == "literary-translation":
                 repository.get_case(case["case_id"])
-                translation = repository.reference(path.parent, case["translation_file"], path.parent)
-                include(translation, repository.cases)
+                for candidate in candidates(case):
+                    translation = repository.reference(path.parent, candidate["translation_file"], path.parent)
+                    include(translation, repository.cases)
                 judgments = repository.guarded(path.parent / "judgments.jsonl", repository.cases)
                 if judgments.exists():
                     include(judgments, repository.cases)

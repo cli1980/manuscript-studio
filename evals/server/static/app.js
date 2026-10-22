@@ -65,7 +65,7 @@ async function loadCases(selectId) {
   $("case-list").replaceChildren();
   for (const c of cases) {
     const status = skill.supported
-      ? reviewStatus(await api(`/api/cases/${encodeURIComponent(c.case_id)}`))
+      ? caseProgress(await api(`/api/cases/${encodeURIComponent(c.case_id)}`))
       : "Review unavailable";
     const button = document.createElement("button");
     button.textContent = caseSummary(c, status);
@@ -78,9 +78,31 @@ async function loadCases(selectId) {
   if (selectId) await openCase(selectId);
   return cases;
 }
-async function openCase(id) {
-  current = await api(`/api/cases/${encodeURIComponent(id)}`);
-  renderCase();
+async function openCase(id, candidateId = null) {
+  const controls = [...$("judgment-form").elements, $("candidate-select")];
+  const disabled = controls.map(element => element.disabled);
+  const wasInert = $("workspace").inert;
+  controls.forEach(element => { element.disabled = true; });
+  $("workspace").inert = true;
+  let loaded = false;
+  try {
+    current = await api(`/api/cases/${encodeURIComponent(id)}${candidateId ? `?candidate_id=${encodeURIComponent(candidateId)}` : ""}`);
+    renderCase();
+    loaded = true;
+  } finally {
+    $("workspace").inert = wasInert;
+    if (!loaded) controls.forEach((element, index) => { element.disabled = disabled[index]; });
+  }
+}
+function candidateView(data, candidate) {
+  return {...data, candidate: candidate.metadata, translation: candidate.translation, judgments: candidate.judgments};
+}
+function caseProgress(data) {
+  const count = data.candidates.length;
+  if (!count) return "No candidates";
+  if (count === 1) return reviewStatus(candidateView(data, data.candidates[0]));
+  const complete = data.candidates.filter(c => reviewStatus(candidateView(data, c)) === "Completed").length;
+  return `${complete}/${count} candidates reviewed`;
 }
 function collapseCase(message = "Select a case to compare its source and translation.") {
   current = null;
@@ -100,16 +122,23 @@ function renderCase() {
   for (const button of $("case-list").querySelectorAll("button")) {
     const selected = button.dataset.caseId === c.case_id;
     button.classList.toggle("selected", selected);
-    if (selected) button.textContent = caseSummary(c, reviewStatus(current));
+    if (selected) button.textContent = caseSummary(c, caseProgress(current));
   }
   text("case-title", c.case_id);
-  text("case-subtitle", `${p.work?.title || p.group_id} · source revision ${c.source_revision} · case revision ${c.revision} · ${reviewStatus(current)}`);
+  text("case-subtitle", `${p.work?.title || p.group_id} · source revision ${c.source_revision} · case revision ${c.revision} · ${caseProgress(current)} · ${reviewStatus(current)}`);
+  $("candidate-select").replaceChildren(...current.candidates.map(item =>
+    option(item.metadata.candidate_id, `${item.metadata.candidate_id} · revision ${item.metadata.revision} · ${reviewStatus(candidateView(current, item))}`)));
+  $("candidate-select").value = current.candidate?.candidate_id || "";
+  $("candidate-select").disabled = !current.candidates.length;
+  text("candidate-info", current.candidate
+    ? `${reviewStatus(current)} · Candidate status: ${current.candidate.status}. Scores and review history belong only to this candidate.`
+    : "This source task has no stored candidates yet.");
   text("source-heading", `Original · ${c.source_language}`); text("translation-heading", `Translation · ${c.target_language}`);
   text("source-text", current.source.text); $("source-text").lang = c.source_language;
-  text("translation-text", current.translation); $("translation-text").lang = c.target_language;
-  text("source-context", `Source origin: ${p.provenance?.source_origin || "Unspecified"}. Source rights: ${p.provenance?.usage_rights || "pending"}. ${p.context?.background || ""}`);
-  text("case-brief", `Translation brief: ${c.context?.brief || "Not specified"}`);
-  text("case-provenance", `Translation origin: ${c.provenance?.translation_origin || "Unspecified"}. Translation rights: ${c.provenance?.usage_rights || "pending"}. Case status: ${c.status}.`);
+  text("translation-text", current.translation || "No translation supplied for this candidate."); $("translation-text").lang = c.target_language;
+  text("source-context", `Source revision ${c.source_revision}. Assess the supplied source and translation.`);
+  text("case-brief", "Candidate IDs carry no model or quality labels.");
+  text("case-provenance", `Case status: ${c.status}. Generation details and provenance are withheld during review.`);
   const superseded = new Set(current.judgments.map(j => j.supersedes_judgment_id).filter(Boolean));
   activeJudgment = currentReview(current);
   loadAssessment();
@@ -120,6 +149,8 @@ function currentReview(caseData) {
   const superseded = new Set(caseData.judgments.map(j => j.supersedes_judgment_id).filter(Boolean));
   const eligible = [...caseData.judgments].reverse().filter(j =>
     !superseded.has(j.judgment_id) && j.case_revision === metadata.revision && j.source_revision === metadata.source_revision
+    && (j.candidate_id || "baseline") === caseData.candidate?.candidate_id
+    && (j.candidate_revision ?? j.case_revision) === caseData.candidate?.revision
     && (!j.rubric_version || j.rubric_version === caseData.rubric?.rubric_id));
   return eligible.find(j => j.rater_id === reviewer) || eligible.find(isEmptyPlaceholder) || null;
 }
@@ -132,6 +163,14 @@ function caseSummary(metadata, status) {
   return `${metadata.case_id}\n${metadata.source_language || "—"} → ${metadata.target_language || "—"} · ${status}`;
 }
 async function advanceAfterCompletion(completedId) {
+  const remaining = current.candidates.find(item => item.translation.trim() && reviewStatus(candidateView(current, item)) !== "Completed");
+  if (remaining) {
+    current = candidateView(current, remaining);
+    renderCase();
+    $("candidate-select").focus();
+    notice("Assessment saved. Opened the next unfinished candidate for this source. Submit changes to publish your reviews.");
+    return;
+  }
   collapseCase("Review complete. Looking for your next unfinished case…");
   const cases = await loadCases();
   const position = cases.findIndex(c => c.case_id === completedId);
@@ -139,16 +178,17 @@ async function advanceAfterCompletion(completedId) {
   for (const candidate of ordered) {
     if (candidate.case_id === completedId) continue;
     const next = await api(`/api/cases/${encodeURIComponent(candidate.case_id)}`);
-    if (currentReview(next)?.status === "complete") continue;
-    current = next;
+    const unfinished = next.candidates.find(item => item.translation.trim() && reviewStatus(candidateView(next, item)) !== "Completed");
+    if (!unfinished) continue;
+    current = candidateView(next, unfinished);
     renderCase();
     $("case-title").scrollIntoView({block: "start"});
     notice(`Assessment saved. Opened your next unfinished case: ${candidate.case_id}. Submit changes to publish your reviews.`);
     return;
   }
   const skill = skills.find(s => s.id === $("skill-filter").value);
-  collapseCase(`You have completed all cases for ${skill.label}. You can reopen a case from the list to review it again.`);
-  notice(`Assessment saved. You have completed all cases for ${skill.label}. Submit changes to publish your reviews.`);
+  collapseCase(`You have completed all cases for ${skill.label} that have available translations. Empty candidates remain pending. You can reopen a case to review it again.`);
+  notice(`Assessment saved. You have completed all cases for ${skill.label} that have available translations. Submit changes to publish your reviews.`);
   $("case-empty").scrollIntoView({block: "nearest"});
 }
 function isEmptyPlaceholder(j) {
@@ -170,7 +210,11 @@ function loadAssessment() {
   $("issues").replaceChildren();
   for (const issue of j?.issues || []) addIssue(issue);
   renderGuidance();
-  form.querySelector('[value="complete"]').disabled = !current.rubric;
+  form.querySelector('[value="complete"]').disabled = !current.rubric || !current.translation.trim();
+  if (!current.candidate) {
+    for (const element of form.elements) element.disabled = true;
+    $("add-issue").disabled = true;
+  } else $("add-issue").disabled = false;
   dirty = false;
 }
 function renderHistory(superseded) {
@@ -191,7 +235,7 @@ function renderHistory(superseded) {
     const kind = superseded.has(j.judgment_id) ? "Earlier version" : j.rater_id === reviewer ? "Earlier review" : "Other reviewer";
     summary.textContent = `${j.rater_id || "Unassigned"} · ${j.status === "complete" ? "Complete" : "Draft"} · overall ${j.overall_score ?? "unset"} · ${kind}`;
     entry.append(summary);
-    line(entry, `Case revision ${j.case_revision} · source revision ${j.source_revision} · rubric ${j.rubric_version || "unset"}${j.created_at ? ` · ${new Date(j.created_at).toLocaleString()}` : ""}`, "muted");
+    line(entry, `Candidate revision ${j.candidate_revision ?? j.case_revision} · case revision ${j.case_revision} · source revision ${j.source_revision} · rubric ${j.rubric_version || "unset"}${j.created_at ? ` · ${new Date(j.created_at).toLocaleString()}` : ""}`, "muted");
     for (const [dimension, label] of [["fidelity", "Fidelity"], ["english_naturalness", "English naturalness"], ["literary_voice", "Literary voice"]]) {
       line(entry, `${label}: ${j.dimension_scores?.[dimension] ?? "unset"}`);
     }
@@ -250,9 +294,9 @@ async function openPassage(id, revision) {
   const p = passage.metadata;
   show("passage-detail", true);
   text("passage-title", p.work?.title || p.passage_id);
-  text("passage-info", `${p.group_id} · ${p.passage_id} · ${p.source_language} · revision ${p.revision} · ${p.work?.author || "Author unspecified"}`);
+  text("passage-info", `${p.group_id} · ${p.passage_id} · ${p.source_language} · revision ${p.revision}`);
   text("passage-text", passage.text); $("passage-text").lang = p.source_language;
-  text("passage-context", `Origin: ${p.provenance?.source_origin || "Unspecified"}. Rights: ${p.provenance?.usage_rights || "pending"}. ${p.context?.background || ""}`);
+  text("passage-context", "Only the source text and identifiers are shown during blind review.");
 }
 
 for (const select of document.querySelectorAll("select.score")) select.replaceChildren(option("", "Unset"), ...[1,2,3,4,5].map(n => option(n, String(n))));
@@ -278,7 +322,13 @@ $("skill-filter").addEventListener("change", run(async () => {
   collapseCase(); await loadCases();
 }));
 $("load-latest-review").addEventListener("click", run(async () => {
-  if (canLeave()) { await openCase(current.metadata.case_id); await refreshWorkspace(); notice("Latest saved review loaded."); }
+  if (canLeave()) { await openCase(current.metadata.case_id, current.candidate?.candidate_id); await refreshWorkspace(); notice("Latest saved review loaded."); }
+}));
+$("candidate-select").addEventListener("change", run(async () => {
+  const selected = $("candidate-select").value;
+  if (!canLeave()) { $("candidate-select").value = current.candidate?.candidate_id || ""; return; }
+  try { await openCase(current.metadata.case_id, selected); }
+  catch (error) { $("candidate-select").value = current.candidate?.candidate_id || ""; throw error; }
 }));
 $("add-issue").addEventListener("click", () => { if ($("issues").children.length >= 50) { notice("An assessment supports at most 50 issues.", true); return; } addIssue(); dirty = true; });
 $("judgment-form").addEventListener("submit", run(async event => {
@@ -290,6 +340,7 @@ $("judgment-form").addEventListener("submit", run(async event => {
   try {
     current = await api(`/api/cases/${encodeURIComponent(current.metadata.case_id)}/judgments`, "POST", {
       version: current.version, supersedes_judgment_id: activeJudgment?.judgment_id || null,
+      candidate_id: current.candidate.candidate_id, candidate_revision: current.candidate.revision,
       status, overall_score: score("overall_score"),
       dimension_scores: {fidelity: score("fidelity"), english_naturalness: score("english_naturalness"), literary_voice: score("literary_voice")},
       rationale: nullable(value("rationale")), issues

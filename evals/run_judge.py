@@ -16,6 +16,10 @@ import urllib.request
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+if __package__:
+    from .translation_cases import candidates, select_candidate, judgment_candidate, discover_cases
+else:
+    from translation_cases import candidates, select_candidate, judgment_candidate, discover_cases
 
 ROOT = Path(__file__).resolve().parent
 DIMENSIONS = ("fidelity", "english_naturalness", "literary_voice")
@@ -42,6 +46,10 @@ OUTPUT_SCHEMA = {
 
 class EvaluationError(ValueError):
     pass
+
+
+class UnavailableCase(EvaluationError):
+    """A valid case/candidate lacks the inputs needed for this evaluation mode."""
 
 
 def identifier(value):
@@ -137,7 +145,7 @@ def rubric_contract(rubric):
 
 
 def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=None,
-                 purpose="evaluate", translation_file=None):
+                 purpose="evaluate", translation_file=None, candidate_id=None):
     case_root = root / "cases/literary-translation" / identifier(case_id)
     paths, hashes, areas = {}, {}, {}
 
@@ -150,6 +158,10 @@ def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=Non
     case = object_json(read("case", case_root / "case.json", root / "cases/literary-translation"))
     if case.get("case_id") != case_id or case.get("task") != "literary-translation-quality":
         raise EvaluationError("Case identity or task does not match the requested judge.")
+    try:
+        candidate = select_candidate(case, candidate_id) if translation_file is None else None
+    except ValueError as exc:
+        raise EvaluationError(str(exc)) from exc
     source_meta_path = reference(case_root, case.get("source_metadata_file"), root / "fixtures/manuscripts")
     if source_meta_path.name != "passage.json":
         raise EvaluationError("Expected shared passage metadata.")
@@ -168,17 +180,18 @@ def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=Non
         raise EvaluationError("This judge currently supports Chinese-to-English translation only.")
     eligible = (
         case.get("status") == "ready"
-        and case.get("provenance", {}).get("usage_rights") == "permitted"
+        and candidate is not None and candidate.get("status") == "ready"
+        and candidate.get("provenance", {}).get("usage_rights") == "permitted"
         and source.get("provenance", {}).get("usage_rights") == "permitted"
     )
     if not eligible and not smoke_test and purpose != "judge":
-        raise EvaluationError("Case is not benchmark-ready. Use --smoke-test for an explicitly exploratory run.")
+        raise UnavailableCase("Case/candidate is not benchmark-ready. Use --smoke-test for an explicitly exploratory run.")
     source_path = reference(case_root, case.get("source_file"), root / "fixtures/manuscripts")
     if source_path != reference(source_meta_path.parent, source.get("source_file"), source_meta_path.parent):
         raise EvaluationError("Case and passage reference different source texts.")
     if translation_file is None:
         translation_area = case_root
-        translation_path = reference(case_root, case.get("translation_file"), case_root)
+        translation_path = reference(case_root, candidate["translation_file"], case_root)
     else:
         if purpose != "judge":
             raise EvaluationError("A translation override is allowed only in judge mode.")
@@ -194,7 +207,7 @@ def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=Non
     source_text = read("source", source_path, root / "fixtures/manuscripts").decode("utf-8")
     translation_text = read("translation", translation_path, translation_area).decode("utf-8")
     if not source_text.strip() or not translation_text.strip():
-        raise EvaluationError("Both source and translation must be populated.")
+        raise UnavailableCase("Both source and translation must be populated.")
     rubric_id = identifier(case.get("rubric_id") or "literary-translation-quality-v1")
     rubric = object_json(read("rubric", root / "rubrics" / f"{rubric_id}.json", root / "rubrics"))
     clean_rubric = rubric_contract(rubric)
@@ -226,7 +239,7 @@ def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=Non
     if temperature is not None:
         request["temperature"] = temperature
     return {
-        "case": case, "rubric_id": rubric_id, "request": request, "paths": paths,
+        "case": case, "candidate": candidate, "rubric_id": rubric_id, "request": request, "paths": paths,
         "areas": areas, "input_hashes": hashes,
         "candidate_source": "external_translation" if translation_file is not None else "case_translation",
         "benchmark_eligible": eligible and not smoke_test and purpose != "judge",
@@ -256,6 +269,7 @@ def validate_prediction(value):
 
 def human_reference(prepared, reviewer):
     case = prepared["case"]
+    candidate = prepared["candidate"]
     directory = prepared["paths"]["case"].parent
     raw = read_bytes(directory / "judgments.jsonl", directory)
     records = [object_json(line) for line in raw.splitlines() if line.strip()]
@@ -269,13 +283,23 @@ def human_reference(prepared, reviewer):
             identifier(parent)
             if parent not in seen:
                 raise EvaluationError("Human judgment history has a missing or forward reference.")
+            try:
+                if judgment_candidate(record, case) != judgment_candidate(seen[parent], case):
+                    raise EvaluationError("Human judgment amendments cannot cross candidate revisions.")
+            except ValueError as exc:
+                raise EvaluationError(str(exc)) from exc
             superseded.add(parent)
+        try:
+            judgment_candidate(record, case)
+        except ValueError as exc:
+            raise EvaluationError(str(exc)) from exc
         seen[jid] = record
     current = next((r for r in reversed(records) if
         r["judgment_id"] not in superseded and r.get("rater_id") == reviewer
         and r.get("case_revision") == case["revision"]
         and r.get("passage_id") == case["passage_id"]
         and r.get("source_revision") == case["source_revision"]
+        and judgment_candidate(r, case) == (candidate["candidate_id"], candidate["revision"])
         and r.get("rubric_version") == prepared["rubric_id"]), None)
     if current is None:
         raise EvaluationError("No current human judgment matches the requested reviewer and versions.")
@@ -394,6 +418,7 @@ def ensure_inputs_unchanged(prepared, root):
 def run(args):
     purpose = getattr(args, "mode", "evaluate")
     translation_file = getattr(args, "translation_file", None)
+    candidate_id = getattr(args, "candidate", None)
     if purpose not in {"evaluate", "judge", "export-training"}:
         raise EvaluationError("Unknown runner mode.")
     if purpose == "export-training" and args.prepare_only:
@@ -402,13 +427,14 @@ def run(args):
         raise EvaluationError("Judge mode does not use human references; omit --reviewer.")
     if translation_file is not None and (purpose != "judge" or not args.case or len(args.case) != 1):
         raise EvaluationError("--translation-file requires judge mode and exactly one --case.")
+    if candidate_id is not None and (translation_file is not None or not args.case or len(args.case) != 1):
+        raise EvaluationError("--candidate requires one --case and cannot be combined with --translation-file.")
     if purpose == "export-training" and (not args.reviewer or not args.reviewer.strip()):
         raise EvaluationError("Training export requires --reviewer to select the human targets.")
     root = guarded(args.data_dir, args.data_dir)
     cases_root = guarded(root / "cases/literary-translation", root)
     case_ids = list(dict.fromkeys(args.case or [
-        path.name for path in sorted(cases_root.iterdir())
-        if not path.name.startswith(".") and (path / "case.json").is_file()
+        path.parent.name for path in discover_cases(cases_root)
     ]))
     if not case_ids:
         raise EvaluationError("No literary-translation cases found.")
@@ -422,9 +448,32 @@ def run(args):
         key = os.environ.get(args.api_key_env)
         if not key:
             raise EvaluationError(f"{args.api_key_env} is not set. Configure a model API key or use --prepare-only.")
-    prepared = [prepare_case(root, case_id, model=args.model, smoke_test=args.smoke_test,
-                             temperature=args.temperature, purpose=purpose,
-                             translation_file=translation_file) for case_id in case_ids]
+    prepared, skipped = [], []
+    for case_id in case_ids:
+        metadata = object_json(read_bytes(cases_root / identifier(case_id) / "case.json", cases_root))
+        try:
+            selection = ([None] if translation_file is not None else
+                         [candidate_id] if candidate_id is not None else
+                         [item["candidate_id"] for item in candidates(metadata)])
+        except ValueError as exc:
+            raise EvaluationError(str(exc)) from exc
+        if not selection:
+            if not args.all:
+                raise UnavailableCase("This source task has no candidates; supply --translation-file.")
+            skipped.append({"case_id": case_id, "candidate_id": None, "reason": "No stored candidates."})
+        for cid in selection:
+            try:
+                prepared.append(prepare_case(
+                    root, case_id, model=args.model, smoke_test=args.smoke_test,
+                    temperature=args.temperature, purpose=purpose,
+                    translation_file=translation_file, candidate_id=cid,
+                ))
+            except UnavailableCase as exc:
+                if not args.all:
+                    raise
+                skipped.append({"case_id": case_id, "candidate_id": cid, "reason": str(exc)})
+    if not prepared:
+        raise UnavailableCase("No evaluable candidates. " + "; ".join(item["reason"] for item in skipped))
     results = guarded(root / "results", root)
     results.mkdir(exist_ok=True)
     run_id = "judge-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
@@ -443,20 +492,26 @@ def run(args):
         "training_eligible": False,
         "model": args.model, "api_base_url": args.base_url if purpose != "export-training" else None,
         "temperature": args.temperature, "reviewer": args.reviewer,
-        "human_labels_sent_to_model": False, "cases": [], "status": "running",
+        "human_labels_sent_to_model": False, "cases": [], "skipped_candidates": skipped, "status": "running",
     }
     write_json(destination / "run.json", manifest)
     comparisons = []
+    comparisons_by_case = {}
     training_rows = []
     training_index = []
     failures = 0
     for item in prepared:
         case = item["case"]
-        case_dir = destination / case["case_id"]
-        case_dir.mkdir()
+        candidate = item["candidate"]
+        cid = candidate["candidate_id"] if candidate else "generated"
+        artifact_dir = case["case_id"] if case.get("schema_version", 1) == 1 else f"{case['case_id']}/{cid}"
+        case_dir = destination / artifact_dir
+        case_dir.mkdir(parents=True)
         write_json(case_dir / "request.json", item["request"])
         record = {
             "case_id": case["case_id"], "case_revision": case["revision"],
+            "candidate_id": cid, "candidate_revision": candidate["revision"] if candidate else None,
+            "artifact_dir": artifact_dir,
             "group_id": case["group_id"], "passage_id": case["passage_id"],
             "source_revision": case["source_revision"], "rubric_id": item["rubric_id"],
             "input_hashes": item["input_hashes"],
@@ -480,6 +535,7 @@ def run(args):
                 training_rows.append(row)
                 training_index.append({
                     "line": len(training_rows), "case_id": case["case_id"],
+                    "candidate_id": cid, "candidate_revision": candidate["revision"],
                     "group_id": case["group_id"], "case_revision": case["revision"],
                     "source_revision": case["source_revision"], "rubric_id": item["rubric_id"],
                     "human_judgment_id": human["judgment_id"], "human_judgments_sha256": human_hash,
@@ -508,9 +564,11 @@ def run(args):
                     difference = compare(prediction, human)
                     write_json(case_dir / "comparison.json", {
                         "case_id": case["case_id"], "human_judgment_id": human["judgment_id"],
+                        "candidate_id": cid, "candidate_revision": candidate["revision"],
                         "human_judgments_sha256": human_hash, "scores": difference,
                     })
                     comparisons.append(difference)
+                    comparisons_by_case.setdefault(case["case_id"], []).append(difference)
                     record["human_judgment_id"] = human["judgment_id"]
                     record["status"] = "compared"
             except (EvaluationError, OSError, UnicodeError) as exc:
@@ -533,14 +591,29 @@ def run(args):
     if not args.prepare_only:
         summary = {
             "scope": manifest["scope"], "benchmark_eligible": manifest["benchmark_eligible"],
-            "cases_requested": len(prepared), "cases_failed": failures,
+            "cases_requested": len({item["case"]["case_id"] for item in prepared}),
+            "cases_failed": len({row["case_id"] for row in manifest["cases"] if row["status"] == "failed"}),
+            "unique_case_count": len({item["case"]["case_id"] for item in prepared}),
+            "candidates_requested": len(prepared), "candidates_failed": failures,
+            "skipped_candidates": skipped,
         }
         if purpose == "evaluate":
-            summary.update(cases_compared=len(comparisons), metrics=aggregate(comparisons))
+            summary.update(cases_compared=len(comparisons_by_case), candidates_compared=len(comparisons),
+                           metrics=aggregate(comparisons))
+            per_case = {cid: aggregate(rows) for cid, rows in comparisons_by_case.items()}
+            macro = {}
+            for dimension in METRICS:
+                values = [metrics[dimension] for metrics in per_case.values() if metrics[dimension]["count"]]
+                macro[dimension] = {"count": len(values)}
+                for metric in ("mean_signed_error", "mean_absolute_error", "exact_agreement_rate"):
+                    macro[dimension][metric] = sum(v[metric] for v in values) / len(values) if values else None
+            summary.update(case_metrics=per_case, case_macro_metrics=macro)
         elif purpose == "judge":
-            summary["cases_judged"] = sum(case["status"] == "predicted" for case in manifest["cases"])
+            summary["candidates_judged"] = sum(case["status"] == "predicted" for case in manifest["cases"])
+            summary["cases_judged"] = len({row["case_id"] for row in manifest["cases"] if row["status"] == "predicted"})
         else:
-            summary["cases_exported"] = len(training_rows)
+            summary["candidates_exported"] = len(training_rows)
+            summary["cases_exported"] = len({row["case_id"] for row in manifest["cases"] if row["status"] == "exported"})
         write_json(destination / "summary.json", summary)
     return destination, manifest
 
@@ -548,8 +621,10 @@ def run(args):
 def print_report(destination, manifest):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
-    print(f"{manifest['status']}: {len(manifest['cases'])} case(s)")
+    print(f"{manifest['status']}: {len({row['case_id'] for row in manifest['cases']})} case(s), {len(manifest['cases'])} candidate(s)")
     print(f"Artifacts: {destination}")
+    for skipped in manifest.get("skipped_candidates", []):
+        print(f"Skipped {skipped['case_id']} / {skipped['candidate_id'] or '(no candidates)'}: {skipped['reason']}")
     if manifest["scope"] == "smoke_test":
         print("Exploratory smoke test; excluded from benchmark results.")
     if manifest["mode"] == "prepare_only":
@@ -559,12 +634,12 @@ def print_report(destination, manifest):
         summary = object_json(read_bytes(destination / "summary.json", destination))
         print("No model was called. Human scores are assistant targets; model inputs remain blind.")
         print(f"Human reference reviewer: {manifest['reviewer']}")
-        print(f"Exported: {summary['cases_exported']}/{summary['cases_requested']}; failed: {summary['cases_failed']}")
+        print(f"Exported: {summary.get('candidates_exported', summary['cases_exported'])}/{summary.get('candidates_requested', summary['cases_requested'])}; failed: {summary.get('candidates_failed', summary['cases_failed'])} (candidates)")
         print(f"Training examples: {destination / 'training.jsonl'}")
         print(f"Case and work-group index: {destination / 'training-index.jsonl'}")
         for case in manifest["cases"]:
             if case["status"] == "failed":
-                print(f"{case['case_id']}: {case['error']}")
+                print(f"{case['case_id']} / {case.get('candidate_id', 'baseline')}: {case['error']}")
         return
     print(f"Model: {manifest['model']}")
     judgment_only = manifest["mode"] == "judgment"
@@ -575,11 +650,11 @@ def print_report(destination, manifest):
         "english_naturalness": "English naturalness", "literary_voice": "Literary voice",
     }
     for case in manifest["cases"]:
-        print(f"\nCase: {case['case_id']}")
+        print(f"\nCase: {case['case_id']} · candidate: {case.get('candidate_id', 'baseline')}")
         if case["status"] != ("predicted" if judgment_only else "compared"):
             print(f"Evaluation failed: {case.get('error', 'No result available.')}")
             continue
-        directory = destination / case["case_id"]
+        directory = destination / case.get("artifact_dir", case["case_id"])
         prediction = object_json(read_bytes(directory / "prediction.json", destination))
         if judgment_only:
             print(f"{'Dimension':<21} {'LLM score':>10}")
@@ -600,10 +675,10 @@ def print_report(destination, manifest):
         print(f"Judge rationale: {prediction['rationale'] or 'Not provided.'}")
     summary = object_json(read_bytes(destination / "summary.json", destination))
     if judgment_only:
-        print(f"\nJudged: {summary['cases_judged']}/{summary['cases_requested']}; failed: {summary['cases_failed']}")
+        print(f"\nJudged: {summary.get('candidates_judged', summary['cases_judged'])}/{summary.get('candidates_requested', summary['cases_requested'])}; failed: {summary.get('candidates_failed', summary['cases_failed'])} (candidates)")
         print("Human reference comparison is disabled in judge mode.")
         return
-    print(f"\nCompared: {summary['cases_compared']}/{summary['cases_requested']}; failed: {summary['cases_failed']}")
+    print(f"\nCompared: {summary.get('candidates_compared', summary['cases_compared'])}/{summary.get('candidates_requested', summary['cases_requested'])}; failed: {summary.get('candidates_failed', summary['cases_failed'])} (candidates)")
     if not summary["cases_compared"]:
         print("No valid comparisons are available; judge quality cannot be assessed.")
         return
@@ -614,19 +689,27 @@ def print_report(destination, manifest):
         mae = "n/a" if metric["mean_absolute_error"] is None else f"{metric['mean_absolute_error']:.2f}"
         agreement = "n/a" if metric["exact_agreement_rate"] is None else f"{metric['exact_agreement_rate']:.1%}"
         print(f"{labels[name]:<21} {metric['count']:>6} {bias:>11} {mae:>7} {agreement:>16}")
+    if "case_macro_metrics" in summary:
+        print("Equal case weighting (mean absolute error):")
+        for name in METRICS:
+            metric = summary["case_macro_metrics"][name]
+            error = metric["mean_absolute_error"]
+            print(f"  {labels[name]}: {'n/a' if error is None else f'{error:.2f}'} across {metric['count']} case(s)")
     print("Missing human dimension scores are excluded, not treated as zero.")
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Export human-labeled judge training data, evaluate a judge blindly, or judge translations.")
-    parser.add_argument("--mode", choices=["evaluate", "judge", "export-training"], default="evaluate")
+    parser.add_argument("--mode", choices=["evaluate", "judge", "export-training"], default="evaluate",
+                        help="evaluate: judge accuracy against human ratings; judge: translation quality; export-training: judge training data.")
     selection = parser.add_mutually_exclusive_group(required=True)
     selection.add_argument("--case", action="append", help="Case ID; repeat to select multiple cases.")
     selection.add_argument("--all", action="store_true", help="Select all literary-translation cases.")
+    parser.add_argument("--candidate", help="Select one candidate within a single --case; otherwise assess all its candidates.")
     parser.add_argument("--data-dir", type=Path, default=ROOT)
     parser.add_argument("--reviewer", help="Human reference label; never sent to the model.")
     parser.add_argument("--translation-file", type=Path, help="Judge mode only: the actual translated output (.txt or .md), using --case for its source.")
-    parser.add_argument("--model", help="Model identifier supported by your Chat Completions endpoint.")
+    parser.add_argument("--model", help="Judge model identifier; translation generation is a separate step.")
     parser.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"))
     parser.add_argument("--api-key-env", default="OPENAI_API_KEY", help="Name of the environment variable containing the API key.")
     parser.add_argument("--prepare-only", action="store_true", help="Write blind requests without reading human judgments or calling a model.")

@@ -38,6 +38,8 @@ class Issue(Input):
 
 class JudgmentCreate(Input):
     version: Version
+    candidate_id: Identifier | None = None
+    candidate_revision: Annotated[int, Field(strict=True, ge=1)] | None = None
     supersedes_judgment_id: Identifier | None = None
     status: Literal["pending", "complete"] = "pending"
     overall_score: Score | None = None

@@ -21,7 +21,6 @@ import uuid
 from zipfile import BadZipFile, ZipFile
 
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_CASE = Path(__file__).parent / "cases/translation-ciqing-001/case.json"
 if __package__ in (None, ""):
     sys.path.insert(0, str(REPO))
 
@@ -593,7 +592,7 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input, auto_approve_
 
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument("--case", type=Path, default=DEFAULT_CASE)
+    result.add_argument("--case", type=Path, required=True, help="Explicit case manifest; long local tests are never selected by default.")
     destination = result.add_mutually_exclusive_group()
     destination.add_argument("--run-dir", type=Path, help="New run directory; default is a unique .workflow-runs/e2e path.")
     destination.add_argument("--resume", type=Path, help="Resume a run created by this launcher.")

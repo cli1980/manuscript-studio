@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Translation source task with candidate assessments",
+  "type": "object",
+  "required": ["schema_version", "case_id", "revision", "status", "task", "source_language", "target_language", "source_file", "source_metadata_file", "source_revision", "group_id", "passage_id", "candidates"],
+  "not": {"required": ["translation_file"]},
+  "properties": {
+    "schema_version": {"const": 2},
+    "case_id": {"$ref": "#/$defs/id"},
+    "revision": {"type": "integer", "minimum": 1},
+    "status": {"enum": ["ready", "placeholder"]},
+    "task": {"const": "literary-translation-quality"},
+    "source_language": {"type": "string", "minLength": 1},
+    "target_language": {"type": "string", "minLength": 1},
+    "source_file": {"type": "string", "minLength": 1},
+    "source_metadata_file": {"type": "string", "minLength": 1},
+    "source_revision": {"type": "integer", "minimum": 1},
+    "group_id": {"$ref": "#/$defs/id"},
+    "passage_id": {"$ref": "#/$defs/id"},
+    "translation_instructions": {"type": ["string", "null"], "minLength": 1},
+    "rubric_id": {"$ref": "#/$defs/id"},
+    "context": {"type": "object"},
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["candidate_id", "revision", "translation_file", "status", "provenance"],
+        "properties": {
+          "candidate_id": {"$ref": "#/$defs/id", "description": "Use random c- plus 16 lowercase hex digits for new candidates; legacy IDs remain readable."},
+          "revision": {"type": "integer", "minimum": 1},
+          "translation_file": {"type": "string", "minLength": 1},
+          "status": {"enum": ["ready", "placeholder"]},
+          "provenance": {"type": "object"},
+          "derived_from": {"$ref": "#/$defs/id"}
+        }
+      }
+    }
+  },
+  "$defs": {"id": {"type": "string", "maxLength": 100, "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"}}
+}

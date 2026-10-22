@@ -259,22 +259,23 @@ def create_app(data_root, origin="http://127.0.0.1:8765", *, reviewer_label=None
     @app.get("/api/passages")
     def passages(request: Request):
         session(request)
-        return repository.list_passages()
+        return [repository.review_source(item) for item in repository.list_passages()]
 
     @app.get("/api/passages/{passage_id}")
     def passage(request: Request, passage_id: str, revision: int = 1):
         session(request)
-        return repository.get_passage(passage_id, revision)
+        item = repository.get_passage(passage_id, revision)
+        return {"metadata": repository.review_source(item["metadata"]), "text": item["text"]}
 
     @app.get("/api/cases")
     def cases(request: Request, skill: str = "literary-translation"):
         session(request)
-        return repository.list_cases(skill)
+        return [repository.review_case_metadata(item) for item in repository.list_cases(skill)]
 
     @app.get("/api/cases/{case_id}")
-    def case(request: Request, case_id: str):
+    def case(request: Request, case_id: str, candidate_id: str | None = None):
         session(request)
-        return repository.get_case(case_id)
+        return repository.get_review_case(case_id, candidate_id)
 
     @app.post("/api/cases/{case_id}/judgments", status_code=201)
     async def judgment(request: Request, case_id: str):
@@ -283,6 +284,10 @@ def create_app(data_root, origin="http://127.0.0.1:8765", *, reviewer_label=None
             data = JudgmentCreate.model_validate_json(await request.body())
         except ValueError:
             raise HTTPException(422, "Check assessment fields. Scores must be whole numbers from 1 to 5 or unset.")
-        return repository.add_judgment(case_id, data, rater_id=fixed_reviewer)
+        data = data.model_copy(update={
+            "candidate_id": repository.resolve_review_id(case_id, "candidate", data.candidate_id),
+            "supersedes_judgment_id": repository.resolve_review_id(case_id, "judgment", data.supersedes_judgment_id),
+        })
+        return repository.review_view(repository.add_judgment(case_id, data, rater_id=fixed_reviewer))
 
     return app

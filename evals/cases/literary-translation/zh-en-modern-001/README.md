@@ -3,10 +3,15 @@
 This modern Chinese literature case uses a passage from Lu Xun's (鲁迅)
 《故乡》 (*My Old Home*).
 
+Follow the [two-target evaluation contract](../README.md): a translator receives
+the Chinese source and translation instructions to generate a new candidate;
+a judge receives the Chinese source, a fixed English candidate, and the judge
+skill. The stored English text and its ratings must not enter translator inputs.
+
 This case remains a dataset placeholder while its metadata is being completed.
 The user-provided Chinese passage
 is stored in the [shared source fixture](../../../fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt);
-the English translation remains in `translation.en.txt`.
+the English translation is referenced by `case.json.candidates[].translation_file`.
 Human reviews are recorded in `judgments.jsonl`; submitting a review does not
 complete the remaining dataset metadata. Exclude placeholder cases and pending
 judgments from training, validation, and test datasets.
@@ -18,8 +23,9 @@ judgments from training, validation, and test datasets.
 2. Complete the shared [passage metadata](../../../fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json)
    with verified work information, source provenance, usage rights, and any shared
    context. `modern-lu-xun-guxiang` identifies the source work, and
-   `modern-lu-xun-guxiang-passage-001` identifies this excerpt. In `case.json`, record translation
-   provenance, its usage rights, and any translation-specific brief. The source
+   `modern-lu-xun-guxiang-passage-001` identifies this excerpt. In `case.json.candidates`,
+   record each candidate's provenance and usage rights. Record translation-task
+   instructions at case level. The source
    identifiers, language, and revision must match the shared metadata. Leave
    unavailable optional context null.
 3. Select a versioned rubric under `evals/rubrics/`. The initial
@@ -30,21 +36,21 @@ judgments from training, validation, and test datasets.
    the rubric version, and the human's `overall_score`. Dimension scores,
    rationale, and evidence-backed issues are optional. Keep unavailable scores
    null rather than using zero.
-5. Mark the judgment `complete` after the human assessment is recorded. Change
-   the case status to `ready` once its inputs and metadata are complete and usage
-   rights for both texts are established.
+5. Mark the judgment `complete` after the human assessment is recorded. Mark the
+   source task and the candidate `ready` separately once their inputs, metadata,
+   and usage rights are established.
 
 Keep each judgment as one JSON object on a single line in `judgments.jsonl`.
 For another reviewer, append a record with a unique judgment ID; do not overwrite
 an independent rating. An empty `issues` array in this pending template does not
 mean the translation has been reviewed and found error-free.
 
-For another translation of this passage, create a separate case directory with
-a unique case ID, its own `translation.en.txt`, and a fresh pending judgment.
-Reuse this case's source references, work and passage IDs, and source revision.
-Do not copy the Chinese text or reuse human ratings from this case.
+For another translation, add a candidate to this case with its own ID, revision,
+text file, and provenance. Start fresh human judgments bound to that candidate;
+do not copy the source or reuse another candidate's ratings. The existing
+translation has an opaque candidate ID.
 
-Judgments identify both the case revision and the source passage revision.
+Judgments identify the case, candidate, and source passage revisions.
 No completed judgments exist yet, so this layout migration retains revision 1.
 For subsequent text changes, follow the
 [revision and dataset rules](../../../README.md#revisions-and-dataset-splits).

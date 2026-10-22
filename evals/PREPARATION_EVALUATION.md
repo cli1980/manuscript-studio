@@ -8,6 +8,10 @@ prepared reference. Candidate work/chapter IDs need not match reference-unit IDs
 
 ## Run
 
+The full-length `docx-novel-001` case and its DOCX/reference fixtures are local-only,
+Git-ignored manual tests. The example below requires those local files; use another
+explicit case ID on a fresh checkout. Unit tests construct small synthetic inputs.
+
 ```text
 python -m pip install -r evals/requirements-preparation.txt
 python evals/check_preparation.py --case docx-novel-001 --check-reference

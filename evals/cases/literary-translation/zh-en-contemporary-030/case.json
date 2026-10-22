@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "case_id": "zh-en-contemporary-030",
   "revision": 1,
   "status": "ready",
@@ -9,47 +9,111 @@
   "source_file": "../../../fixtures/manuscripts/contemporary-what-we-talk-about-when-we-talk-about-love/passage-030/source.zh.txt",
   "source_metadata_file": "../../../fixtures/manuscripts/contemporary-what-we-talk-about-when-we-talk-about-love/passage-030/passage.json",
   "source_revision": 1,
-  "translation_file": "translation.en.txt",
   "group_id": "contemporary-what-we-talk-about-when-we-talk-about-love",
   "passage_id": "contemporary-what-we-talk-about-when-we-talk-about-love-passage-030",
   "rubric_id": "literary-translation-quality-v1",
   "context": {
     "brief": null
   },
-  "provenance": {
-    "usage_rights": "permitted",
-    "license": "CC BY-SA 3.0",
-    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
-    "attribution": "当我们第一次去黄石 / When We First Visited Yellowstone, by ttkbot. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/what-we-talk-about-when-we-talk-about-love and https://scp-int.wikidot.com/what-we-talk-about-when-we-talk-about-love.",
-    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
-    "corpus_collection": "contemporary_corpus",
-    "corpus_record_id": "contemporary-030",
-    "source_work_id": "what-we-talk-about-when-we-talk-about-love",
-    "retrieved_date": "2026-10-19",
-    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
-    "translation_origin": "published English translation",
-    "translator": "Not separately named in the retrieved credit box; see linked English page history and retained credits.",
-    "title_en": "When We First Visited Yellowstone",
-    "source_url": "https://scp-int.wikidot.com/what-we-talk-about-when-we-talk-about-love",
-    "english_history_url": "https://scp-int.wikidot.com/what-we-talk-about-when-we-talk-about-love/history",
-    "source_credits": [
-      "rating: +1 + – x  close Info X By ttkbot Thanks for reading rating: +1 + – x",
-      "close Info X By ttkbot Thanks for reading rating: +1 + – x"
-    ],
-    "source_snapshot_sha256": "5e26d591eba809c7d8a4addfe4148318a9ab94db56370dee9ae4ee97f0b44773",
-    "extracted_block_range_exclusive": [
-      0,
-      23
-    ],
-    "english_word_count": 577,
-    "selection_type": "complete_scene_or_story",
-    "corpus_review": {
-      "reviewer": "Codex (AI)",
-      "date": "2026-10-19",
-      "boundary_rationale": "The complete short story and its deliberately unresolved final conversation.",
-      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
-      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
-      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  "candidates": [
+    {
+      "candidate_id": "c-10a79ffdddbd406d",
+      "revision": 1,
+      "translation_file": "candidates/c-10a79ffdddbd406d.en.txt",
+      "status": "ready",
+      "provenance": {
+        "usage_rights": "permitted",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "attribution": "当我们第一次去黄石 / When We First Visited Yellowstone, by ttkbot. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/what-we-talk-about-when-we-talk-about-love and https://scp-int.wikidot.com/what-we-talk-about-when-we-talk-about-love.",
+        "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+        "corpus_collection": "contemporary_corpus",
+        "corpus_record_id": "contemporary-030",
+        "source_work_id": "what-we-talk-about-when-we-talk-about-love",
+        "retrieved_date": "2026-10-19",
+        "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+        "translation_origin": "published English translation",
+        "translator": "Not separately named in the retrieved credit box; see linked English page history and retained credits.",
+        "title_en": "When We First Visited Yellowstone",
+        "source_url": "https://scp-int.wikidot.com/what-we-talk-about-when-we-talk-about-love",
+        "english_history_url": "https://scp-int.wikidot.com/what-we-talk-about-when-we-talk-about-love/history",
+        "source_credits": [
+          "rating: +1 + – x  close Info X By ttkbot Thanks for reading rating: +1 + – x",
+          "close Info X By ttkbot Thanks for reading rating: +1 + – x"
+        ],
+        "source_snapshot_sha256": "5e26d591eba809c7d8a4addfe4148318a9ab94db56370dee9ae4ee97f0b44773",
+        "extracted_block_range_exclusive": [
+          0,
+          23
+        ],
+        "english_word_count": 577,
+        "selection_type": "complete_scene_or_story",
+        "corpus_review": {
+          "reviewer": "Codex (AI)",
+          "date": "2026-10-19",
+          "boundary_rationale": "The complete short story and its deliberately unresolved final conversation.",
+          "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+          "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+          "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+        }
+      }
+    },
+    {
+      "candidate_id": "c-fa866e4b18b04293",
+      "revision": 1,
+      "translation_file": "candidates/c-fa866e4b18b04293.en.txt",
+      "status": "ready",
+      "provenance": {
+        "translation_origin": "synthetic model translation",
+        "purpose": "minimal-prompt adverse-candidate pool",
+        "quality_status": "unreviewed; degradation is not assumed",
+        "requested_model": "azure/openai/gpt-4.1-mini",
+        "returned_model": "azure/openai/gpt-4.1-mini",
+        "non_reasoning_model": true,
+        "instruction": "translate the Chinese to English",
+        "generation_settings": {
+          "temperature": 0,
+          "max_tokens": 6000
+        },
+        "request_sha256": "47fce0baa3dadc86d8e5e8b962e8db1a5e05d800544e1abecd81fe316c453b66",
+        "response_id": "chatcmpl-EbbEfq8MMp5RNJWvhSEMGfH1VqJEF",
+        "generated_at": "2026-10-22T00:46:17+00:00",
+        "usage": {
+          "completion_tokens": 733,
+          "prompt_tokens": 800,
+          "total_tokens": 1533,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          },
+          "latency_checkpoint": {
+            "engine_tbt_ms": 6,
+            "engine_ttft_ms": 27,
+            "engine_ttlt_ms": 4456,
+            "pre_inference_ms": 87,
+            "service_tbt_ms": 6,
+            "service_ttft_ms": 171,
+            "service_ttlt_ms": 4591,
+            "user_visible_ttft_ms": 84
+          }
+        },
+        "generation_artifacts": "results/synthetic-translations-p_5iw50i/zh-en-contemporary-030",
+        "task_id": "b4fa4163ef24a5a00ed5e33e3fe19f43d243ff8a3e93aedb21c9d525898191b0",
+        "source_revision": 1,
+        "source_sha256": "80f97820e876413ab7b8029e4654aa39b9d01240e9ea86a285606d04b587a7c4",
+        "translation_sha256": "cd3a224650faf668b7d220b6142352cd9915f0cd8d156719c651f57b3cfc168c",
+        "usage_rights": "permitted",
+        "attribution": "Chinese source: 当我们第一次去黄石; author: ttkbot; https://scp-cn.wiki/what-we-talk-about-when-we-talk-about-love. Synthetic English translation generated with azure/openai/gpt-4.1-mini.",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/"
+      }
     }
-  }
+  ],
+  "translation_instructions": null
 }

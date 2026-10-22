@@ -18,22 +18,21 @@ preserving `python -m workflow`. Workflow definitions live in `definitions/`,
 tests in `tests/`, and architecture documentation in `docs/`. The README and
 requirements remain at the workflow root.
 
-The [《刺秦》 end-to-end case](tests/cases/translation-ciqing-001/README.md)
-defines raw DOCX inputs, expected workflow artifacts, and human-supervised
-approval/recovery checks. It uses a workflow-specific manifest, separate from
-the source/English quality-evaluation format under `evals/`. The case-driven
-[E2E launcher](tests/run_e2e.py) runs it interactively; live model execution is
-separate from the deterministic unit-test suite.
-Its original manuscript lives in
-[`tests/fixtures/short-story-ciqing/`](tests/fixtures/short-story-ciqing/).
+The case-driven [E2E launcher](tests/run_e2e.py) accepts an explicit workflow
+manifest. Live model execution is separate from the deterministic unit-test suite,
+which constructs small synthetic inputs without external manuscripts.
+The full-length 《刺秦》 case at `tests/cases/translation-ciqing-001/` and its DOCX
+under `tests/fixtures/short-story-ciqing/` are optional, Git-ignored local manual
+tests. They are preserved locally but are not included in a fresh checkout.
 
 To set up Python dependencies and launch that test in one command:
 
 ```text
-python workflow/tests/run_e2e.py --setup
+python workflow/tests/run_e2e.py --case workflow/tests/cases/translation-ciqing-001/case.json --setup
 ```
 
-Codex must already be installed and authenticated. The launcher creates or
+This example requires the local case and fixture. `--case` is required; the launcher
+never selects a long manuscript implicitly. Codex must already be installed and authenticated. The launcher creates or
 resumes a run, presents each human gate, checks restart/replay behavior, verifies
 the export, and writes an E2E report. See the case README for pause/resume, runtime
 options, and the distinction between workflow checks and literary quality.
@@ -259,11 +258,11 @@ the original Chinese preparation is never substituted for it.
 The E2E launcher can trigger this final operation automatically after export:
 
 ```powershell
-python workflow/tests/run_e2e.py --setup --format-docx `
+python workflow/tests/run_e2e.py --case PATH_TO_CASE_JSON --setup --format-docx `
   --renderer word
 ```
 
-Use `--resume COMPLETED-TRANSLATION-RUN --format-docx ...` to add it to an existing
+Use `--case PATH_TO_CASE_JSON --resume COMPLETED-TRANSLATION-RUN --format-docx ...` to add it to an existing
 E2E run without repeating translation. `--format-purpose` selects the profile.
 Explicit `--auto-approve-recommended` also applies to recommended format decisions,
 with the same separate-closure and delegated-decision audit rules. Formatting has

@@ -366,20 +366,41 @@ class WorkflowTests(unittest.TestCase):
             definition_at(path)
 
     def e2e_case(self):
-        spec = json.loads(run_e2e.DEFAULT_CASE.read_text(encoding="utf-8"))
-        spec["case_id"] = "fixture-e2e"
-        spec["input"]["manuscript"] = {
-            "file": str(self.source), "format": "markdown", "sha256": digest(self.source.read_bytes()),
+        spec = {
+            "schema_version": 1, "case_id": "fixture-e2e", "revision": 1,
+            "task": "literary-translation-workflow",
+            "input": {
+                "manuscript": {"file": str(self.source), "format": "markdown", "sha256": digest(self.source.read_bytes())},
+                "source_language": "zh", "target_language": "en-US", "scope": "whole_work",
+                "workflow_definition": str(DEFAULT_DEFINITION), "task_specification": "task.md",
+                "runtime": {"adapter": "codex-app-server", "model": None, "human_responses": "interactive"},
+            },
+            "source_inventory": {"title": "Synthetic fixture"},
+            "expected_output": {
+                "stage_sequence": ["prepare", "translate", "accept", "export"],
+                "required_files": ["state.sqlite3", "export/manifest.json", "export/glossary.md", "export/voice.md"],
+            },
+            "checks": [
+                {"id": name, "evaluation": method, "expectation": f"Verify {name} on the synthetic fixture."}
+                for name, method in (
+                    ("source-integrity", "deterministic"), ("coverage", "source-comparison"),
+                    ("domain-gates", "receipts-and-domain-review"), ("recovery", "interactive-scenario"),
+                    ("stale-response", "interactive-scenario"), ("continuity", "domain-review"),
+                    ("export-provenance", "deterministic"), ("fidelity-routing", "trace-and-domain-review"),
+                )
+            ],
         }
-        spec["input"]["workflow_definition"] = str(DEFAULT_DEFINITION)
-        spec["input"]["task_specification"] = "task.md"
-        spec["source_inventory"] = {"title": "Synthetic fixture"}
         (self.base / "task.md").write_text("Translate the complete synthetic fixture.", encoding="utf-8")
         path = self.base / "case.json"
         path.write_text(json.dumps(spec), encoding="utf-8")
         case = run_e2e.load_case(path)
         run_e2e.bind_case(self.engine, case, {"executable": "test-only", "version": "scripted fixture"})
         return case
+
+    def test_e2e_launcher_requires_an_explicit_case(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as stopped:
+            run_e2e.parser().parse_args([])
+        self.assertEqual(stopped.exception.code, 2)
 
     def test_e2e_launcher_interactive_loop_and_honest_report(self):
         case = self.e2e_case()

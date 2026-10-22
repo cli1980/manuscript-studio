@@ -1,6 +1,8 @@
 services:
   ground-truth:
-    build: .
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
     ports:
       - "127.0.0.1:8765:8765"
     read_only: true

@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from evals.server.app import COOKIE, MAX_BODY, create_app
 from evals.server.repository import DataError, plain_path
 from evals.server.workspace import snapshot
+from evals.translation_cases import migrate_case
 
 EVALS = Path(__file__).resolve().parents[2]
 ORIGIN = "http://127.0.0.1:8765"
@@ -36,6 +37,15 @@ def sample_copy(root):
         shutil.copytree(EVALS / relative, root / relative)
     case_root = root / f"cases/literary-translation/{CASE_ID}"
     case = json.loads((case_root / "case.json").read_text(encoding="utf-8"))
+    # Legacy fixtures exercise compatibility; dedicated tests migrate them below.
+    if case.get("schema_version") == 2:
+        baseline = next(c for c in case.pop("candidates") if c["provenance"]["translation_origin"] == "user-provided")
+        original = (case_root / baseline["translation_file"]).read_bytes()
+        (case_root / "translation.en.txt").write_bytes(original)
+        case.update(schema_version=1, translation_file="translation.en.txt",
+                    provenance=baseline["provenance"])
+        case.pop("translation_instructions", None)
+        (case_root / "case.json").write_text(json.dumps(case), encoding="utf-8")
     pending = {
         "judgment_id": f"{CASE_ID}-judgment-001", "case_id": CASE_ID,
         "case_revision": case["revision"], "passage_id": case["passage_id"],
@@ -82,15 +92,115 @@ class ServerTests(unittest.TestCase):
             "issues": [],
         }
         body.update(changes)
+        if body.get("candidate_id") and not body["candidate_id"].startswith("c-"):
+            body["candidate_id"] = self.app.state.repository.review_id(CASE_ID, "candidate", body["candidate_id"])
         return self.client.post(f"/api/cases/{CASE_ID}/judgments", json=body, headers=self.headers)
 
     def test_sample_read_is_exact_and_has_no_generated_score(self):
         case = self.get_case()
         self.assertEqual(case["source"]["text"], (EVALS / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt").read_bytes().decode("utf-8"))
-        self.assertEqual(case["translation"], (EVALS / f"cases/literary-translation/{CASE_ID}/translation.en.txt").read_bytes().decode("utf-8"))
+        original_case = json.loads((EVALS / f"cases/literary-translation/{CASE_ID}/case.json").read_text(encoding="utf-8"))
+        original_file = next(c["translation_file"] for c in original_case["candidates"]
+                             if c["provenance"]["translation_origin"] == "user-provided")
+        self.assertEqual(case["translation"], (EVALS / f"cases/literary-translation/{CASE_ID}" / original_file).read_bytes().decode("utf-8"))
         self.assertIsNone(case["judgments"][0]["overall_score"])
         self.assertEqual(case["judgments"][0]["status"], "pending")
         self.assertIn("was nor in the least", case["translation"])
+
+    def test_local_only_cases_are_not_listed_for_routine_review(self):
+        directory = self.root / f"cases/literary-translation/{CASE_ID}"
+        (directory / ".local-only").write_text("Manual case.")
+        self.assertEqual(self.app.state.repository.list_cases("literary-translation"), [])
+        self.assertEqual(self.app.state.repository.get_case(CASE_ID)["metadata"]["case_id"], CASE_ID)
+
+    def multi_candidate(self):
+        path = self.root / f"cases/literary-translation/{CASE_ID}/case.json"
+        history = path.parent / "judgments.jsonl"
+        case, judgments = migrate_case(json.loads(path.read_text()), [json.loads(line) for line in history.read_text().splitlines()])
+        case["candidates"].append({
+            "candidate_id": "variant", "revision": 1, "translation_file": "variant.en.txt",
+            "status": "ready", "derived_from": "baseline", "provenance": {},
+        })
+        (path.parent / "variant.en.txt").write_text("Separate candidate for a disposable test.")
+        path.write_text(json.dumps(case))
+        history.write_text("".join(json.dumps(item) + "\n" for item in judgments))
+        # This setup is a maintainer change, not a review edit.
+        for target in (self.source_root,):
+            directory = target / path.parent.relative_to(self.root)
+            for name in ("case.json", "judgments.jsonl", "variant.en.txt"):
+                (directory / name).write_bytes((path.parent / name).read_bytes())
+        self.app.state.workspace.baseline = snapshot(self.app.state.workspace.source)
+        return case
+
+    def test_candidate_reviews_are_isolated_and_submit_preserves_both(self):
+        self.multi_candidate()
+        response = self.judgment(candidate_id="baseline", candidate_revision=1)
+        self.assertEqual(response.status_code, 201, response.text)
+        baseline_id = response.json()["judgments"][-1]["judgment_id"]
+        variant_id = self.app.state.repository.review_id(CASE_ID, "candidate", "variant")
+        variant = self.client.get(f"/api/cases/{CASE_ID}?candidate_id={variant_id}").json()
+        self.assertEqual(variant["translation"], "Separate candidate for a disposable test.")
+        self.assertEqual(variant["judgments"], [])
+        rejected = self.judgment(candidate_id="variant", candidate_revision=1, supersedes_judgment_id=baseline_id)
+        self.assertEqual(rejected.status_code, 409)
+        response = self.judgment(candidate_id="variant", candidate_revision=1, overall_score=2)
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(response.json()["judgments"][-1]["overall_score"], 2)
+        self.assertIsNone(response.json()["judgments"][-1]["supersedes_judgment_id"])
+        baseline_alias = self.app.state.repository.review_id(CASE_ID, "candidate", "baseline")
+        baseline = self.client.get(f"/api/cases/{CASE_ID}?candidate_id={baseline_alias}").json()
+        self.assertEqual(baseline["judgments"][-1]["overall_score"], 4)
+        self.assertEqual(len(baseline["all_judgments"]), 3)
+        status = self.client.get("/api/workspace").json()
+        submitted = self.client.post("/api/workspace/submit", json={"version": status["version"]}, headers=self.headers)
+        self.assertEqual(submitted.status_code, 200, submitted.text)
+        saved = self.app.state.workspace.source.get_case(CASE_ID, "variant")
+        self.assertEqual(saved["judgments"][-1]["overall_score"], 2)
+        self.assertEqual(len(saved["all_judgments"]), 3)
+
+    def test_multiple_candidates_require_selection_and_current_candidate_revision(self):
+        self.multi_candidate()
+        self.assertEqual(self.judgment().status_code, 422)
+        self.assertEqual(self.judgment(candidate_id="variant", candidate_revision=99).status_code, 409)
+        self.assertEqual(self.client.get(f"/api/cases/{CASE_ID}?candidate_id=unknown").status_code, 404)
+        self.assertEqual(self.judgment(candidate_id="variant", candidate_revision=1).status_code, 201)
+        path = self.root / f"cases/literary-translation/{CASE_ID}/case.json"
+        case = json.loads(path.read_text())
+        case["candidates"][1]["revision"] = 2
+        path.write_text(json.dumps(case))
+        response = self.judgment(candidate_id="variant", candidate_revision=2)
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNone(response.json()["judgments"][-1]["supersedes_judgment_id"])
+
+    def test_review_api_hides_labels_provenance_paths_and_english_title(self):
+        self.multi_candidate()
+        directory = self.root / f"cases/literary-translation/{CASE_ID}"
+        case = json.loads((directory / "case.json").read_text())
+        case["context"] = {"brief": "SECRET_CASE_HINT"}
+        for candidate in case["candidates"]:
+            candidate["provenance"]["model"] = "SECRET_GENERATOR"
+        (directory / "case.json").write_text(json.dumps(case))
+        source_path = (directory / case["source_metadata_file"]).resolve()
+        source = json.loads(source_path.read_text(encoding="utf-8"))
+        source["work"]["title_en"] = "SECRET_ENGLISH_TITLE"
+        source["provenance"]["translator"] = "SECRET_TRANSLATOR"
+        source_path.write_text(json.dumps(source))
+        for route in ("/api/cases", f"/api/cases/{CASE_ID}", "/api/passages", f"/api/passages/{PASSAGE_ID}"):
+            response = self.client.get(route)
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn("SECRET_", response.text)
+            self.assertNotIn("translation_file", response.text)
+            self.assertNotIn("derived_from", response.text)
+        view = self.get_case()
+        self.assertEqual(self.client.get(f"/api/cases/{CASE_ID}?candidate_id=baseline").status_code, 404)
+        self.assertEqual(self.client.get(f"/api/cases/{CASE_ID}?candidate_id=variant").status_code, 404)
+        for candidate in view["candidates"]:
+            self.assertRegex(candidate["metadata"]["candidate_id"], r"^c-[a-f0-9]{16}$")
+            self.assertEqual(set(candidate["metadata"]), {"candidate_id", "revision", "status"})
+        chosen = view["candidate"]["candidate_id"]
+        saved = self.judgment(candidate_id=chosen, candidate_revision=1)
+        self.assertEqual(saved.status_code, 201)
+        self.assertEqual(saved.json()["candidate"]["candidate_id"], chosen)
 
     def test_authentication_required_on_every_data_route(self):
         self.client.cookies.clear()
@@ -273,7 +383,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(response.json()["pending_files"], 0)
         published = workspace.source.get_case(CASE_ID)
         self.assertEqual(published["judgments"][-1]["overall_score"], 4)
-        self.assertEqual(published["judgments"], self.get_case()["judgments"])
+        self.assertEqual(published["judgments"], self.app.state.repository.get_case(CASE_ID)["judgments"])
         self.assertEqual(self.submit().status_code, 200)
         self.assertEqual(len(workspace.source.get_case(CASE_ID)["judgments"]), 2)
 
@@ -499,7 +609,7 @@ class ServerTests(unittest.TestCase):
                 self.assertEqual(self.judgment(**extra).status_code, 422)
         self.assertEqual(self.judgment(rationale="My subjective reading of this passage.").status_code, 201)
         self.assertEqual(self.submit().status_code, 200)
-        after = self.app.state.workspace.source.get_case(CASE_ID)
+        after = self.app.state.repository.review_view(self.app.state.workspace.source.get_case(CASE_ID))
         self.assertEqual(before["metadata"], after["metadata"])
         self.assertEqual(before["source"], after["source"])
         self.assertEqual(before["translation"], after["translation"])
@@ -635,6 +745,96 @@ class ServerTests(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("EVAL_BROWSER_TEST") == "1", "Set EVAL_BROWSER_TEST=1 after installing Playwright and Chromium.")
 class BrowserTests(unittest.TestCase):
+    def test_candidate_switching_scores_history_and_submission(self):
+        import uvicorn
+        from playwright.sync_api import expect, sync_playwright
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve() / "evals"
+            sample_copy(root)
+            directory = root / f"cases/literary-translation/{CASE_ID}"
+            history_path = directory / "judgments.jsonl"
+            case, history = migrate_case(
+                json.loads((directory / "case.json").read_text()),
+                [json.loads(line) for line in history_path.read_text().splitlines()],
+            )
+            case["candidates"].append({
+                "candidate_id": "variant", "revision": 1, "translation_file": "variant.en.txt",
+                "status": "ready", "derived_from": "baseline", "provenance": {},
+            })
+            (directory / "case.json").write_text(json.dumps(case))
+            (directory / "variant.en.txt").write_text("A distinct candidate for browser testing.")
+            history_path.write_text("".join(json.dumps(item) + "\n" for item in history))
+            app = create_app(root, "http://127.0.0.1:18765", reviewer_label="candidate-reviewer")
+            baseline_id = app.state.repository.review_id(CASE_ID, "candidate", "baseline")
+            variant_id = app.state.repository.review_id(CASE_ID, "candidate", "variant")
+            self.addCleanup(app.state.workspace.close)
+            server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=18765, log_level="error", access_log=False))
+            thread = threading.Thread(target=server.run, daemon=True)
+            thread.start()
+            try:
+                for _ in range(100):
+                    if server.started:
+                        break
+                    time.sleep(.05)
+                self.assertTrue(server.started)
+                with sync_playwright() as playwright:
+                    browser = playwright.chromium.launch()
+                    try:
+                        page = browser.new_page(viewport={"width": 1440, "height": 1100})
+                        errors = []
+                        page.on("pageerror", lambda error: errors.append(str(error)))
+                        page.goto("http://127.0.0.1:18765")
+                        page.get_by_label("Startup access key").fill(app.state.access_key)
+                        page.get_by_role("button", name="Open workspace").click()
+                        page.locator(f'[data-case-id="{CASE_ID}"]').click()
+                        page.get_by_label("Translation candidate", exact=True).select_option(baseline_id)
+                        expect(page.get_by_label("Translation candidate", exact=True)).to_have_value(baseline_id)
+                        original = page.locator("#source-text").inner_text()
+                        page.get_by_label("Overall quality").select_option("4")
+                        page.get_by_label("Comments", exact=True).fill("Baseline review only.")
+                        page.once("dialog", lambda dialog: dialog.dismiss())
+                        page.get_by_label("Translation candidate", exact=True).select_option(variant_id)
+                        expect(page.get_by_label("Translation candidate", exact=True)).to_have_value(baseline_id)
+                        expect(page.get_by_label("Comments", exact=True)).to_have_value("Baseline review only.")
+                        page.get_by_role("button", name="Save draft", exact=True).click()
+                        expect(page.locator("#notice")).to_contain_text("Assessment saved")
+                        page.get_by_label("Translation candidate", exact=True).select_option(variant_id)
+                        expect(page.locator("#translation-text")).to_have_text("A distinct candidate for browser testing.")
+                        expect(page.locator("#source-text")).to_have_text(original)
+                        expect(page.get_by_label("Overall quality")).to_have_value("")
+                        expect(page.get_by_label("Comments", exact=True)).to_have_value("")
+                        expect(page.locator("#review-history")).to_be_hidden()
+                        page.get_by_label("Overall quality").select_option("2")
+                        page.get_by_label("Comments", exact=True).fill("Variant review only.")
+                        if os.environ.get("EVAL_MULTI_SCREENSHOT"):
+                            page.screenshot(path=os.environ["EVAL_MULTI_SCREENSHOT"], full_page=True)
+                        page.get_by_role("button", name="Mark complete", exact=True).click()
+                        expect(page.get_by_label("Translation candidate", exact=True)).to_have_value(baseline_id)
+                        expect(page.get_by_label("Overall quality")).to_have_value("4")
+                        expect(page.get_by_label("Comments", exact=True)).to_have_value("Baseline review only.")
+                        page.get_by_role("button", name="Mark complete", exact=True).click()
+                        expect(page.locator("#case-detail")).to_be_hidden()
+                        expect(page.locator(f'[data-case-id="{CASE_ID}"]')).to_contain_text("2/2 candidates reviewed")
+                        self.assertEqual(len(app.state.workspace.source.get_case(CASE_ID)["all_judgments"]), 1)
+                        page.locator(f'[data-case-id="{CASE_ID}"]').click()
+                        page.get_by_label("Translation candidate", exact=True).select_option(variant_id)
+                        expect(page.get_by_label("Overall quality")).to_have_value("2")
+                        expect(page.get_by_label("Comments", exact=True)).to_have_value("Variant review only.")
+                        expect(page.locator("#review-history")).to_be_hidden()
+                        page.get_by_role("button", name="Submit changes", exact=True).click()
+                        page.get_by_role("button", name="Submit to source", exact=True).click()
+                        expect(page.locator("#workspace-state")).to_have_text("No pending changes.")
+                        saved = app.state.workspace.source.get_case(CASE_ID, "variant")
+                        self.assertEqual(saved["judgments"][-1]["overall_score"], 2)
+                        self.assertEqual(len(saved["all_judgments"]), 4)
+                        self.assertEqual(errors, [])
+                    finally:
+                        browser.close()
+            finally:
+                server.should_exit = True
+                thread.join(timeout=10)
+
     def test_browser_conflict_offers_contextual_reload_without_losing_edits(self):
         import uvicorn
         from playwright.sync_api import expect, sync_playwright

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "case_id": "zh-en-contemporary-047",
   "revision": 1,
   "status": "ready",
@@ -9,46 +9,110 @@
   "source_file": "../../../fixtures/manuscripts/contemporary-a-battlefield-for-idols/passage-047/source.zh.txt",
   "source_metadata_file": "../../../fixtures/manuscripts/contemporary-a-battlefield-for-idols/passage-047/passage.json",
   "source_revision": 1,
-  "translation_file": "translation.en.txt",
   "group_id": "contemporary-a-battlefield-for-idols",
   "passage_id": "contemporary-a-battlefield-for-idols-passage-047",
   "rubric_id": "literary-translation-quality-v1",
   "context": {
     "brief": null
   },
-  "provenance": {
-    "usage_rights": "permitted",
-    "license": "CC BY-SA 3.0",
-    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
-    "attribution": "屬於偶像的戰場 / A Battlefield For Idols, by MScarlet. Translation: la kanro CC BY-SA 3.0. Sources: https://scp-cn.wiki/a-battlefield-for-idols and https://scp-int.wikidot.com/a-battlefield-for-idols.",
-    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
-    "corpus_collection": "contemporary_corpus",
-    "corpus_record_id": "contemporary-047",
-    "source_work_id": "a-battlefield-for-idols",
-    "retrieved_date": "2026-10-19",
-    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
-    "translation_origin": "published English translation",
-    "translator": "la kanro",
-    "title_en": "A Battlefield For Idols",
-    "source_url": "https://scp-int.wikidot.com/a-battlefield-for-idols",
-    "english_history_url": "https://scp-int.wikidot.com/a-battlefield-for-idols/history",
-    "source_credits": [
-      "rating: +3 + – x close Credits A Battlefield For Idols Author: MScarlet , Click here for other works by me Translator: la kanro Who says an MTF must be military? Recommended Readings: SCP-CN-280 SCP-CN-326 Sound Attack: Overview Inspiration Sources: 1. Koi to King Kong by Hinatabi Bitter Sweets♪ close"
-    ],
-    "source_snapshot_sha256": "03ba68459c70fd5c55388a59f85ece27e72eeec24da86b39bf62f7a506798812",
-    "extracted_block_range_exclusive": [
-      7,
-      25
-    ],
-    "english_word_count": 602,
-    "selection_type": "complete_scene_or_story",
-    "corpus_review": {
-      "reviewer": "Codex (AI)",
-      "date": "2026-10-19",
-      "boundary_rationale": "The complete opening performance: stage entrance, greeting, song and the audience member's transformation into a fan.",
-      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
-      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
-      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  "candidates": [
+    {
+      "candidate_id": "c-82b72f16ada84b6f",
+      "revision": 1,
+      "translation_file": "candidates/c-82b72f16ada84b6f.en.txt",
+      "status": "ready",
+      "provenance": {
+        "usage_rights": "permitted",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "attribution": "屬於偶像的戰場 / A Battlefield For Idols, by MScarlet. Translation: la kanro CC BY-SA 3.0. Sources: https://scp-cn.wiki/a-battlefield-for-idols and https://scp-int.wikidot.com/a-battlefield-for-idols.",
+        "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+        "corpus_collection": "contemporary_corpus",
+        "corpus_record_id": "contemporary-047",
+        "source_work_id": "a-battlefield-for-idols",
+        "retrieved_date": "2026-10-19",
+        "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+        "translation_origin": "published English translation",
+        "translator": "la kanro",
+        "title_en": "A Battlefield For Idols",
+        "source_url": "https://scp-int.wikidot.com/a-battlefield-for-idols",
+        "english_history_url": "https://scp-int.wikidot.com/a-battlefield-for-idols/history",
+        "source_credits": [
+          "rating: +3 + – x close Credits A Battlefield For Idols Author: MScarlet , Click here for other works by me Translator: la kanro Who says an MTF must be military? Recommended Readings: SCP-CN-280 SCP-CN-326 Sound Attack: Overview Inspiration Sources: 1. Koi to King Kong by Hinatabi Bitter Sweets♪ close"
+        ],
+        "source_snapshot_sha256": "03ba68459c70fd5c55388a59f85ece27e72eeec24da86b39bf62f7a506798812",
+        "extracted_block_range_exclusive": [
+          7,
+          25
+        ],
+        "english_word_count": 602,
+        "selection_type": "complete_scene_or_story",
+        "corpus_review": {
+          "reviewer": "Codex (AI)",
+          "date": "2026-10-19",
+          "boundary_rationale": "The complete opening performance: stage entrance, greeting, song and the audience member's transformation into a fan.",
+          "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+          "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+          "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+        }
+      }
+    },
+    {
+      "candidate_id": "c-9a4e2d74d7a0443e",
+      "revision": 1,
+      "translation_file": "candidates/c-9a4e2d74d7a0443e.en.txt",
+      "status": "ready",
+      "provenance": {
+        "translation_origin": "synthetic model translation",
+        "purpose": "minimal-prompt adverse-candidate pool",
+        "quality_status": "unreviewed; degradation is not assumed",
+        "requested_model": "azure/openai/gpt-4.1-mini",
+        "returned_model": "azure/openai/gpt-4.1-mini",
+        "non_reasoning_model": true,
+        "instruction": "translate the Chinese to English",
+        "generation_settings": {
+          "temperature": 0,
+          "max_tokens": 6000
+        },
+        "request_sha256": "e8d35f418d3feb8a988d2aef87751f7f6fcd9242f94450f4d10108424b2dba04",
+        "response_id": "chatcmpl-EbbF9m3QI1BhrqH5L6SrDpwENDZTD",
+        "generated_at": "2026-10-22T00:46:47+00:00",
+        "usage": {
+          "completion_tokens": 779,
+          "prompt_tokens": 1122,
+          "total_tokens": 1901,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          },
+          "latency_checkpoint": {
+            "engine_tbt_ms": 6,
+            "engine_ttft_ms": 31,
+            "engine_ttlt_ms": 4631,
+            "pre_inference_ms": 325,
+            "service_tbt_ms": 6,
+            "service_ttft_ms": 752,
+            "service_ttlt_ms": 5384,
+            "user_visible_ttft_ms": 427
+          }
+        },
+        "generation_artifacts": "results/synthetic-translations-p_5iw50i/zh-en-contemporary-047",
+        "task_id": "162d23cc4011c1675a32e2cd146596221d49f5a88dd41dc9c151acec870e75be",
+        "source_revision": 1,
+        "source_sha256": "f28b1d22b28836bb86475e1e9e71bbdf0795e0d7c901d41b35bd46f7eece4643",
+        "translation_sha256": "fe4c5885f7a956b89ca20ea0f7275d8c0a6915c805396ea0c1dcf7330b4f7dd1",
+        "usage_rights": "permitted",
+        "attribution": "Chinese source: 屬於偶像的戰場; author: MScarlet; https://scp-cn.wiki/a-battlefield-for-idols. Synthetic English translation generated with azure/openai/gpt-4.1-mini.",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/"
+      }
     }
-  }
+  ],
+  "translation_instructions": null
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "case_id": "zh-en-contemporary-002",
   "revision": 1,
   "status": "ready",
@@ -9,44 +9,108 @@
   "source_file": "../../../fixtures/manuscripts/contemporary-apollyon/passage-002/source.zh.txt",
   "source_metadata_file": "../../../fixtures/manuscripts/contemporary-apollyon/passage-002/passage.json",
   "source_revision": 1,
-  "translation_file": "translation.en.txt",
   "group_id": "contemporary-apollyon",
   "passage_id": "contemporary-apollyon-passage-002",
   "rubric_id": "literary-translation-quality-v1",
   "context": {
     "brief": null
   },
-  "provenance": {
-    "usage_rights": "permitted",
-    "license": "CC BY-SA 3.0",
-    "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
-    "attribution": "论一个清洁工是怎么从Apollyon级（伪）手中拯救世界五次的 / On how a cleaner saved the world five times from an Apollyon-class (pseudo) entity, by Dr Vodka Skyy. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/apollyon and https://scp-int.wikidot.com/apollyon.",
-    "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
-    "corpus_collection": "contemporary_corpus",
-    "corpus_record_id": "contemporary-002",
-    "source_work_id": "apollyon",
-    "retrieved_date": "2026-10-19",
-    "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
-    "translation_origin": "published English translation",
-    "translator": "Not separately named in the retrieved credit box; see linked English page history and retained credits.",
-    "title_en": "On how a cleaner saved the world five times from an Apollyon-class (pseudo) entity",
-    "source_url": "https://scp-int.wikidot.com/apollyon",
-    "english_history_url": "https://scp-int.wikidot.com/apollyon/history",
-    "source_credits": [],
-    "source_snapshot_sha256": "6b98da637f39b9be3103d39321d36270e58a976449096dc956e40fdbf7d1e9c9",
-    "extracted_block_range_exclusive": [
-      0,
-      25
-    ],
-    "english_word_count": 679,
-    "selection_type": "complete_scene_or_story",
-    "corpus_review": {
-      "reviewer": "Codex (AI)",
-      "date": "2026-10-19",
-      "boundary_rationale": "The first two containment attempts each reach a concrete solution; the passage introduces the problem and completes both iterations.",
-      "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
-      "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
-      "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+  "candidates": [
+    {
+      "candidate_id": "c-1afdb50ff2294532",
+      "revision": 1,
+      "translation_file": "candidates/c-1afdb50ff2294532.en.txt",
+      "status": "ready",
+      "provenance": {
+        "usage_rights": "permitted",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "attribution": "论一个清洁工是怎么从Apollyon级（伪）手中拯救世界五次的 / On how a cleaner saved the world five times from an Apollyon-class (pseudo) entity, by Dr Vodka Skyy. Translation: Not separately named in the retrieved credit box; see linked English page history and retained credits. CC BY-SA 3.0. Sources: https://scp-cn.wiki/apollyon and https://scp-int.wikidot.com/apollyon.",
+        "license_evidence": "CC BY-SA 3.0 link found on both retrieved source pages; original HTML retained in source_cache.",
+        "corpus_collection": "contemporary_corpus",
+        "corpus_record_id": "contemporary-002",
+        "source_work_id": "apollyon",
+        "retrieved_date": "2026-10-19",
+        "modifications": "Imported verbatim from contemporary_pairs.jsonl; no additional wording or normalization changes.",
+        "translation_origin": "published English translation",
+        "translator": "Not separately named in the retrieved credit box; see linked English page history and retained credits.",
+        "title_en": "On how a cleaner saved the world five times from an Apollyon-class (pseudo) entity",
+        "source_url": "https://scp-int.wikidot.com/apollyon",
+        "english_history_url": "https://scp-int.wikidot.com/apollyon/history",
+        "source_credits": [],
+        "source_snapshot_sha256": "6b98da637f39b9be3103d39321d36270e58a976449096dc956e40fdbf7d1e9c9",
+        "extracted_block_range_exclusive": [
+          0,
+          25
+        ],
+        "english_word_count": 679,
+        "selection_type": "complete_scene_or_story",
+        "corpus_review": {
+          "reviewer": "Codex (AI)",
+          "date": "2026-10-19",
+          "boundary_rationale": "The first two containment attempts each reach a concrete solution; the passage introduces the problem and completes both iterations.",
+          "alignment": "Passage-level alignment of the published translation with its Chinese original. Not a sentence-aligned or human-certified corpus.",
+          "normalization": "HTML removed; paragraph and scene breaks preserved; credit widgets, navigation and footnote markers excluded. Source wording retained, including translation quirks. Unrendered formatting/image directives omitted; no images collected.",
+          "context": "An excerpt may use characters and terms established elsewhere in the source or SCP shared universe."
+        }
+      }
+    },
+    {
+      "candidate_id": "c-b77c5bd7e5a244f0",
+      "revision": 1,
+      "translation_file": "candidates/c-b77c5bd7e5a244f0.en.txt",
+      "status": "ready",
+      "provenance": {
+        "translation_origin": "synthetic model translation",
+        "purpose": "minimal-prompt adverse-candidate pool",
+        "quality_status": "unreviewed; degradation is not assumed",
+        "requested_model": "azure/openai/gpt-4.1-mini",
+        "returned_model": "azure/openai/gpt-4.1-mini",
+        "non_reasoning_model": true,
+        "instruction": "translate the Chinese to English",
+        "generation_settings": {
+          "temperature": 0,
+          "max_tokens": 6000
+        },
+        "request_sha256": "3a58af032cecccedc3b247d59a0d8e1b2f8648edc51df180f0b8e9e43933e136",
+        "response_id": "chatcmpl-EbbDeAYClEni69639avsYvn38uFbm",
+        "generated_at": "2026-10-22T00:45:14+00:00",
+        "usage": {
+          "completion_tokens": 796,
+          "prompt_tokens": 927,
+          "total_tokens": 1723,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          },
+          "latency_checkpoint": {
+            "engine_tbt_ms": 7,
+            "engine_ttft_ms": 30,
+            "engine_ttlt_ms": 5495,
+            "pre_inference_ms": 365,
+            "service_tbt_ms": 7,
+            "service_ttft_ms": 668,
+            "service_ttlt_ms": 6126,
+            "user_visible_ttft_ms": 303
+          }
+        },
+        "generation_artifacts": "results/synthetic-translations-p_5iw50i/zh-en-contemporary-002",
+        "task_id": "2046330dae35cf78d0161a47f292f9d733fcfacdedd67b4e0e2de63acbbe4c71",
+        "source_revision": 1,
+        "source_sha256": "b8ec391d7e893f924d2db50362517bc1a18b3100c0936e7c412d49b77aabe8f8",
+        "translation_sha256": "95e218bc666e623912cf87272237df0ccd6a86bf4e89d2c40352a7aca03d59d8",
+        "usage_rights": "permitted",
+        "attribution": "Chinese source: 论一个清洁工是怎么从Apollyon级（伪）手中拯救世界五次的; author: Dr Vodka Skyy; https://scp-cn.wiki/apollyon. Synthetic English translation generated with azure/openai/gpt-4.1-mini.",
+        "license": "CC BY-SA 3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/"
+      }
     }
-  }
+  ],
+  "translation_instructions": null
 }

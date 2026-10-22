@@ -10,7 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from run_judge import EvaluationError, guarded, identifier, object_json, read_bytes, sha
+from run_judge import EvaluationError, guarded, identifier, object_json, read_bytes, sha, reference
 
 ROOT = Path(__file__).resolve().parent
 LICENSE_URL = "https://creativecommons.org/licenses/by-sa/3.0/"
@@ -83,6 +83,10 @@ def load_records(corpus):
 
 
 def build_plan(records, corpus_hash):
+    if __package__:
+        from .translation_cases import migrate_case, new_candidate_id
+    else:
+        from translation_cases import migrate_case, new_candidate_id
     plan, mapping = {}, []
     for record in records:
         group = identifier("contemporary-" + record["source_work_id"])
@@ -136,10 +140,14 @@ def build_plan(records, corpus_hash):
                 "selection_type": record["selection_type"], "corpus_review": review,
             },
         }
+        case, _ = migrate_case(case, [])
+        candidate = case["candidates"][0]
+        candidate["candidate_id"] = new_candidate_id()
+        candidate["translation_file"] = f"candidates/{candidate['candidate_id']}.en.txt"
         source_bytes, translation_bytes = record["chinese"].encode("utf-8"), record["english"].encode("utf-8")
         plan[passage_directory] = {"passage.json": encoded(passage), "source.zh.txt": source_bytes}
         plan[case_directory] = {
-            "case.json": encoded(case), "translation.en.txt": translation_bytes, "judgments.jsonl": b"",
+            "case.json": encoded(case), candidate["translation_file"]: translation_bytes, "judgments.jsonl": b"",
         }
         mapping.append({
             "corpus_record_id": rid, "case_id": case_id, "source_work_id": record["source_work_id"],
@@ -176,11 +184,40 @@ def import_corpus(corpus, data_root, *, dry_run=False):
         if directory.exists():
             if not directory.is_dir():
                 raise EvaluationError(f"Import destination is not a directory: {relative}")
+            if "case.json" in files:
+                if __package__:
+                    from .translation_cases import migrate_case
+                else:
+                    from translation_cases import migrate_case
+                case_path = guarded(directory / "case.json", data_root)
+                if not case_path.is_file() or not (directory / "judgments.jsonl").is_file():
+                    raise EvaluationError(f"Existing import is incomplete: {relative}")
+                stored, _ = migrate_case(object_json(read_bytes(case_path, data_root)), [])
+                expected_case = object_json(files["case.json"])
+                expected_candidate = expected_case["candidates"][0]
+                matches = [c for c in stored["candidates"]
+                           if c.get("provenance", {}).get("corpus_record_id") == expected_candidate["provenance"]["corpus_record_id"]
+                           and c.get("provenance", {}).get("translation_origin") == "published English translation"
+                           and not c.get("derived_from")]
+                if len(matches) != 1:
+                    raise EvaluationError(f"Cannot identify the imported candidate: {relative}")
+                actual_candidate = matches[0]
+                translation = reference(directory, actual_candidate["translation_file"], directory)
+                if read_bytes(translation, directory) != files[expected_candidate["translation_file"]]:
+                    raise EvaluationError(f"Refusing to overwrite changed data: {relative}")
+                expected_candidate.update(candidate_id=actual_candidate["candidate_id"],
+                                          translation_file=actual_candidate["translation_file"])
+                stored["candidates"] = [actual_candidate]
+                if stored != expected_case:
+                    raise EvaluationError(f"Refusing to overwrite changed data: {relative / 'case.json'}")
+                unchanged += 1
+                continue
             for filename, expected in files.items():
                 path = guarded(directory / filename, data_root)
                 if not path.is_file():
                     raise EvaluationError(f"Existing import is incomplete: {relative / filename}")
-                if filename != "judgments.jsonl" and read_bytes(path, data_root) != expected:
+                actual = read_bytes(path, data_root)
+                if filename != "judgments.jsonl" and actual != expected:
                     raise EvaluationError(f"Refusing to overwrite changed data: {relative / filename}")
             unchanged += 1
         else:
@@ -192,7 +229,9 @@ def import_corpus(corpus, data_root, *, dry_run=False):
                 directory = staging / relative
                 directory.mkdir(parents=True, exist_ok=True)
                 for filename, content in files.items():
-                    (directory / filename).write_bytes(content)
+                    target = directory / filename
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(content)
             for relative, _ in sorted(missing, key=lambda item: (not str(item[0]).startswith("fixtures"), str(item[0]))):
                 destination = guarded(data_root / relative, data_root)
                 destination.parent.mkdir(parents=True, exist_ok=True)

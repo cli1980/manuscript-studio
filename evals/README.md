@@ -20,18 +20,17 @@ separate human judgments. Its Chinese source and English translation are
 populated, and submitted human reviews are preserved separately. Remaining
 dataset metadata must be completed before inclusion in training or evaluation datasets.
 
-The [《刺秦》 quality case](cases/literary-translation/zh-en-ciqing-001/README.md)
-compares a complete English candidate against a hash-bound Chinese text fixture.
-Its candidate and human judgments remain empty until supplied. DOCX intake,
-approval/recovery behavior, and final export are tested by the
-[separate workflow case](../workflow/tests/cases/translation-ciqing-001/README.md).
-The two case formats have different inputs, outputs, and success criteria.
+Full-length 《刺秦》 and novel cases are optional local manual tests, excluded from
+Git along with their manuscript and reference fixtures. Their existing local paths
+are preserved. A `.local-only` file in a case directory excludes it from automatic
+`--all` selection and the review-server case list; an explicit `--case` still works.
+Routine evaluation uses the short distributed cases.
 
-The `literary-translation-quality` cases assess translation output; they do not
-execute the production skill. Direct skill-execution tests would bind a verified
-prepared-manuscript package and continuity context to approved chapter outputs
-and domain records. Workflow cases instead begin with raw manuscripts and cover
-orchestration across skills; their manifests live under `workflow/tests/cases/`.
+The `literary-translation-quality` cases support
+[both translator and judge evaluation](cases/literary-translation/README.md).
+A translator receives the source and translation instructions and produces a new
+candidate. A judge receives the source, a candidate, and judging instructions and
+produces scores. The runner handles assessment, not translation generation.
 
 The [contemporary corpus cases](cases/literary-translation/CONTEMPORARY_CORPUS.md)
 add 50 Chinese–English pairs from 29 source works, with shared Chinese fixtures,
@@ -109,8 +108,9 @@ For manuscript preparation, use the separate
 [deterministic skill evaluator](PREPARATION_EVALUATION.md). It checks a candidate
 prepared package against case-defined sources and reference Markdown, with
 explicit missing-evidence reporting for discovery traces and visual review.
-Its first DOCX case has fixed source ground truth for counts, boundaries, and text
-fingerprints; review of the reference Markdown's presentation remains separate.
+The full-novel `docx-novel-001` example and its reference data are local-only.
+The deterministic test suite builds small synthetic fixtures and does not require
+that manuscript.
 
 ## Run the translation judge
 
@@ -121,13 +121,19 @@ Both texts normally come from the case definition's file references. Judgment
 mode can instead accept a new translated output file, retaining the case's
 original passage as the source. The shared source reference is always checked.
 
-### Three purposes
+### Runner modes and evaluation targets
 
 | Mode | Model input | Human scores | Result |
 | --- | --- | --- | --- |
 | `export-training` | Judge skill and the two case texts | Supervised assistant targets, never input prompts | `training.jsonl` and an audit index; no model call |
-| `evaluate` (default) | Judge skill and the two case texts | Read only after the prediction is saved | Predictions, human comparisons, and discrepancy metrics |
-| `judge` | Judge skill, case source, and stored or newly supplied translation | Never read | Translation-quality scores and optional rationale |
+| `evaluate` (default) | Judge skill and the two case texts | Read only after the prediction is saved | Evaluate the judge: predictions, human comparisons, and discrepancy metrics |
+| `judge` | Judge skill, case source, and stored or newly supplied translation | Never read | Assess translation quality; use a new candidate to evaluate a translator's output |
+
+In every runner mode, `--model` identifies the judge model. When evaluating a
+translator, generate its candidate separately using the case source and translation
+instructions, withholding the stored English text and assessments. Then pass the
+new output with `--translation-file`. Human ratings for the stored candidate do
+not apply to this new output.
 
 Export human-labeled examples for fine-tuning:
 
@@ -152,7 +158,7 @@ Evaluate the judge's agreement with human reviews:
 python evals/run_judge.py --mode evaluate --all --reviewer lin-shaw --model YOUR_MODEL
 ```
 
-Judge an actual output from the literary-translation workflow:
+Assess a translator's newly generated output:
 
 ```text
 python evals/run_judge.py --mode judge --case zh-en-modern-001 --translation-file "C:/Workspace/translated-passage.md" --model YOUR_MODEL
@@ -235,16 +241,17 @@ results/judge-<timestamp>-<id>/
 |-- training.jsonl                # Training export only
 |-- training-index.jsonl          # Training export provenance, outside model input
 `-- <case-id>/
-    |-- request.json
-    |-- response.json             # Parsed API response, even if scoring is invalid
-    |-- prediction.json           # Validated prediction
-    |-- comparison.json           # Evaluation only: human reference and discrepancies
-    `-- training-target.json      # Training export only: human-provided target
+    `-- <candidate-id>/            # "generated" for an external translator output
+        |-- request.json
+        |-- response.json         # Parsed API response, even if scoring is invalid
+        |-- prediction.json       # Validated prediction
+        |-- comparison.json       # Evaluation only: human reference and discrepancies
+        `-- training-target.json  # Training export only: human-provided target
 ```
 
 In evaluation mode, after saving a valid prediction the runner checks that its
 input files have not changed, then reads human judgments locally. It selects the last applicable
-non-superseded record for the requested reviewer and matching case, source, and
+non-superseded record for the requested reviewer and matching case, candidate, source, and
 rubric versions. A current draft blocks comparison rather than falling back to
 an obsolete completed score. The comparison records the selected judgment ID and
 the human-history file hash. The run records hashes of the source, translation,
@@ -253,6 +260,11 @@ metadata, judge skill, rubric, and request.
 Each scored field reports `prediction - human`, absolute error, and exact
 agreement. The summary reports sample count, mean signed error, mean absolute
 error, and exact-agreement rate separately for overall score and each dimension.
+It also reports `case_macro_metrics`, giving each source task equal weight rather
+than letting a case with many variants dominate. `--candidate ID` selects one
+candidate within a single case; otherwise the runner iterates all candidates.
+Automatic `--all` selection reports skipped unavailable candidates. Legacy v1
+results retain the previous flat per-case directory layout.
 Live runs also print a per-case human-versus-LLM score table, the judge's rationale,
 and aggregate metrics in evaluation mode. Judge mode prints only model scores and
 rationale; training mode reports exported and rejected case counts. Prepare-only
@@ -287,8 +299,8 @@ on that sample is a development check, not independent evidence of improvement.
 
 ## Shared translation sources
 
-Each translation case pairs a shared source passage with one candidate
-translation and its own human judgments:
+Each translation case owns one shared source task and multiple candidate
+translations with candidate-specific human judgments:
 
 ```text
 evals/
@@ -300,26 +312,30 @@ evals/
     `-- zh-en-modern-001/
         |-- README.md
         |-- case.json
-        |-- translation.en.txt
+        |-- candidates/<opaque-id>.en.txt
         `-- judgments.jsonl
 ```
 
 `passage.json` owns work information, source provenance and usage rights, shared
-context, source language, and source revision. `case.json` owns the candidate
-translation, target language, translation provenance and usage rights, any
-translation-specific brief, and case revision. Human scores remain separate
-in `judgments.jsonl`.
+context, source language, and source revision. Version-2 `case.json` owns the target
+language, translation instructions, task revision, and a `candidates` array.
+Each candidate owns its translation path, revision, readiness, and provenance.
+Human scores remain in `judgments.jsonl`, bound to a candidate ID and revision.
+Candidate IDs and filenames are opaque. The human review API strips provenance,
+model names, English reference titles, and derivation links; AI judge requests
+remain limited to the source and one translation.
+See the [case contract](cases/literary-translation/README.md) for schema and migration.
 
 All file references use forward slashes and resolve relative to the JSON file
 containing them, not the shell's working directory. In a case, `source_file` must
 resolve to the same file as the referenced passage metadata's `source_file`.
 The case's `group_id`, `passage_id`, and `source_language` must match the shared
 metadata, and `source_revision` must match its `revision`. Each judgment must
-match its case ID and revision and the referenced passage ID and source revision.
+match its case ID/revision, candidate ID/revision, and passage ID/source revision.
 
-To add an alternative translation, create a new case ID and translation file
-while retaining the same source references and identifiers. Start fresh human
-judgments for that candidate. Different target languages can also reference the
+To add an alternative translation, add a candidate ID and translation file to the
+existing case. Start fresh human judgments for that candidate. Different translation
+tasks or target languages can use separate cases referencing the
 same source; declare the appropriate `target_language` and use a suitable rubric.
 The current fidelity, English-naturalness, and literary-voice dimensions are a
 draft for Chinese-to-English cases, not a universal rubric for every language.
@@ -336,8 +352,10 @@ draft for Chinese-to-English cases, not a universal rubric for every language.
   the corrected source, create a new case or preserve the old case revision
   before updating its source references and incrementing its revision. Never
   relabel an existing score as an assessment of the new source.
-- Likewise, preserve a rated case's translation and judgments before revising its
-  translation or brief. Use a new case ID for an independently compared candidate.
+- Preserve a rated candidate's text and judgments before revising its translation;
+  increment its candidate revision. Add a new candidate ID for an independently
+  compared translation. Change the case revision when its source binding or
+  translation instructions change, not merely when adding another candidate.
 - Keep all cases from an originating work in one training, validation, or test
   split. This includes alternative translations, target languages, and revisions.
   Record split assignments in a separate versioned dataset manifest when building
