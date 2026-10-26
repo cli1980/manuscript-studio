@@ -81,11 +81,13 @@ mkdir .workflow-runs
 `create --model MODEL` sets the model for both agents. Alternatively copy
 [`definitions/translation.json`](definitions/translation.json), set each agent's `model`, and pass
 `create --definition PATH`. The configuration is snapshotted at creation.
-The translation template retains this four-stage topology and these skill bundles;
+The translation template retains this five-stage topology (prepare → metadata →
+translate → accept → export) and these skill bundles;
 the configuration loader rejects other targets, stages, and incomplete bundles.
 An omitted model uses the installed Codex default.
 
-Each `step` runs one agent turn, or performs the final deterministic export.
+Each `step` runs one agent turn, re-presents a refreshed metadata review, or
+performs the final deterministic export.
 It does not automatically run another turn after a human response. `READY`
 means another step is available; `WAITING_FOR_HUMAN` means review is required.
 The full skill directories are copied and hash-pinned at creation, preserving
@@ -132,6 +134,32 @@ When the chapter sanity diff is empty, the saved record must explicitly say
 `No textual changes proposed`; the separate response is `approve chapter`.
 Other responses to that gate are feedback. Translation issue conversations and
 passage continuation use their own saved gate IDs and free-text responses.
+
+### Metadata review
+
+When preparation completes, the run waits at a `metadata_review` gate before any
+translation turn. `review` lists every shared `work.json` metadata field with its
+value, origin, review status, and confidence, plus unknown and stale fields. No
+agent runs at this gate. Edit one field at a time with a JSON value file:
+
+```text
+.venv-workflow/Scripts/python.exe -m workflow metadata .workflow-runs/my-book --gate GATE-ID --field /genres --value-file genres.json --reason "Author correction"
+```
+
+Each edit goes through the pinned `prepare_metadata.py set` helper: it increments
+`record_revision`, keeps the previous record under `metadata-history/`, and
+records the field as a confirmed user edit. The engine also snapshots each
+presented record and logs a `metadata.edited` event. Every edit presents a new
+gate ID, so a confirmation always refers to the record you last saw.
+`/manuscript_language` is locked once the run exists.
+
+To continue, reply to the current gate with a response file containing exactly
+`confirm metadata`. The confirmation receipt is bound to the inspected record
+revision and hash, and translation becomes `READY`. If `work.json` is changed
+outside the gate, the reply is refused; run `recover --refresh-gate`, then `step`,
+to present the current record again.
+
+### Final acceptance
 
 Once all chapters finish, `review` displays the immutable English outputs beside
 their original prepared chapters and an acceptance ID. Accept only after reviewing

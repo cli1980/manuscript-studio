@@ -13,5 +13,5 @@
       "model": null
     }
   },
-  "stages": ["prepare", "translate", "accept", "export"]
+  "stages": ["prepare", "metadata", "translate", "accept", "export"]
 }

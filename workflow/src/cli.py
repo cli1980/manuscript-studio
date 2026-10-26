@@ -20,6 +20,8 @@ def display(engine, state, *, review=False):
     if state.get("gate"):
         summary["gate_id"] = state["gate"]["id"]
         summary["gate_kind"] = state["gate"]["kind"]
+        if state["gate"]["kind"] == "metadata_review":
+            summary["metadata_record_revision"] = state["gate"]["record_revision"]
     if state.get("acceptance_id"):
         summary["acceptance_id"] = state["acceptance_id"]
     print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -47,6 +49,9 @@ def display(engine, state, *, review=False):
             print("\nReply with explicit item lines, bound to the displayed gate ID.")
         elif gate["kind"] == "chapter_sanity":
             print("\nReply 'approve chapter' to approve the empty-diff chapter review, or provide feedback.")
+        elif gate["kind"] == "metadata_review":
+            print("\nEdit: python -m workflow metadata RUN_DIR --gate GATE-ID --field /PATH --value-file VALUE.json"
+                  "\nEach edit presents a new gate ID. Confirm with a reply containing exactly 'confirm metadata'.")
     if state["status"] == "WAITING_FOR_ACCEPTANCE":
         print("\nReview these immutable English outputs against the source before accepting.")
         for artifact in state["outputs"]:
@@ -76,6 +81,13 @@ def parser():
     formatter.add_argument("--purpose", choices=("reader-facing", "editorial-review", "submission"), default="reader-facing")
     formatter.add_argument("--model")
     formatter.add_argument("--new-edition", action="store_true", help="Create a distinct job instead of reusing an unchanged edition.")
+    metadata = sub.add_parser("metadata", help="Edit one shared metadata field at the metadata review gate.")
+    metadata.add_argument("run_dir", type=Path)
+    metadata.add_argument("--gate", required=True)
+    metadata.add_argument("--field", required=True, help="Metadata field path, such as /genres or /edition/label.")
+    metadata.add_argument("--value-file", required=True, type=Path,
+                          help="UTF-8 JSON value, including null or [].")
+    metadata.add_argument("--reason", default="Explicit metadata edit.")
     for command in ("step", "status", "review", "reply", "accept", "recover", "cancel", "events"):
         child = sub.add_parser(command)
         child.add_argument("run_dir", type=Path)
@@ -121,9 +133,14 @@ def main(argv=None):
         if args.command == "step":
             if args.timeout <= 0:
                 raise ValueError("Timeout must be positive.")
-            if engine.state()["stage"] != "export" and shutil.which(args.codex) is None:
+            if engine.state()["stage"] not in ("export", "metadata") and shutil.which(args.codex) is None:
                 raise ValueError("Codex executable not found. Install/sign in to Codex or pass --codex PATH.")
             state = engine.advance(CodexRuntime([args.codex, "app-server"], args.timeout))
+        elif args.command == "metadata":
+            value = json.loads(args.value_file.read_text(encoding="utf-8-sig"))
+            state = engine.edit_metadata(args.gate, args.field, value, reason=args.reason)
+            display(engine, state, review=True)
+            return 0
         elif args.command == "reply":
             state = engine.reply(args.gate, args.response_file.read_text(encoding="utf-8"))
         elif args.command == "accept":

@@ -19,6 +19,8 @@ WORKFLOW_ROOT = Path(__file__).resolve().parents[1]
 REPO = WORKFLOW_ROOT.parent
 SKILLS = REPO / "plugins/manuscript-studio/skills"
 DEFAULT_DEFINITION = WORKFLOW_ROOT / "definitions" / "translation.json"
+LOCKED_METADATA = ("/manuscript_language",)
+METADATA_CONFIRMATION = "confirm metadata"
 NULL_PATH = {"type": ["string", "null"]}
 RESULT_SCHEMA = {
     "type": "object",
@@ -52,7 +54,7 @@ def definition_at(path):
     if not isinstance(definition, dict):
         raise ValueError("Workflow definition must be a JSON object.")
     if definition.get("stages") != expected["stages"]:
-        raise ValueError("This iteration supports prepare -> translate -> accept -> export only.")
+        raise ValueError("This iteration supports prepare -> metadata -> translate -> accept -> export only.")
     if definition.get("target_language") != "en-US":
         raise ValueError("This template supports translation into US English only.")
     if not isinstance(definition.get("id"), str) or not definition["id"].strip():
@@ -106,6 +108,20 @@ class Engine:
     def close(self):
         self.store.close()
 
+    def metadata_helper(self):
+        """Load the pinned metadata helper bound to this run's pinned validator."""
+        if not hasattr(self, "_metadata_helper"):
+            previous = sys.modules.get("validate_preparation")
+            sys.modules["validate_preparation"] = self.preparation
+            try:
+                self._metadata_helper = module_at(self.root / "skills/prepare-manuscript/scripts/prepare_metadata.py")
+            finally:
+                if previous is None:
+                    sys.modules.pop("validate_preparation", None)
+                else:
+                    sys.modules["validate_preparation"] = previous
+        return self._metadata_helper
+
     @classmethod
     def create(cls, root, source, source_language, *, definition=DEFAULT_DEFINITION, model=None):
         root, source = plain(root), plain(source)
@@ -143,7 +159,7 @@ class Engine:
             "skills": inventory, "thread_id": None, "attempts": 0,
             "prepared": None, "chapters": [], "outputs": [], "continuity": {},
             "gate": None, "receipts": [], "next_input": None, "domain_state": None,
-            "map_approval": None, "sanity_approval": None, "error": None,
+            "map_approval": None, "sanity_approval": None, "metadata_approval": None, "error": None,
         }
         store = Store.create(root, state)
         try:
@@ -207,6 +223,7 @@ class Engine:
             "work_record": state["prepared"]["work_record"] if state["prepared"] else None,
             "chapter": chapter, "domain_state": state["domain_state"],
             "map_approval": state["map_approval"], "sanity_approval": state["sanity_approval"],
+            "metadata_approval": state.get("metadata_approval"),
             "previous_outputs": state["outputs"], "continuity": state["continuity"],
             "user_receipt": state["next_input"], "skills": bundle,
             "python_executable": sys.executable,
@@ -231,12 +248,15 @@ class Engine:
             "package using available adapters. Never claim readiness without source comparison "
             "and evidence-bound inference of missing metadata under the shared metadata contract "
             "and successful existing validation. Return completed with work_record only when ready. "
-            "Unavailable adapters or incomplete extraction return blocked.\n\n"
+            "Unavailable adapters or incomplete extraction return blocked. After preparation the "
+            "orchestrator presents the shared metadata at its own metadata_review gate for user "
+            "inspection and edits; do not request metadata confirmation yourself.\n\n"
             "TRANSLATION: process only the supplied complete chapter. Use translation/ as project "
             "root, with glossary.md, voice.md, translated_english/, and the skill's internal "
             ".literary-translation-work/ layout. Reread continuity state and preceding chapter. "
             "Maintain your shared workflow summary; reuse current shared metadata and preserve user "
-            "edits under its contract. Preserve prepared source text and revision manifests. "
+            "edits under its contract. metadata_approval records the metadata record revision the "
+            "user inspected and confirmed. Preserve prepared source text and revision manifests. "
             "Do not add a general line edit. Follow chapter brief, approved passage map, complete "
             "two-path drafting, Step 3.2, passage continuation, and chapter sanity gates exactly. "
             "Domain state remains authoritative; user_receipt is a validated user response, not "
@@ -273,6 +293,12 @@ class Engine:
             self.verify(state)
             if state["stage"] == "export":
                 return self._export(revision, state)
+            if state["stage"] == "metadata":
+                self._present_metadata(state)
+                state["next_input"] = None
+                self.store.save(revision, state, "metadata.review_requested",
+                                {"gate_id": state["gate"]["id"], "record_revision": state["gate"]["record_revision"]})
+                return state
             if state["stage"] not in self.agent_stages:
                 raise ValueError("This stage does not execute an agent.")
             state.update(status="RUNNING", attempts=state["attempts"] + 1, error=None)
@@ -352,8 +378,74 @@ class Engine:
             "files": {p.relative_to(self.workspace).as_posix(): self.store.snapshot(p, "prepared")
                       for p in files},
         }
-        state.update(chapters=chapters, stage="translate", status="READY", thread_id=None,
-                     domain_state=None)
+        state.update(chapters=chapters, thread_id=None, domain_state=None)
+        self._present_metadata(state)
+
+    def _present_metadata(self, state):
+        """Engine-owned human gate: inspect, optionally edit, then confirm shared metadata."""
+        relative = state["prepared"]["work_record"]
+        work = json.loads(self.file(relative).read_text(encoding="utf-8"))
+        gate = {"id": str(uuid.uuid4()), "kind": "metadata_review", "message": self._metadata_message(work),
+                "chapter_index": state["chapter_index"], "binding": self.checkpoint(relative, "metadata_record"),
+                "sheet": None, "record_revision": work["record_revision"]}
+        state.update(stage="metadata", status="WAITING_FOR_HUMAN", gate=gate)
+
+    def _metadata_message(self, work):
+        lines = [
+            f"Inspect the shared manuscript metadata before translation (work.json record revision "
+            f"{work['record_revision']}, schema version {work['schema_version']}).",
+            "Edit a field through this gate's metadata command, or reply exactly "
+            f"'{METADATA_CONFIRMATION}' to continue with these values.",
+            "Locked for this run: " + ", ".join(LOCKED_METADATA) + ".", "",
+        ]
+        if work["schema_version"] == 1:
+            lines.insert(3, "This is a version-1 record; the first edit migrates it to version 2.")
+            lines.extend(f"/{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in work["metadata"].items())
+            return "\n".join(lines)
+        helper = self.metadata_helper()
+        provenance = work.get("metadata_provenance", {})
+        unknown, stale = [], []
+        for field in helper.FIELDS:
+            value = helper.field_value(work["metadata"], field)
+            entry = provenance.get(field)
+            if entry is None:
+                note = "unknown" if helper.missing(value) else "no provenance"
+                if helper.missing(value):
+                    unknown.append(field)
+            else:
+                note = f"{entry['origin']}, {entry['review_status']}"
+                if entry["confidence"]:
+                    note += f", confidence {entry['confidence']}"
+                if entry["review_status"] == "stale":
+                    stale.append(field)
+            lines.append(f"{field}: {json.dumps(value, ensure_ascii=False)} [{note}]")
+        lines.append("")
+        lines.append("Unknown: " + (", ".join(unknown) or "none"))
+        lines.append("Stale: " + (", ".join(stale) or "none"))
+        return "\n".join(lines)
+
+    def edit_metadata(self, gate_id, field, value, *, reason="Explicit metadata edit."):
+        with self.store.locked():
+            revision, state = self.store.load()
+            gate = state["gate"]
+            if (state["status"] != "WAITING_FOR_HUMAN" or not gate or gate["kind"] != "metadata_review"
+                    or gate["id"] != gate_id):
+                raise ValueError("Stale or unavailable metadata review gate.")
+            if field in LOCKED_METADATA:
+                raise ValueError(f"{field} is locked for this run.")
+            self.verify(state)
+            path = self.file(state["prepared"]["work_record"])
+            if digest(read_bytes(path)) != gate["binding"]["sha256"]:
+                raise ValueError("Metadata changed after presentation; recover with --refresh-gate to review it again.")
+            result = self.metadata_helper().update(path, "set", field=field, value=value,
+                                                   actor="user", rationale=reason)
+            self.verify(state)
+            self._present_metadata(state)
+            self.store.save(revision, state, "metadata.edited", {
+                "field": field, "record_revision": result["record_revision"],
+                "previous_gate_id": gate_id, "gate_id": state["gate"]["id"],
+            })
+            return state
 
     def _wait(self, state, result):
         kind = result["gate"]
@@ -451,6 +543,11 @@ class Engine:
                     parsed = {"type": "feedback", "text": text}
                 else:
                     parsed = {"type": "final-closure", "command": "approve chapter"}
+            elif gate["kind"] == "metadata_review":
+                if text.strip() != METADATA_CONFIRMATION:
+                    # No agent consumes this gate; edits use edit_metadata, never free-text feedback.
+                    raise ValueError(f"Reply '{METADATA_CONFIRMATION}', or edit a field with the metadata command.")
+                parsed = {"type": "final-closure", "command": METADATA_CONFIRMATION}
             else:
                 parsed = {"type": "feedback", "text": text}
             receipt = {"id": str(uuid.uuid4()), "created_at": now(),
@@ -460,11 +557,18 @@ class Engine:
             if parsed["type"] == "final-closure":
                 self._record_closure(state, gate)
             state.update(next_input=receipt, status="READY", gate=None)
-            self.store.save(revision, state, "review.received", {"receipt_id": receipt["id"], "gate_id": gate_id})
+            kind = "review.received"
+            if gate["kind"] == "metadata_review":
+                state["metadata_approval"].update(receipt_id=receipt["id"], decision_source=decision_source)
+                state.update(stage="translate", next_input=None)
+                kind = "metadata.confirmed"
+            self.store.save(revision, state, kind, {"receipt_id": receipt["id"], "gate_id": gate_id})
             return state
 
     def _record_closure(self, state, gate):
-        if gate["kind"] == "passage_map":
+        if gate["kind"] == "metadata_review":
+            state["metadata_approval"] = {**gate["binding"], "record_revision": gate["record_revision"]}
+        elif gate["kind"] == "passage_map":
             state["map_approval"] = gate["binding"]
         elif gate["kind"] == "chapter_sanity":
             state["sanity_approval"] = gate["binding"]

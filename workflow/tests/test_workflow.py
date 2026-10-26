@@ -99,22 +99,108 @@ class WorkflowTests(unittest.TestCase):
 
     def prepare(self):
         self.engine.advance(ScriptedRuntime(self.preparation))
+        self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+
+    def gate_receipts(self):
+        return [r for r in self.engine.state()["receipts"] if r["gate"]["kind"] != "metadata_review"]
+
+    def prepare_v2(self, request):
+        response = self.preparation(request)
+        path = self.workspace / response["work_record"]
+        work = json.loads(path.read_text(encoding="utf-8"))
+        template = self.engine.root / "skills/prepare-manuscript/references/work.example.json"
+        work["schema_version"] = 2
+        work["metadata"] = json.loads(template.read_text(encoding="utf-8"))["metadata"]
+        work["metadata"].update(title="Story", manuscript_language="zh", genres=["Historical fiction"])
+        work["metadata_provenance"] = {}
+        self.write(response["work_record"], work)
+        return response
+
+    def test_metadata_review_gate_precedes_translation(self):
+        self.engine.advance(ScriptedRuntime(self.preparation))
+        state = self.engine.state()
+        gate = state["gate"]
+        self.assertEqual((state["stage"], state["status"], gate["kind"]), ("metadata", "WAITING_FOR_HUMAN", "metadata_review"))
+        self.assertEqual(gate["record_revision"], 1)
+        self.assertIn('/title: "Story"', gate["message"])
+        self.assertIsNone(state["metadata_approval"])
+        with self.assertRaisesRegex(ValueError, "WAITING_FOR_HUMAN"):
+            self.engine.advance(ScriptedRuntime(self.translation))
+        with self.assertRaisesRegex(ValueError, "confirm metadata"):
+            self.engine.reply(gate["id"], "looks fine")
+        self.assertEqual(self.engine.state()["receipts"], [])
+        state = self.engine.reply(gate["id"], "confirm metadata")
+        self.assertEqual((state["stage"], state["status"]), ("translate", "READY"))
+        self.assertIsNone(state["next_input"])
+        approval = state["metadata_approval"]
+        self.assertEqual((approval["record_revision"], approval["sha256"], approval["decision_source"]),
+                         (1, gate["binding"]["sha256"], "human"))
+        self.assertEqual(approval["receipt_id"], state["receipts"][0]["id"])
+        self.assertIn('"metadata_approval"', self.engine.prompt(state))
+        self.assertEqual(self.engine.store.events()[-1]["kind"], "metadata.confirmed")
+        with self.assertRaisesRegex(ValueError, "Stale"):
+            self.engine.reply(gate["id"], "confirm metadata")
+
+    def test_metadata_edits_are_versioned_and_rebind_the_gate(self):
+        self.engine.advance(ScriptedRuntime(self.prepare_v2))
+        first = self.engine.state()["gate"]
+        self.assertIn('/genres: ["Historical fiction"] [no provenance]', first["message"])
+        self.assertIn("/subtitle", first["message"].split("Unknown: ")[1])
+        with self.assertRaisesRegex(ValueError, "locked"):
+            self.engine.edit_metadata(first["id"], "/manuscript_language", "fr")
+        with self.assertRaisesRegex(ValueError, "Stale"):
+            self.engine.edit_metadata("old-gate", "/genres", ["Literary fiction"])
+        state = self.engine.edit_metadata(first["id"], "/genres", ["Literary fiction"], reason="Author correction")
+        gate = state["gate"]
+        self.assertNotEqual(gate["id"], first["id"])
+        self.assertEqual(gate["record_revision"], 2)
+        self.assertIn('/genres: ["Literary fiction"] [user_edit, confirmed]', gate["message"])
+        work_path = self.engine.file(state["prepared"]["work_record"])
+        work = json.loads(work_path.read_text(encoding="utf-8"))
+        self.assertEqual(work["metadata_provenance"]["/genres"]["rationale"], "Author correction")
+        history = list((work_path.parent / "metadata-history").glob("1-*.json"))
+        self.assertEqual(len(history), 1)
+        self.assertEqual(json.loads(history[0].read_text(encoding="utf-8"))["metadata"]["genres"], ["Historical fiction"])
+        self.assertEqual(self.engine.store.content(first["binding"]), history[0].read_bytes())
+        with self.assertRaisesRegex(ValueError, "Stale"):
+            self.engine.reply(first["id"], "confirm metadata")
+        value = self.base / "title.json"
+        value.write_text('"Corrected title"', encoding="utf-8")
+        from ..src import cli
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            code = cli.main(["metadata", str(self.engine.root), "--gate", gate["id"], "--field", "/title",
+                             "--value-file", str(value)])
+        self.assertEqual(code, 0)
+        self.assertIn('/title: "Corrected title"', output.getvalue())
+        state = self.engine.state()
+        self.assertEqual(state["gate"]["record_revision"], 3)
+        self.assertEqual([e["kind"] for e in self.engine.store.events()].count("metadata.edited"), 2)
+        state = self.engine.reply(state["gate"]["id"], "confirm metadata")
+        self.assertEqual(state["metadata_approval"]["record_revision"], 3)
+        self.assertIn("Corrected title", self.engine.prompt(state))
+
+    def test_external_metadata_change_requires_a_refreshed_gate(self):
+        self.engine.advance(ScriptedRuntime(self.prepare_v2))
+        gate = self.engine.state()["gate"]
+        relative = self.engine.state()["prepared"]["work_record"]
+        work = json.loads(self.engine.file(relative).read_text(encoding="utf-8"))
+        work["metadata"]["title"] = "Edited outside the gate"
+        self.write(relative, work)
+        with self.assertRaisesRegex(ValueError, "Review changed"):
+            self.engine.reply(gate["id"], "confirm metadata")
+        with self.assertRaisesRegex(ValueError, "Metadata changed"):
+            self.engine.edit_metadata(gate["id"], "/genres", [])
+        self.engine.recover(refresh_gate=True)
+        state = self.engine.advance(None)
+        self.assertEqual((state["stage"], state["status"]), ("metadata", "WAITING_FOR_HUMAN"))
+        self.assertNotEqual(state["gate"]["id"], gate["id"])
+        self.assertIn("Edited outside the gate", state["gate"]["message"])
+        self.engine.reply(state["gate"]["id"], "confirm metadata")
+        self.assertEqual(self.engine.state()["stage"], "translate")
 
     def test_editable_v2_metadata_does_not_change_prepared_source_identity(self):
-        def prepare_v2(request):
-            response = self.preparation(request)
-            path = self.workspace / response["work_record"]
-            work = json.loads(path.read_text(encoding="utf-8"))
-            template = self.engine.root / "skills/prepare-manuscript/references/work.example.json"
-            work["schema_version"] = 2
-            work["metadata"] = json.loads(template.read_text(encoding="utf-8"))["metadata"]
-            work["metadata"].update(title="Story", manuscript_language="zh")
-            work["metadata_provenance"] = {}
-            self.write(response["work_record"], work)
-            return response
-
-        self.engine.advance(ScriptedRuntime(prepare_v2))
-        state = self.engine.state()
+        self.engine.advance(ScriptedRuntime(self.prepare_v2))
+        state = self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
         relative = state["prepared"]["work_record"]
         work = json.loads(self.engine.file(relative).read_text(encoding="utf-8"))
         work["metadata"]["title"] = "Corrected title"
@@ -284,7 +370,7 @@ class WorkflowTests(unittest.TestCase):
                              "Revision: old", *sheet["submission"]["rules"], "", "PM001 approve"])
         with self.assertRaises(ValueError):
             self.engine.reply(self.engine.state()["gate"]["id"], payload)
-        self.assertEqual(self.engine.state()["receipts"], [])
+        self.assertEqual(self.gate_receipts(), [])
 
     def test_changed_proposal_cannot_reuse_old_disposition(self):
         self.prepare()
@@ -330,7 +416,7 @@ class WorkflowTests(unittest.TestCase):
             self.engine.advance(ScriptedRuntime(fail))
         self.engine.recover()
         self.assertEqual(self.engine.state()["next_input"]["id"], receipt)
-        self.assertEqual(len(self.engine.state()["receipts"]), 1)
+        self.assertEqual(len(self.engine.state()["receipts"]), 2)
 
     def test_export_conflict_is_not_overwritten(self):
         self.complete_translation()
@@ -377,7 +463,7 @@ class WorkflowTests(unittest.TestCase):
             },
             "source_inventory": {"title": "Synthetic fixture"},
             "expected_output": {
-                "stage_sequence": ["prepare", "translate", "accept", "export"],
+                "stage_sequence": ["prepare", "metadata", "translate", "accept", "export"],
                 "required_files": ["state.sqlite3", "export/manifest.json", "export/glossary.md", "export/voice.md"],
             },
             "checks": [
@@ -414,8 +500,8 @@ class WorkflowTests(unittest.TestCase):
             prompts.append(request.prompt)
             return next(actions)(request)
 
-        replies = iter(["PM001 approve", ".", "confirm final closure", ".", "approve chapter", ".",
-                        "accept", "skip", "skip", "skip", "skip"])
+        replies = iter(["confirm metadata", ".", "PM001 approve", ".", "confirm final closure", ".",
+                        "approve chapter", ".", "accept", "skip", "skip", "skip", "skip"])
         runtime = run_e2e.CaseRuntime(ScriptedRuntime(action), case["task"])
         with contextlib.redirect_stdout(io.StringIO()):
             code = run_e2e.drive(self.engine, case, runtime, input_fn=lambda _: next(replies))
@@ -430,7 +516,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(checks["domain-gates"]["status"], "not-checked")
         self.assertEqual(report["literary_quality"]["status"], "not-checked")
         self.assertEqual((self.engine.root / "candidate.en.txt").read_text(), "He came back.\n")
-        self.assertEqual(len(self.engine.state()["receipts"]), 3)
+        self.assertEqual(len(self.engine.state()["receipts"]), 4)
+        self.assertEqual(report["automated_checks"]["stage-order"]["evidence"],
+                         ["prepare", "metadata", "translate", "accept", "export"])
         # A completed run can finish its human evidence review without another model call.
         evidence = iter(["pass", "Synthetic test evidence"] * 4)
         with contextlib.redirect_stdout(io.StringIO()):
@@ -452,7 +540,7 @@ class WorkflowTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(run_e2e.drive(self.engine, case, None, input_fn=eof), 2)
         self.assertEqual(self.engine.state()["gate"]["id"], gate_id)
-        self.assertEqual(self.engine.state()["receipts"], [])
+        self.assertEqual(self.gate_receipts(), [])
         run_e2e.bind_case(self.engine, case, {"version": "test"}, resume=True)
         changed = dict(case, task_sha256="changed")
         with self.assertRaisesRegex(ValueError, "Changed task_sha256"):
@@ -484,7 +572,7 @@ class WorkflowTests(unittest.TestCase):
     def test_recommended_approvals_complete_without_claiming_human_review(self):
         case = self.e2e_case()
         actions = iter([
-            (self.preparation, "needs_review", ""),
+            (self.preparation, "accept", "confirm metadata"),
             (lambda r: self.map_gate(), "accept", "PM001 approve"),
             (lambda r: self.map_gate("2", True), "accept", "confirm final closure"),
             (self.sanity_gate, "accept", "approve chapter"),
@@ -509,8 +597,38 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["acceptance"]["decision_source"], "delegated-automation")
         report = json.loads((self.engine.root / "e2e-report.json").read_text(encoding="utf-8"))
         self.assertEqual(report["e2e_status"], "needs-review")
-        self.assertEqual(report["delegated_decisions"], 3)
+        self.assertEqual(report["delegated_decisions"], 4)
+        self.assertEqual(state["metadata_approval"]["decision_source"], "delegated-automation")
         self.assertEqual(report["literary_quality"]["status"], "not-checked")
+
+    def test_automation_does_not_confirm_unrecommended_or_edited_metadata(self):
+        case = self.e2e_case()
+        for recommendation, edit, reason in [
+            ({"action": "needs_review", "response": "", "reason": "Genre needs the author's judgment"}, False,
+             "Recommendation requires review"),
+            ({"action": "accept", "response": "confirm metadata", "reason": "Synthetic fixture"}, True,
+             "Metadata changed after the recommendation"),
+        ]:
+            with self.subTest(edit=edit):
+                self.engine.close()
+                self.engine = Engine.create(self.base / f"automation-{edit}", self.source, "zh")
+                self.workspace = self.engine.workspace
+                run_e2e.bind_case(self.engine, case, {"executable": "test-only", "version": "scripted fixture"})
+                runtime = run_e2e.CaseRuntime(
+                    ScriptedRuntime(lambda r: self.prepare_v2(r) | {"approval_recommendation": recommendation}),
+                    case["task"], auto_approve_recommended=True,
+                )
+                self.engine.advance(runtime)
+                if edit:
+                    self.engine.edit_metadata(self.engine.state()["gate"]["id"], "/genres", [])
+                with contextlib.redirect_stdout(io.StringIO()) as output:
+                    code = run_e2e.drive(self.engine, case, runtime, auto_approve_recommended=True,
+                                         input_fn=lambda _: self.fail("Must stop without reading stdin."))
+                self.assertEqual(code, 2)
+                self.assertIn(reason, output.getvalue())
+                state = self.engine.state()
+                self.assertEqual((state["stage"], state["status"]), ("metadata", "WAITING_FOR_HUMAN"))
+                self.assertEqual(state["receipts"], [])
 
     def test_automation_stops_on_review_or_nonaccepting_recommendation(self):
         case = self.e2e_case()
@@ -531,7 +649,7 @@ class WorkflowTests(unittest.TestCase):
                                          input_fn=lambda _: self.fail("Must stop without reading stdin."))
                 self.assertEqual(code, 2)
                 self.assertEqual(self.engine.state()["status"], "WAITING_FOR_HUMAN")
-                self.assertEqual(self.engine.state()["receipts"], [])
+                self.assertEqual(self.gate_receipts(), [])
 
     def formatting_job(self):
         self.complete_translation()

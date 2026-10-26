@@ -184,7 +184,8 @@ Provides a shared interactive review interface for stable-ID approval sheets. It
 ## Workflow prototype
 
 The [workflow CLI](workflow/README.md) provides an initial orchestration implementation:
-verified preparation, translation with source-grounded review and human gates,
+verified preparation, a human metadata review gate, translation with
+source-grounded review and human gates,
 explicit artifact acceptance, and Markdown export. It persists run state and review
 receipts in SQLite and uses a Codex App Server adapter. General line editing is not
 part of the default translation flow.

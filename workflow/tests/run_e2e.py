@@ -160,8 +160,10 @@ class CaseRuntime:
                 "choice for a single translation issue. Never recommend reject/defer/reopen as acceptance. "
                 "Use action='needs_review' for missing information, uncertainty requiring user judgment, "
                 "or a recommendation to revise/reject. For a completed translation, recommend response='accept' "
-                "only when you recommend accepting that exact final artifact. For preparation completion "
-                "or a blocked result use needs_review with an explanatory reason. This is a user-authorized "
+                "only when you recommend accepting that exact final artifact. For completed preparation, "
+                "recommend response='confirm metadata' only when you recommend confirming the saved shared "
+                "metadata unchanged at the following metadata review gate; otherwise use needs_review. For "
+                "a blocked result use needs_review with an explanatory reason. This is a user-authorized "
                 "automation policy, not evidence that a human reviewed the text. Continue to use source-grounded "
                 "fidelity review, not general stylistic polishing."
                 " Finish the complete current passage's drafting and review before requesting editorial "
@@ -207,6 +209,13 @@ def recommended_response(engine):
     if state["status"] == "WAITING_FOR_ACCEPTANCE":
         require(response == "accept" and completed["payload"]["outcome"] == "completed",
                 "Final artifact acceptance was not recommended.")
+    elif state["gate"]["kind"] == "metadata_review":
+        require(completed["payload"]["outcome"] == "completed" and completed["payload"]["gate"] is None
+                and next(e for e in events if e["id"] == started)["payload"]["stage"] == "prepare",
+                "Metadata confirmation needs the completed preparation turn's recommendation.")
+        require(not any(e["kind"] == "metadata.edited" and e["id"] > completed["id"] for e in events),
+                "Metadata changed after the recommendation; resume interactively.")
+        require(response == "confirm metadata", "Metadata confirmation was not recommended.")
     else:
         gate = state["gate"]
         require(gate["kind"] == completed["payload"]["gate"], "Recommendation belongs to a different gate.")
@@ -327,7 +336,8 @@ def write_report(engine, case):
             stages = []
             for event in events:
                 stage = (event["payload"].get("stage") if event["kind"] == "execution.started" else
-                         {"artifacts.accepted": "accept", "run.completed": "export"}.get(event["kind"]))
+                         {"metadata.confirmed": "metadata", "artifacts.accepted": "accept",
+                          "run.completed": "export"}.get(event["kind"]))
                 if stage and (not stages or stages[-1] != stage):
                     stages.append(stage)
             require(stages == case["spec"]["expected_output"]["stage_sequence"],

@@ -676,7 +676,7 @@ workflow:
 
 This is an illustrative configuration, not a complete executable schema.
 
-A production schema must define input/output artifact mappings, failure policies, and revision routing explicitly. The first CLI iteration uses the narrower executable JSON definition in [`definitions/translation.json`](../definitions/translation.json), validating the four-stage topology and required skill bundles. Source language and designated input are recorded when creating a run.
+A production schema must define input/output artifact mappings, failure policies, and revision routing explicitly. The first CLI iteration uses the narrower executable JSON definition in [`definitions/translation.json`](../definitions/translation.json), validating the five-stage topology (including the engine-owned metadata review gate after preparation) and required skill bundles. Source language and designated input are recorded when creating a run.
 
 Translation executes sequentially by prepared chapter and pauses at its domain gates. The artifact-acceptance stage remains separate from those gates. General editing/copyediting services are excluded from this template.
 
