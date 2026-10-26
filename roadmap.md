@@ -141,3 +141,28 @@ Each update should include the date, changes being pushed, validation performed,
 remaining blockers or human review, and the next step. If no milestone is
 affected, state that explicitly and briefly describe the maintenance or
 documentation change. Do not mark work complete while required review is pending.
+
+- **2026-10-26** — Push of four local commits ahead of `origin/main`.
+  - **Changes:**
+    - `ed71c1f` standardizes the editable shared manuscript metadata contract
+      (schema, `prepare_metadata.py`, validator updates) across workflows.
+    - `610182e` adds blind multi-candidate translation evaluation (opaque
+      candidate IDs, candidate generation/anonymization, judge runner and review
+      server updates) and removes local-only full-length fixtures from Git.
+    - `dc9126f` defines this roadmap: planning decisions and milestones M1–M4.
+    - `7097366` adds `AGENTS.md`, requiring a committed roadmap update before
+      every push.
+  - **Milestones:** M1–M4 defined as `planned`; none started. The two earlier
+    commits predate the milestones and are maintenance/evaluation work.
+  - **Validation:** with Python 3.12.10 (`.venv-evals`), all existing suites
+    passed: installer 30 (3 symlink skips), `test_sample_boundary` 6,
+    `test_validate_on_demand` 6, `test_approval_review` 28 (1 Node.js skip),
+    `test_validate_preparation` 25, `evals/tests` 73, `evals/server/tests` 55
+    (7 browser skips), and `workflow.tests.test_workflow` 37. Live Codex E2E and
+    browser tests were not run.
+  - **Human review:** the owner reviewed and approved the roadmap requirements
+    in the planning session. No separate review is recorded for `ed71c1f` or
+    `610182e`.
+  - **Blockers:** none.
+  - **Next step:** start M1 by designing the workflow registry, definition schema,
+    and shared service API.
