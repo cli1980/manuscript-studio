@@ -13,7 +13,7 @@ workflow supported in both the CLI and the web GUI.
 - The roadmap file stays at `roadmap.md`, which is where [AGENTS.md](AGENTS.md) points.
 - All planned work, milestones, scope, and progress live only in `roadmap.md`.
   The GitHub Project
-  [Manuscript Studio Roadmap](https://github.com/users/cli1980/projects/2) is
+  [Manuscript Studio Requirements](https://github.com/users/cli1980/projects/2) is
   used only to collect and triage external requirements (New, Triage, Accepted,
   Declined, Moved to roadmap). Accepted requirements are added to `roadmap.md`,
   which then tracks them.
@@ -272,7 +272,7 @@ documentation change. Do not mark work complete while required review is pending
   Documentation-only change; no milestone scope or status changes.
   - **Changes:** added a convention that `roadmap.md` is the only record of
     planned work, and that the GitHub Project
-    [Manuscript Studio Roadmap](https://github.com/users/cli1980/projects/2),
+    [Manuscript Studio Requirements](https://github.com/users/cli1980/projects/2),
     linked to the repository, is used only to collect and triage external
     requirements. The Project is empty, with intake Status options (New,
     Triage, Accepted, Declined, Moved to roadmap). Repository milestones and
