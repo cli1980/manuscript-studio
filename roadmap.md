@@ -11,6 +11,11 @@ workflow supported in both the CLI and the web GUI.
 - Milestones are outcome-based and ordered by priority. They have no target dates.
 - Every milestone is owned by the project owner, `cli1980`, unless stated otherwise.
 - The roadmap file stays at `roadmap.md`, which is where [AGENTS.md](AGENTS.md) points.
+- Work is tracked in the GitHub Project
+  [Manuscript Studio Roadmap](https://github.com/users/cli1980/projects/2), with
+  one repository milestone and one issue per roadmap milestone. `roadmap.md`
+  stays authoritative; whenever it changes, update the matching issue checklists
+  and Project status.
 
 ## Cross-cutting decisions
 
@@ -63,6 +68,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 - **Status:** `in_progress`
 - **Owner:** `cli1980`
+- **Tracking:** [#1](https://github.com/cli1980/manuscript-studio/issues/1)
 - **Design:** [workflow/docs/m1-design.md](workflow/docs/m1-design.md)
   (owner-reviewed 2026-10-26)
 - **Outcome:** Workflows are pluggable templates, the CLI and the web
@@ -117,6 +123,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 - **Status:** `planned`
 - **Owner:** `cli1980`
+- **Tracking:** [#2](https://github.com/cli1980/manuscript-studio/issues/2)
 - **Outcome:** Preparation accepts DOCX uploads through an extraction adapter with
   source comparison.
 - **Acceptance criteria:**
@@ -129,6 +136,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 - **Status:** `planned`
 - **Owner:** `cli1980`
+- **Tracking:** [#3](https://github.com/cli1980/manuscript-studio/issues/3)
 - **Depends on:** M1, M2
 - **Outcome:** A user can run a complete literary-translation workflow from the
   browser.
@@ -184,6 +192,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 - **Status:** `planned`
 - **Owner:** `cli1980`
+- **Tracking:** [#4](https://github.com/cli1980/manuscript-studio/issues/4)
 - **Depends on:** M1; M3 for web support
 - **Outcome:** A Literary Edit workflow is available in both the CLI and the web
   GUI.
@@ -262,3 +271,23 @@ documentation change. Do not mark work complete while required review is pending
   - **Blockers:** none.
   - **Next step:** implement M1 in the design's order, starting with the
     `manuscript_language` rename and the registry/engine split.
+- **2026-10-26** — GitHub tracking for the roadmap. Documentation-only change;
+  no milestone scope or status changes.
+  - **Changes:** created repository milestones M1–M4, issues
+    [#1](https://github.com/cli1980/manuscript-studio/issues/1)–[#4](https://github.com/cli1980/manuscript-studio/issues/4)
+    (one per milestone, mirroring its outcome, scope, and acceptance criteria),
+    and the GitHub Project
+    [Manuscript Studio Roadmap](https://github.com/users/cli1980/projects/2),
+    linked to the repository, with Status options matching the roadmap statuses
+    (#1 In progress; #2–#4 Planned). This roadmap gains a tracking convention and
+    a Tracking link per milestone.
+  - **Validation:** milestones, issue assignments, Project items, Status values,
+    and the repository link were read back through the GitHub API. No code
+    changed, so no test suites were run.
+  - **Human review:** the owner approved the tracking plan in the 2026-10-26
+    session. The open M1 question (whether formatting runs count toward the
+    one-unfinished-run-per-work limit) is copied to #1 and still awaits
+    confirmation.
+  - **Blockers:** none. A board view of the Project must be added in the GitHub
+    UI; the API cannot create Project views.
+  - **Next step:** continue M1 as planned.
