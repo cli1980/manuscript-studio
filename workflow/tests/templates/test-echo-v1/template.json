@@ -1,0 +1,16 @@
+{
+  "id": "test-echo-v1",
+  "title": "Test-only echo workflow",
+  "workflow": "test-echo",
+  "engine": "workflow.tests.echo_engine:EchoEngine",
+  "agents": {
+    "echo": {"skill": "review-approval-sheet", "skills": ["review-approval-sheet"], "model": null}
+  },
+  "library": {"areas": ["echo/"]},
+  "gates": {"question": {}},
+  "stages": [
+    {"id": "echo", "kind": "agent", "agent": "echo", "gates": ["question"], "owns": ["output/"]},
+    {"id": "accept", "kind": "acceptance"},
+    {"id": "export", "kind": "export"}
+  ]
+}

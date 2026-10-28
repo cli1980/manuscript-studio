@@ -1,12 +1,10 @@
-"""Optional, isolated formatting jobs over accepted English manuscript snapshots."""
+"""Derived formatting template: one DOCX edition of an accepted-markdown-chapters/1 publication."""
 
 from __future__ import annotations
 
-import copy
 import json
 import os
 import re
-import shutil
 import struct
 import sys
 import uuid
@@ -14,15 +12,12 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from zipfile import ZipFile
 
-from .engine import Engine, RESULT_SCHEMA, SKILLS, WORKFLOW_ROOT
-from .storage import Store, digest, local_file, now, plain, read_bytes
+from . import registry
+from .engine import SKILLS, WORKFLOW_ROOT, Engine, configure, pin_directories
+from .storage import Store, digest, local_file, plain, read_bytes
 
-FORMAT_DEFINITION = WORKFLOW_ROOT / "definitions/formatting.json"
+TEMPLATE_ID = "manuscript-formatting-v1"
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-FORMAT_RESULT_SCHEMA = copy.deepcopy(RESULT_SCHEMA)
-FORMAT_RESULT_SCHEMA["properties"]["gate"] = {"enum": [None, "format_spec", "question"]}
-FORMAT_RESULT_SCHEMA["properties"]["qa_path"] = {"type": ["string", "null"]}
-FORMAT_RESULT_SCHEMA["required"].append("qa_path")
 
 
 def require(condition, message):
@@ -31,7 +26,7 @@ def require(condition, message):
 
 
 def select_renderer(override=None):
-    backend = json.loads(FORMAT_DEFINITION.read_text(encoding="utf-8"))["document_backend"]
+    backend = registry.get(TEMPLATE_ID)["document_backend"]
     require(backend["builder"] == "python-docx" and backend["require_visual_review"] is True,
             "The built-in adapter requires python-docx and visual review.")
     renderer = override or backend["renderer"]
@@ -127,128 +122,108 @@ def docx_paragraphs(path):
         return paragraphs, any(re.search(r"\bPAGE\b", field) for field in fields)
 
 
-class FormattingEngine(Engine):
-    agent_stages = ("format",)
-    result_schema = FORMAT_RESULT_SCHEMA
+def edition_options(*, documents_skill=None, renderer=None, purpose="reader-facing"):
+    """Resolve formatting options to the backend/adapter identity that defines an edition."""
+    require(purpose in ("reader-facing", "editorial-review", "submission"), "Unsupported edition purpose.")
+    require(not (documents_skill and renderer), "Choose an external Documents skill OR a built-in renderer.")
+    backend = None
+    if documents_skill is None:
+        from .document_adapters import preflight
+        renderer = select_renderer(renderer)
+        capabilities = preflight(renderer)
+        backend = {"builder": "python-docx", "renderer": renderer, "capabilities": capabilities,
+                   "code_sha256": digest(Path(__file__).with_name("document_adapters.py").read_bytes()),
+                   "require_visual_review": True}
+        documents_skill = WORKFLOW_ROOT / "adapters/documents-local"
+    adapter = plain(Path(documents_skill))
+    if adapter.is_file():
+        require(adapter.name == "SKILL.md", "Supply the Documents skill directory or its SKILL.md.")
+        adapter = adapter.parent
+    require((adapter / "SKILL.md").is_file(), "Documents/output-format skill is unavailable.")
+    return {"purpose": purpose, "backend": backend, "adapter": adapter,
+            "adapter_sha256": digest((adapter / "SKILL.md").read_bytes())}
 
-    def __init__(self, root):
-        super().__init__(root)
-        if self.state().get("backend"):
-            self.result_schema = copy.deepcopy(FORMAT_RESULT_SCHEMA)
-            self.result_schema["properties"]["settings_path"] = {"type": ["string", "null"]}
-            self.result_schema["required"].append("settings_path")
+
+class FormattingEngine(Engine):
+    result_fields = ("qa_path",)
+
+    def result_fields_for(self, state):
+        return ("qa_path", "settings_path") if state.get("backend") else ("qa_path",)
+
+    @staticmethod
+    def edition_identity(accepted_sha256, options, model):
+        """Unchanged requests reuse an edition; a different backend, adapter, or purpose is distinct."""
+        return digest(json.dumps({"input": accepted_sha256, "purpose": options["purpose"], "model": model,
+                                  "adapter_sha256": options["adapter_sha256"], "backend": options["backend"]},
+                                 sort_keys=True).encode())
 
     @classmethod
-    def create_from_run(cls, parent, *, documents_skill=None, renderer=None, purpose="reader-facing", model=None, new_edition=False):
-        require(purpose in ("reader-facing", "editorial-review", "submission"), "Unsupported edition purpose.")
-        require(not (documents_skill and renderer), "Choose an external Documents skill OR a built-in renderer.")
-        backend = None
-        if documents_skill is None:
-            from .document_adapters import preflight
-            renderer = select_renderer(renderer)
-            capabilities = preflight(renderer)
-            backend = {"builder": "python-docx", "renderer": renderer, "capabilities": capabilities,
-                       "code_sha256": digest(Path(__file__).with_name("document_adapters.py").read_bytes()),
-                       "require_visual_review": True}
-            documents_skill = WORKFLOW_ROOT / "adapters/documents-local"
-        adapter = plain(Path(documents_skill))
-        if adapter.is_file():
-            require(adapter.name == "SKILL.md", "Supply the Documents skill directory or its SKILL.md.")
-            adapter = adapter.parent
-        require((adapter / "SKILL.md").is_file(), "Documents/output-format skill is unavailable.")
-        definition = json.loads(FORMAT_DEFINITION.read_text(encoding="utf-8"))
-        definition["agents"]["format"]["model"] = model
+    def resolve_options(cls, options):
+        return edition_options(**(options or {}))
+
+    @classmethod
+    def derived_identity(cls, accepted, options, model):
+        return cls.edition_identity(digest(json.dumps(accepted, sort_keys=True, ensure_ascii=False).encode()),
+                                    options, model)
+
+    @classmethod
+    def create_derived(cls, root, template, *, accepted, chapter_data, work_id, owner=None, publication_id=None,
+                       options, model=None, agent_models=None, library=None, run_id=None):
+        require(accepted.get("contract") == template.get("consumes"),
+                "The selected publication does not satisfy this template's input contract.")
+        require(len(chapter_data) == len(accepted["chapters"]) and all(
+            digest(data) == chapter["sha256"] for data, chapter in zip(chapter_data, accepted["chapters"])),
+            "Accepted chapter data does not match its publication.")
+        language = accepted["manuscript_language"]
+        backend, adapter = options["backend"], options["adapter"]
+        # The built-in builder writes English navigation labels; other languages need a spec-supplied label.
+        require(not backend or language.split("-")[0] == "en",
+                f"Built-in DOCX formatting currently supports English manuscripts only, not {language}.")
+        definition = configure(template, model, agent_models)
+        definition["document_backend"] = backend or {"builder": "external-documents-skill", "renderer": "external",
+                                                     "require_visual_review": True}
+        combined = b"\n".join(chapter_data)
+        expected_paragraphs = manuscript_paragraphs(combined.decode("utf-8"))
+        identity = digest(combined)
+        sources = {name: SKILLS / name for name in ("prepare-manuscript", "review-approval-sheet", "format-manuscript")}
+        sources["documents"] = adapter
+        inventory = pin_directories(sources)
+        source_manifest = {
+            "publication_id": publication_id, "parent_run_id": accepted["run_id"], "acceptance": accepted["acceptance"],
+            "manuscript_language": language,
+            "chapters": [{"chapter_id": c["chapter_id"], "sha256": c["sha256"], "file": f"chapters/{index:04d}.md"}
+                         for index, c in enumerate(accepted["chapters"], 1)],
+            "manuscript_sha256": identity, "content_reference": "content.json",
+        }
+        manifest_bytes = (json.dumps(source_manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        content_bytes = (json.dumps(expected_paragraphs, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        accepted_sha256 = digest(json.dumps(accepted, sort_keys=True, ensure_ascii=False).encode())
+        state = cls.initial_state(
+            definition, work_id=work_id, owner=owner, kind="manuscript-formatting",
+            manuscript_language=language, chapters=source_manifest["chapters"], purpose=options["purpose"],
+            format_approval=None, source_name="manuscript.md", source_hash=identity,
+            publication_id=publication_id, parent_run_id=accepted["run_id"], accepted_sha256=accepted_sha256,
+            edition=cls.edition_identity(accepted_sha256, options, model),
+            options={"purpose": options["purpose"], "renderer": backend and backend["renderer"],
+                     "documents_skill": None if backend else str(adapter)},
+            input_manifest_sha256=digest(manifest_bytes), expected_paragraphs=expected_paragraphs,
+            skills={relative: sha for relative, (_, sha) in inventory.items()},
+            adapter_origin=str(adapter), adapter_sha256=options["adapter_sha256"],
+            backend=backend, approved_settings=None, generated=None,
+            input_files={"manuscript.md": identity, "manifest.json": digest(manifest_bytes),
+                         "content.json": digest(content_bytes),
+                         **{f"chapters/{i:04d}.md": digest(data) for i, data in enumerate(chapter_data, 1)}},
+            **({"id": run_id} if run_id else {}),
+        )
+        Store.create(plain(Path(root)), state).close()
+        engine = cls(root, library=library)
+        inputs = {"manuscript.md": combined, "manifest.json": manifest_bytes, "content.json": content_bytes,
+                  **{f"chapters/{i:04d}.md": data for i, data in enumerate(chapter_data, 1)}}
         if backend:
-            definition["document_backend"] = backend
-        else:
-            definition["document_backend"] = {"builder": "external-documents-skill", "renderer": "external",
-                                              "require_visual_review": True}
-        with parent.store.locked():
-            parent_revision, source_state = parent.store.load()
-            require(source_state.get("kind") != "manuscript-formatting" and source_state["status"] == "COMPLETED",
-                    "Formatting requires a completed translation export.")
-            parent.verify(source_state)
-            require(source_state.get("acceptance", {}).get("hashes") == [a["sha256"] for a in source_state["outputs"]],
-                    "Formatting requires exactly accepted English chapters.")
-            input_data = [parent.store.content(a) for a in source_state["outputs"]]
-            combined = b"\n".join(input_data)
-            expected_paragraphs = manuscript_paragraphs(combined.decode("utf-8"))
-            identity = digest(combined)
-            adapter_hash = digest((adapter / "SKILL.md").read_bytes())
-            for previous in reversed(source_state.get("format_jobs", [])):
-                if (not new_edition and previous["input_sha256"] == identity and previous["purpose"] == purpose
-                        and previous["model"] == model and previous["adapter_sha256"] == adapter_hash
-                        and previous.get("backend") == backend):
-                    return cls(parent.root / previous["path"])
-            sources = {name: SKILLS / name for name in ("prepare-manuscript", "review-approval-sheet", "format-manuscript")}
-            sources["documents"] = adapter
-            inventory = {}
-            for name, directory in sources.items():
-                require((directory / "SKILL.md").is_file(), f"Missing required skill: {name}")
-                for path in directory.rglob("*"):
-                    if "__pycache__" in path.parts or path.suffix == ".pyc":
-                        continue
-                    plain(path)
-                    if path.is_file():
-                        require(path.stat().st_nlink == 1, "Linked skill resource is not supported.")
-                        inventory[f"{name}/{path.relative_to(directory).as_posix()}"] = (path, digest(read_bytes(path)))
-            job_id = "edition-" + uuid.uuid4().hex[:12]
-            destination = plain(parent.root / "formatting")
-            destination.mkdir(exist_ok=True)
-            root = destination / job_id
-            source_manifest = {
-                "parent_run_id": source_state["id"], "acceptance": source_state["acceptance"],
-                "chapters": [{"chapter_id": a["chapter_id"], "sha256": a["sha256"],
-                              "file": f"chapters/{index:04d}.md"}
-                             for index, a in enumerate(source_state["outputs"], 1)],
-                "manuscript_sha256": identity, "content_reference": "content.json",
-            }
-            manifest_bytes = (json.dumps(source_manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
-            content_bytes = (json.dumps(expected_paragraphs, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
-            state = {
-                "id": job_id, "kind": "manuscript-formatting", "created_at": now(),
-                "definition": definition, "status": "READY", "stage": "format", "chapter_index": 0,
-                "attempts": 0, "thread_id": None, "gate": None, "receipts": [], "next_input": None,
-                "domain_state": None, "error": None, "prepared": None, "continuity": {}, "outputs": [],
-                "chapters": source_manifest["chapters"], "purpose": purpose, "format_approval": None,
-                "source_name": "manuscript.md", "source_hash": identity, "source_language": "en",
-                "parent_run": str(parent.root), "parent_run_id": source_state["id"],
-                "input_manifest_sha256": digest(manifest_bytes),
-                "expected_paragraphs": expected_paragraphs,
-                "skills": {relative: sha for relative, (_, sha) in inventory.items()},
-                "adapter_origin": str(adapter), "adapter_sha256": adapter_hash,
-                "backend": backend, "approved_settings": None, "generated": None,
-                "input_files": {"manuscript.md": identity, "manifest.json": digest(manifest_bytes),
-                                "content.json": digest(content_bytes),
-                                **{f"chapters/{i:04d}.md": digest(data) for i, data in enumerate(input_data, 1)}},
-            }
-            store = Store.create(root, state)
-            try:
-                (root / "input/chapters").mkdir()
-                (root / "input/manuscript.md").write_bytes(combined)
-                (root / "input/manifest.json").write_bytes(manifest_bytes)
-                (root / "input/content.json").write_bytes(content_bytes)
-                for index, data in enumerate(input_data, 1):
-                    (root / f"input/chapters/{index:04d}.md").write_bytes(data)
-                for relative, (source, sha) in inventory.items():
-                    target = root / "skills" / relative
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copyfile(source, target)
-                    require(digest(target.read_bytes()) == sha, "Skill changed while pinning the format job.")
-                state["source"] = store.snapshot(root / "input/manuscript.md", "accepted_english_manuscript")
-                if backend:
-                    state["adapter_code"] = store.snapshot(Path(__file__).with_name("document_adapters.py"),
+            state["adapter_code"] = engine.store.snapshot(Path(__file__).with_name("document_adapters.py"),
                                                           "document_adapter_code")
-                store.save(0, state, "formatting.created", {"parent_run_id": source_state["id"]})
-            finally:
-                store.close()
-            source_state.setdefault("format_jobs", []).append({
-                "job_id": job_id, "path": root.relative_to(parent.root).as_posix(),
-                "input_sha256": identity, "purpose": purpose, "model": model, "adapter_sha256": adapter_hash,
-                "backend": backend,
-            })
-            parent.store.save(parent_revision, source_state, "formatting.requested", {"job_id": job_id})
-        return cls(root)
+        engine._initialize(state, inputs, inventory, "accepted_manuscript")
+        return engine
 
     def verify(self, state):
         if state.get("backend") and state["status"] != "COMPLETED":
@@ -256,15 +231,6 @@ class FormattingEngine(Engine):
                     "Document adapter implementation changed; start a new edition.")
         if state.get("adapter_code"):
             self.store.content(state["adapter_code"])
-        parent = Store(Path(state["parent_run"]))
-        try:
-            parent_state = parent.load()[1]
-            manifest = json.loads((self.root / "input/manifest.json").read_text(encoding="utf-8"))
-            require(parent_state["id"] == state["parent_run_id"]
-                    and parent_state.get("acceptance") == manifest["acceptance"],
-                    "Accepted source version changed; create a newly reviewed edition.")
-        finally:
-            parent.close()
         for relative, sha in state["input_files"].items():
             require(digest(read_bytes(local_file(self.root / "input", relative))) == sha, "Formatting input changed.")
         for relative, sha in state["skills"].items():
@@ -279,11 +245,12 @@ class FormattingEngine(Engine):
                 require(digest(read_bytes(self.file(artifact["path"]))) == artifact["sha256"],
                         "Generated rendering evidence changed; rebuild through the approved adapter.")
 
-    def prompt(self, state):
+    def stage_prompt(self, state, stage):
         if state.get("backend"):
             return self._local_prompt(state)
+        language = state["manuscript_language"]
         context = {
-            "input_manifest": str(self.root / "input/manifest.json"),
+            "input_manifest": str(self.root / "input/manifest.json"), "manuscript_language": language,
             "manuscript": str(self.root / "input/manuscript.md"), "purpose": state["purpose"],
             "content_reference": str(self.root / "input/content.json"),
             "input_manifest_sha256": state["input_manifest_sha256"],
@@ -298,7 +265,7 @@ class FormattingEngine(Engine):
         return (
             "Act as the final manuscript formatter. Read the pinned format-manuscript skill and its "
             "required references, shared approval helper, and Documents skill. Consolidate all accepted "
-            "English chapters in manifest order into ONE readable DOCX. This is formatting only: preserve "
+            f"chapters (manuscript language {language}) in manifest order into ONE readable DOCX. This is formatting only: preserve "
             "every word, punctuation mark, paragraph, heading, intentional ambiguity and literary line break. "
             "Do not apply the Documents skill's generic prose-rewriting/introduction suggestions to this "
             "already accepted manuscript. Do not invent an author, copyright claim, subtitle, or front matter. "
@@ -306,7 +273,7 @@ class FormattingEngine(Engine):
             "Word styles; any TOC is additional navigation. Input paths and skill resources are read-only; "
             "write only inside this job workspace. Keep manuscript-formatting/format-spec.md, "
             "format-review.json and outputs/docx/ as the formatting skill requires. The input is a set of "
-            "accepted English artifact snapshots, not the original-language prepared package.\n\n"
+            f"accepted {language} artifact snapshots, not an earlier prepared package in another language.\n\n"
             "Before document generation, inspect fonts and adapter/render capabilities, infer a full "
             "specification for the requested purpose, and put classification/intended use and consequential "
             "choices into FM### items. Save a complete immutable proposal copy as the binding_path, separate "
@@ -449,7 +416,8 @@ class FormattingEngine(Engine):
         state["document_path"] = str(target)
         state["export_path"] = str(export)
         publication = {
-            "job_id": state["id"], "parent_run_id": state["parent_run_id"],
+            "job_id": state["id"], "work_id": state.get("work_id"), "publication_id": state.get("publication_id"),
+            "parent_run_id": state["parent_run_id"], "manuscript_language": state.get("manuscript_language"),
             "input_manifest_sha256": state["input_manifest_sha256"],
             "manuscript_sha256": state["source_hash"], "approved_spec": approved,
             "document": document, "qa": qa_artifact, "rendered_pages": evidence,
@@ -467,7 +435,7 @@ class FormattingEngine(Engine):
     def _local_prompt(self, state):
         context = {
             "input_manifest": str(self.root / "input/manifest.json"),
-            "manuscript": str(self.root / "input/manuscript.md"),
+            "manuscript": str(self.root / "input/manuscript.md"), "manuscript_language": state["manuscript_language"],
             "content_reference": str(self.root / "input/content.json"),
             "purpose": state["purpose"], "backend": state["backend"],
             "skills": {name: str(self.root / "skills" / name / "SKILL.md")
@@ -483,7 +451,8 @@ class FormattingEngine(Engine):
             "managed dependency loader, Node marker, or bundled LibreOffice runtime is required for Word. "
             "The host preflighted the selected renderer. Preserve every accepted word, heading, paragraph, "
             "and inline emphasis. Do not retranslate, rewrite, add an introduction/author/copyright, or "
-            "substitute original-language content. The input manifest orders all English chapters.\n\n"
+            "substitute content from another language version. The input manifest orders all accepted "
+            f"chapters (manuscript language {state['manuscript_language']}).\n\n"
             "Before generation, save manuscript-formatting/format-spec.md and format-settings.json "
             "with exactly the fields in documents-local/SKILL.md. Check installed fonts before proposing "
             "the design. State the indent_opening_paragraphs choice explicitly and consistently with "
@@ -527,6 +496,7 @@ class FormattingEngine(Engine):
         from .document_adapters import build_and_render, validate_settings
         with self.store.locked():
             revision, state = self.store.load()
+            self._guard(state, "step")
             require(state["status"] == "READY" and not state.get("generated"), "Formatting state changed.")
             self.verify(state)
             for artifact in (state["format_approval"], state["approved_settings"]):

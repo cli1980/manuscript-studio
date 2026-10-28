@@ -5,7 +5,7 @@
 **Initial target market:** United States\
 **Architecture:** Deterministic workflow orchestration with pluggable LLM-agent runtimes
 
-**Implementation:** The [CLI implementation](../README.md) provides SQLite state, pinned skill bundles, a Codex App Server stdio adapter, revision-bound review receipts, Markdown export, and an optional final formatting job over accepted English snapshots. The web application and full deterministic domain-record validation remain planned; this document describes the target architecture unless an implementation limit is stated.
+**Implementation:** The [CLI implementation](../README.md) provides a generalized engine (M1: template registry, shared service API, per-work artifact library, chapter/stage/workflow restarts), SQLite state, pinned skill bundles, a Codex App Server stdio adapter, revision-bound review receipts, Markdown export, and an optional derived formatting run over an accepted-output publication. The web application and full deterministic domain-record validation remain planned; this document describes the target architecture unless an implementation limit is stated.
 
 ## 1. Overview
 
@@ -611,9 +611,9 @@ Iteration 1 supports pending domain feedback and final accept/export. Reopening 
 
 The MVP exports the selected accepted Markdown chapters and provenance without modifying their content. This is an orchestrator operation, not an assumed formatting-agent capability.
 
-After export, the optional [format-manuscript](../../plugins/manuscript-studio/skills/format-manuscript/SKILL.md) agent consolidates the accepted English chapters into one readable DOCX. The CLI's `format` command creates or reuses an isolated job; the E2E launcher's `--format-docx` flag triggers the same job after export. Both require a configured document adapter and its generation/render environment.
+After export, the optional [format-manuscript](../../plugins/manuscript-studio/skills/format-manuscript/SKILL.md) agent consolidates the accepted chapters into one readable DOCX. Formatting is the derived template [`manuscript-formatting-v1`](../templates/manuscript-formatting-v1/template.json): `create --template manuscript-formatting-v1 --work WORK` creates or reuses a run over the work's `accepted-markdown-chapters/1` publication; the E2E launcher's `--format-docx` flag triggers the same operation after export. Both require a configured document adapter and its generation/render environment.
 
-The job pins the accepted chapter order, contents, and acceptance record. It uses a separate input manifest, immutable English snapshots, and `manuscript-formatting/` workspace. It does not re-extract the original-language source, alter translation decisions, or replace the completed translation run's state. Its own definition is [`formatting.json`](../definitions/formatting.json).
+The formatting run pins the accepted chapter order, contents, and acceptance record from that publication. It uses a separate input manifest, immutable snapshots, the publication's manuscript language, and a `manuscript-formatting/` workspace. It does not re-extract the original-language source, alter translation decisions, or read or modify the translation run's state.
 
 The formatter first presents the manuscript-bound design, edition profile, classification, and consequential settings as revision-bound `FM###` items. Item dispositions and separate final closure precede generation. Corrections reopen affected choices and invalidate closure. `reader-facing` is the default purpose for a readable consolidated edition; `editorial-review` and `submission` are alternatives with their own approved conventions.
 
@@ -647,7 +647,7 @@ workflow:
   name: Literary Translation
   market: US
 
-  source_language: zh-CN
+  manuscript_language: zh-CN
   target_language: en-US
 
   # Bundles, services, and mandatory gates are defined in Section 4.6.
@@ -676,7 +676,7 @@ workflow:
 
 This is an illustrative configuration, not a complete executable schema.
 
-A production schema must define input/output artifact mappings, failure policies, and revision routing explicitly. The first CLI iteration uses the narrower executable JSON definition in [`definitions/translation.json`](../definitions/translation.json), validating the five-stage topology (including the engine-owned metadata review gate after preparation) and required skill bundles. Source language and designated input are recorded when creating a run.
+A production schema must define input/output artifact mappings, failure policies, and revision routing explicitly. The M1 engine uses registered template JSON files (`workflow/templates/<id>/template.json`, validated by `workflow/src/registry.py`) that declare stages and their kinds (agent with optional per-chapter iteration, metadata review, acceptance, export), gate rules, agents and skill bundles, locked metadata, library checkout and finalization areas, workspace paths owned by each stage, produced/consumed artifact contracts, and the Python engine class. The literary translation template is [`literary-translation-v1`](../templates/literary-translation-v1/template.json). The manuscript language, work, and designated input are recorded when creating a run. See [m1-design.md](m1-design.md) for the service API, work library, and restart semantics.
 
 Translation executes sequentially by prepared chapter and pauses at its domain gates. The artifact-acceptance stage remains separate from those gates. General editing/copyediting services are excluded from this template.
 

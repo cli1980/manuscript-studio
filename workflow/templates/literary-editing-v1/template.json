@@ -1,0 +1,74 @@
+{
+  "id": "literary-editing-v1",
+  "title": "Literary editing",
+  "workflow": "literary-editing",
+  "engine": "workflow.src.editing:EditingEngine",
+  "locked_metadata": ["/manuscript_language"],
+  "agents": {
+    "prepare": {
+      "skill": "prepare-manuscript",
+      "skills": ["prepare-manuscript"],
+      "model": null
+    },
+    "developmental": {
+      "skill": "literary-editing",
+      "skills": ["prepare-manuscript", "literary-editing", "review-approval-sheet"],
+      "model": null
+    },
+    "line": {
+      "skill": "literary-editing",
+      "skills": ["prepare-manuscript", "literary-editing", "review-approval-sheet"],
+      "model": null
+    },
+    "copy": {
+      "skill": "literary-editing",
+      "skills": ["prepare-manuscript", "literary-editing", "review-approval-sheet"],
+      "model": null
+    }
+  },
+  "library": {
+    "checkout": [],
+    "areas": ["literary-editing/", "accepted/literary-editing.json"]
+  },
+  "gates": {
+    "editorial_review": {"sheet": "optional", "binding": "required", "closure": "required",
+                         "empty_command": "approve review", "empty_evidence": "No changes proposed"},
+    "apply_authorization": {"binding": "required", "command": "apply accepted changes"},
+    "question": {}
+  },
+  "stages": [
+    {"id": "prepare", "kind": "agent", "agent": "prepare", "preparation": true, "gates": ["question"],
+     "owns": ["prepared/", "source/", "manuscript/", "editorial/"]},
+    {"id": "metadata", "kind": "metadata_review"},
+    {"id": "developmental", "kind": "agent", "agent": "developmental", "optional": true, "edits_text": false,
+     "iterate": "chapters", "gates": ["editorial_review", "question"],
+     "owns": ["editorial/reports/developmental/"],
+     "iteration": {
+       "owns": ["editorial/reports/developmental/{chapter_id}/"],
+       "carry_forward": ["editorial/editorial-brief.md", "editorial/style-sheet.md", "editorial/continuity-concordance.md"],
+       "restartable": true,
+       "conclude": true
+     }},
+    {"id": "line", "kind": "agent", "agent": "line", "iterate": "chapters",
+     "gates": ["editorial_review", "apply_authorization", "question"],
+     "owns": ["editorial/reports/line/"],
+     "iteration": {
+       "owns": ["editorial/reports/line/{chapter_id}/"],
+       "carry_forward": ["editorial/editorial-brief.md", "editorial/style-sheet.md", "editorial/continuity-concordance.md"],
+       "restartable": true,
+       "conclude": true
+     }},
+    {"id": "copy", "kind": "agent", "agent": "copy", "iterate": "chapters",
+     "gates": ["editorial_review", "apply_authorization", "question"],
+     "owns": ["editorial/reports/copy/"],
+     "iteration": {
+       "owns": ["editorial/reports/copy/{chapter_id}/"],
+       "carry_forward": ["editorial/editorial-brief.md", "editorial/style-sheet.md", "editorial/continuity-concordance.md"],
+       "restartable": true,
+       "conclude": true
+     }},
+    {"id": "accept", "kind": "acceptance"},
+    {"id": "export", "kind": "export"}
+  ],
+  "produces": "accepted-markdown-chapters/1"
+}

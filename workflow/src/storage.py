@@ -51,6 +51,64 @@ def read_bytes(path: Path) -> bytes:
     return path.read_bytes()
 
 
+@contextlib.contextmanager
+def file_lock(path: Path, message: str):
+    """OS lock is released on process exit, including a crash."""
+    with path.open("a+b") as handle:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise ValueError(message) from exc
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def write_new(path: Path, data: bytes):
+    """Write-once: never replace an existing differing file."""
+    path = plain(path)
+    if path.exists():
+        if path.read_bytes() != data:
+            raise ValueError(f"Destination differs; refusing to overwrite it: {path.name}")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("xb") as handle:
+        handle.write(data)
+
+
+def write_atomic(path: Path, data: bytes):
+    path = plain(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with temporary.open("wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def json_bytes(value) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+
+
 class Store:
     def __init__(self, root: Path):
         self.root = plain(root)
@@ -80,36 +138,16 @@ class Store:
     def close(self):
         self.db.close()
 
-    @contextlib.contextmanager
     def locked(self):
-        """OS lock is released on process exit, including a crash."""
-        with (self.root / ".run.lock").open("a+b") as handle:
-            handle.seek(0, os.SEEK_END)
-            if handle.tell() == 0:
-                handle.write(b"\0")
-                handle.flush()
-            handle.seek(0)
-            try:
-                if os.name == "nt":
-                    import msvcrt
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
-                else:
-                    import fcntl
-                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError as exc:
-                raise ValueError("Another process is operating on this run.") from exc
-            try:
-                yield
-            finally:
-                handle.seek(0)
-                if os.name == "nt":
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-                else:
-                    fcntl.flock(handle, fcntl.LOCK_UN)
+        return file_lock(self.root / ".run.lock", "Another process is operating on this run.")
 
     def load(self):
         revision, value = self.db.execute("SELECT revision, state FROM run WHERE id=1").fetchone()
-        return revision, json.loads(value)
+        state = json.loads(value)
+        # Pre-M1 runs: the next save persists the unified name.
+        if "source_language" in state and "manuscript_language" not in state:
+            state["manuscript_language"] = state.pop("source_language")
+        return revision, state
 
     def save(self, revision, state, kind, payload=None):
         with self.db:

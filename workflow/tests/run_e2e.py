@@ -17,7 +17,6 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
-import uuid
 from zipfile import BadZipFile, ZipFile
 
 REPO = Path(__file__).resolve().parents[2]
@@ -43,14 +42,15 @@ def load_case(path):
     path = Path(path).resolve()
     raw = path.read_bytes()
     spec = json.loads(raw)
-    require(isinstance(spec, dict) and spec.get("schema_version") == 1 and spec.get("task") == "literary-translation-workflow",
-            "Expected a version-1 workflow E2E manifest, not a translation-quality case.")
+    require(isinstance(spec, dict) and spec.get("schema_version") == 1
+            and spec.get("task") in ("literary-translation-workflow", "literary-editing-workflow"),
+            "Expected a version-1 workflow E2E manifest, not a quality-evaluation case.")
     require(isinstance(spec.get("case_id"), str) and re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", spec["case_id"]),
             "Invalid case ID.")
     require(type(spec.get("revision")) is int and spec["revision"] > 0, "Invalid case revision.")
     inputs = spec["input"]
-    require(inputs["scope"] == "whole_work" and inputs["target_language"] == "en-US",
-            "This launcher supports whole-work translation into US English.")
+    require(inputs["scope"] == "whole_work" and inputs.get("target_language") in (None, "en-US"),
+            "This launcher supports whole-work cases, translating only into US English.")
     require(inputs["runtime"]["adapter"] == "codex-app-server"
             and inputs["runtime"]["human_responses"] == "interactive",
             "This launcher requires Codex App Server and interactive human responses.")
@@ -60,12 +60,12 @@ def load_case(path):
         with ZipFile(source) as archive:
             require("word/document.xml" in archive.namelist(), "DOCX has no main document part.")
             require(archive.testzip() is None, "DOCX archive integrity check failed.")
-    definition_path = (path.parent / inputs["workflow_definition"]).resolve()
-    definition_raw = definition_path.read_bytes()
-    definition = json.loads(definition_raw)
-    require(definition["stages"] == spec["expected_output"]["stage_sequence"],
-            "Case stage sequence differs from the workflow definition.")
-    require(definition["target_language"] == inputs["target_language"], "Target-language mismatch.")
+    from workflow.src import registry
+    template = registry.get(inputs["template_id"])
+    skipped = inputs.get("skip_stages", [])
+    require([stage["id"] for stage in template["stages"] if stage["id"] not in skipped]
+            == spec["expected_output"]["stage_sequence"], "Case stage sequence differs from the workflow template.")
+    require(template.get("target_language") == inputs.get("target_language"), "Target-language mismatch.")
     task_path = (path.parent / inputs["task_specification"]).resolve()
     task_raw = task_path.read_bytes()
     require(task_raw.strip(), "Case task specification is empty.")
@@ -73,17 +73,18 @@ def load_case(path):
     require(len(set(ids)) == len(ids), "Case check IDs must be unique.")
     return {
         "case_path": str(path), "case_sha256": sha(raw), "spec": spec,
-        "source_path": str(source), "definition_path": str(definition_path),
-        "definition_sha256": sha(definition_raw), "task_sha256": sha(task_raw),
+        "source_path": str(source), "template_id": template["id"],
+        "template_sha256": fingerprint(template), "task_sha256": sha(task_raw),
         "task": task_raw.decode("utf-8"),
     }
 
 
 def preflight(case, codex):
-    from workflow.src.engine import SKILLS, definition_at, module_at
-    config = definition_at(Path(case["definition_path"]))
+    from workflow.src import registry
+    from workflow.src.engine import SKILLS, module_at
+    config = registry.get(case["template_id"])
     module_at(SKILLS / "prepare-manuscript/scripts/validate_preparation.py").validators()
-    for name in config["agents"]["translate"]["skills"]:
+    for name in {skill for agent in config["agents"].values() for skill in agent["skills"]}:
         require((SKILLS / name / "SKILL.md").is_file(), f"Missing skill: {name}")
     executable = shutil.which(codex)
     require(executable is not None, "Codex not found. Install/authenticate Codex, or pass --codex PATH.")
@@ -99,17 +100,18 @@ def preflight(case, codex):
 
 
 def bind_case(engine, case, runtime_info, model=None, *, resume=False):
-    """Store the task/definition identities before executing any case turn."""
+    """Store the task/template identities before executing any case turn."""
     with engine.store.locked():
         revision, state = engine.store.load()
         require(state["source_hash"] == case["spec"]["input"]["manuscript"]["sha256"],
                 "Run belongs to a different manuscript.")
-        require(state["source_language"] == case["spec"]["input"]["source_language"],
-                "Run source language differs from the case.")
+        require(state["manuscript_language"] == case["spec"]["input"]["manuscript_language"],
+                "Run manuscript language differs from the case.")
+        require(state["template_id"] == case["template_id"], "Run uses a different workflow template.")
         if resume:
             saved = state.get("e2e")
             require(saved is not None, "This run was not created by the E2E launcher.")
-            for field in ("case_sha256", "definition_sha256", "task_sha256"):
+            for field in ("case_sha256", "template_sha256", "task_sha256"):
                 require(saved["case"][field] == case[field], f"Changed {field}; start a new test run.")
             require(model is None or model == saved["model_override"],
                     "Cannot change a pinned model on resume; start a new run.")
@@ -173,6 +175,23 @@ class CaseRuntime:
                 "does not merge item dispositions with final closure, postpone passage-map approval until "
                 "after drafting, or treat dependent choices as independent."
             )
+            if self.operation == "editing":
+                prompt += (
+                    "\nFor this literary editing job, translation-only phase instructions (passage maps, "
+                    "continuation, sanity diffs) do not apply. Present all proposals of a job in one "
+                    "revision-bound decision sheet and recommend explicit item lines only for proposals you "
+                    "recommend accepting; a recommendation to reject, defer, or query an item is needs_review, "
+                    "so propose only changes you actually recommend and raise genuine author questions as "
+                    "queries. Item dispositions, the separate closure command, and the apply authorization "
+                    "remain separate responses: recommend exactly 'apply accepted changes' at the "
+                    "apply_authorization gate only when you recommend applying exactly the accepted rows, and "
+                    "exactly 'approve review' for an empty review. Editing a translation: never recommend a "
+                    "change that could alter meaning. approval_recommendation is required in EVERY result, "
+                    "including completed jobs: when a completed job leads to another editorial job, return "
+                    "action='accept', response='continue', and a short reason (no gate follows, so it is not "
+                    "used); when the completed job is the last one before final artifact acceptance, recommend "
+                    "response='accept' only if you recommend accepting the complete edited manuscript."
+                )
             if self.operation == "formatting":
                 prompt += (
                     "\nFor this formatting job, translation-only phase instructions do not apply. "
@@ -218,8 +237,13 @@ def recommended_response(engine):
         require(response == "confirm metadata", "Metadata confirmation was not recommended.")
     else:
         gate = state["gate"]
+        rules = state["definition"]["gates"].get(gate["kind"], {})
         require(gate["kind"] == completed["payload"]["gate"], "Recommendation belongs to a different gate.")
-        if gate["sheet"]:
+        command = rules.get("command") or (None if gate["sheet"] else rules.get("empty_command"))
+        if command:
+            # Template-declared exact commands, such as an apply authorization or an empty-review approval.
+            require(response == command, f"The {gate['kind']} command was not recommended.")
+        elif gate["sheet"]:
             sheet = json.loads(engine.store.content(gate["sheet"]))
             parsed = engine.approval.parse_response(sheet, response)
             if parsed["type"] == "dispositions":
@@ -250,7 +274,7 @@ def restart_probe(engine):
         "import json,sys; from pathlib import Path; "
         "from workflow.src.engine import Engine; "
         "from workflow.tests.run_e2e import fingerprint; "
-        "e=Engine(Path(sys.argv[1])); "
+        "e=Engine.open(Path(sys.argv[1])); "
         "print(json.dumps({'fingerprint':fingerprint(e.store.load())})); e.close()"
     )
     with engine.store.locked():
@@ -346,10 +370,29 @@ def write_report(engine, case):
 
         check("stage-order", stage_order, ready=state["status"] == "COMPLETED")
 
+        def editorial_receipts():
+            items = [i for group in state.get("stage_iterations", {}).values() for i in group] + state["iterations"]
+            closed = {(r["gate"].get("instance"), r["gate"]["kind"]) for r in state["receipts"]
+                      if r["parsed"]["type"] in ("final-closure",)}
+            jobs = 0
+            for item in items:
+                stage = next(s for s in state["definition"]["stages"] if s["id"] == item["stage"])
+                if item["status"] != "completed" or (not stage.get("edits_text", True) and item["chapter_id"] != "_whole"):
+                    continue
+                key = f"{item['stage']}/{state['stage_epochs'].get(item['stage'], 1)}/{item['chapter_id']}/{item['attempt']}"
+                require((key, "editorial_review") in closed, f"Missing decision closure for {key}.")
+                if item.get("changed"):
+                    require((key, "apply_authorization") in closed, f"Text changed without apply authorization: {key}.")
+                jobs += 1
+            return f"{jobs} editorial jobs have decision closure, and every text change has an apply authorization."
+
         def receipts():
-            for index, output in enumerate(state["outputs"]):
+            if state["workflow"] == "literary-editing":
+                return editorial_receipts()
+            for output in state["outputs"]:
                 closures = [(number, receipt["gate"]) for number, receipt in enumerate(state["receipts"])
-                            if receipt["gate"]["chapter_index"] == index
+                            if receipt["gate"].get("chapter_id") == output["chapter_id"]
+                            and receipt["gate"].get("attempt") == output.get("attempt")
                             and receipt["parsed"]["type"] == "final-closure"]
                 maps = [number for number, gate in closures if gate["kind"] == "passage_map"]
                 sanity = [number for number, gate in closures if gate["kind"] == "chapter_sanity"
@@ -381,7 +424,7 @@ def write_report(engine, case):
                         "Export source order or identity differs from preparation.")
                 require(local_file(engine.root, f"export/{index:04d}.md").read_bytes() == engine.store.content(output),
                         "Exported chapter differs from its accepted snapshot.")
-            for name in ("glossary", "voice"):
+            for name in state["continuity"]:
                 require(local_file(engine.root, f"export/{name}.md").read_bytes()
                         == engine.store.content(state["continuity"][name]), f"Exported {name} differs from its snapshot.")
             return "Complete source-ordered export, acceptance hashes, continuity files, and manifest agree."
@@ -411,21 +454,24 @@ def write_report(engine, case):
             "error": state.get("error"),
         }
         report["formatting_jobs"] = {}
-        for job in state.get("format_jobs", []):
+        previous = engine.root / "e2e-report.json"
+        jobs = json.loads(previous.read_text(encoding="utf-8")).get("formatting_jobs", {}) if previous.exists() else {}
+        for job_id, job in jobs.items():
+            # Derived formatting runs live under the server root; refresh their recorded status read-only.
             try:
-                database = local_file(engine.root, job["path"] + "/state.sqlite3")
+                database = Path(job["path"]) / "state.sqlite3"
                 connection = sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)
                 try:
                     job_state = json.loads(connection.execute("SELECT state FROM run WHERE id=1").fetchone()[0])
                 finally:
                     connection.close()
-                report["formatting_jobs"][job["job_id"]] = {
-                    "path": str(database.parent), "status": job_state["status"],
+                report["formatting_jobs"][job_id] = {
+                    "path": job["path"], "status": job_state["status"],
                     "backend": job_state.get("backend"), "document_path": job_state.get("document_path"),
                     "error": job_state.get("error"),
                 }
-            except (OSError, ValueError, sqlite3.Error) as exc:
-                report["formatting_jobs"][job["job_id"]] = {"status": "UNAVAILABLE", "error": str(exc)}
+            except (OSError, ValueError, KeyError, sqlite3.Error) as exc:
+                report["formatting_jobs"][job_id] = {"status": "UNAVAILABLE", "error": str(exc)}
         atomic_json(engine.root / "e2e-report.json", report)
         return report
 
@@ -494,7 +540,8 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input, auto_approve_
             report = write_report(engine, case)
             if report["automated_checks"]["source-integrity"]["status"] == "failed":
                 raise ValueError(report["automated_checks"]["source-integrity"]["evidence"])
-            print(f"\n[{state['stage']}] {state['status']} — completed units {len(state['outputs'])}/{len(state['chapters'])}")
+            progress = engine.summary(state)["progress"] or {"completed": 0, "total": len(state["chapters"])}
+            print(f"\n[{state['stage']}] {state['status']} — completed units {progress['completed']}/{progress['total']}")
             if state["status"] == "COMPLETED":
                 collect_candidate(engine, report)
                 if not auto_approve_recommended:
@@ -541,7 +588,7 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input, auto_approve_
                     if action == "/cancel":
                         engine.cancel()
                     elif action == "/refresh":
-                        engine.recover(refresh_gate=True)
+                        engine.retry(refresh_gate=True)
                     else:
                         engine.reply(state["gate"]["id"], response,
                                      decision_source="delegated-automation" if auto_approve_recommended else "human")
@@ -565,9 +612,11 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input, auto_approve_
                         return 2
                     engine.store.event("e2e.delegated_approval", {"acceptance_id": state["acceptance_id"], **suggestion})
                 else:
-                    action = input_fn("Type 'accept' for these exact artifacts, 'cancel', or 'pause': ").strip()
+                    action = input_fn("Type 'accept' to accept these exact artifacts and confirm the finalization "
+                                      "notice above, 'cancel', or 'pause': ").strip()
                 if action == "accept":
-                    engine.accept(state["acceptance_id"],
+                    # Typing 'accept' after the displayed notice, or the explicit automation opt-in, confirms it.
+                    engine.accept(state["acceptance_id"], confirm_final=True,
                                   decision_source="delegated-automation" if auto_approve_recommended else "human")
                 elif action == "cancel":
                     engine.cancel()
@@ -580,14 +629,14 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input, auto_approve_
                     print("Automation stopped; resolve the failure/blocker before recovery.")
                     return 1 if state["status"] == "FAILED" else 2
                 print("Resolve the cause before recovery. For RUNNING, stop any surviving Codex processes first.")
-                action = input_fn("recover / recover-stopped / cancel / pause: ").strip()
+                action = input_fn("retry / retry-stopped / cancel / pause: ").strip()
                 if action == "pause":
                     return 2
                 try:
                     if action == "cancel":
                         engine.cancel()
-                    elif action in ("recover", "recover-stopped"):
-                        engine.recover(confirm_stopped=action == "recover-stopped")
+                    elif action in ("retry", "retry-stopped"):
+                        engine.retry(confirm_stopped=action == "retry-stopped")
                 except (ValueError, OSError) as exc:
                     print(f"Recovery refused: {exc}")
                 continue
@@ -603,9 +652,9 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input, auto_approve_
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--case", type=Path, required=True, help="Explicit case manifest; long local tests are never selected by default.")
-    destination = result.add_mutually_exclusive_group()
-    destination.add_argument("--run-dir", type=Path, help="New run directory; default is a unique .workflow-runs/e2e path.")
-    destination.add_argument("--resume", type=Path, help="Resume a run created by this launcher.")
+    result.add_argument("--server-root", type=Path, default=REPO / ".workflow-runs/e2e",
+                        help="Workflow server root for E2E works and runs.")
+    result.add_argument("--resume", help="Resume a run ID created by this launcher under the server root.")
     result.add_argument("--codex", default="codex", help="Codex executable, not a shell command.")
     result.add_argument("--model", help="Override both agents' models on creation.")
     result.add_argument("--format-docx", action="store_true",
@@ -627,14 +676,20 @@ def parser():
     return result
 
 
-def format_document(parent, runtime, *, documents_skill=None, renderer=None, purpose="reader-facing", model=None,
-                    auto_approve_recommended=False, max_turns=100, input_fn=input):
-    """Optional final operation; the translation run's result remains independently recorded."""
-    from workflow.src.formatting import FormattingEngine
+def format_document(service, parent, runtime, *, documents_skill=None, renderer=None, purpose="reader-facing",
+                    model=None, auto_approve_recommended=False, max_turns=100, input_fn=input):
+    """Optional derived operation; the translation run's result remains independently recorded."""
+    work_id = parent.state()["work_id"]
+    run_id = service.create_derived_run(work_id, "manuscript-formatting-v1", model=model, options={
+        "documents_skill": documents_skill, "renderer": renderer, "purpose": purpose})
+    with service.open_run(run_id) as job:
+        return drive_formatting(parent, job, runtime, auto_approve_recommended=auto_approve_recommended,
+                                max_turns=max_turns, input_fn=input_fn)
+
+
+def drive_formatting(parent, job, runtime, *, auto_approve_recommended, max_turns, input_fn):
     from workflow.src.cli import display
-    job = FormattingEngine.create_from_run(parent, documents_skill=documents_skill, renderer=renderer,
-                                          purpose=purpose, model=model)
-    print(f"Formatting job: {job.root}")
+    print(f"Formatting run: {job.state()['id']}\nPath: {job.root}")
     try:
         for _ in range(max_turns):
             state = job.state()
@@ -661,13 +716,13 @@ def format_document(parent, runtime, *, documents_skill=None, renderer=None, pur
                     job.cancel()
                     return 2
                 if action == "/refresh":
-                    job.recover(refresh_gate=True)
+                    job.retry(refresh_gate=True)
                 else:
                     job.reply(state["gate"]["id"], response,
                               decision_source="delegated-automation" if auto_approve_recommended else "human")
             else:
                 print(f"Formatting stopped: {state.get('error') or state['status']}")
-                print(f'Recover/review the job with: python -m workflow status "{job.root}"')
+                print(f"Retry/review the run with: python -m workflow status {state['id']}")
                 return 1 if state["status"] == "FAILED" else 2
         print("Formatting turn limit reached; resume the same parent with --format-docx.")
         return 2
@@ -684,13 +739,12 @@ def format_document(parent, runtime, *, documents_skill=None, renderer=None, pur
                 "backend": state.get("backend"),
             })
             atomic_json(report_path, report)
-        job.close()
 
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     args = parser().parse_args(argv)
-    engine = None
+    service = None
     try:
         require(math.isfinite(args.timeout) and args.timeout > 0 and args.max_turns > 0,
                 "Timeout and max-turns must be positive finite values.")
@@ -708,8 +762,8 @@ def main(argv=None):
         if args.check_case:
             print("Case definition and source hash verified; no run created.")
             return 0
-        from workflow.src.engine import Engine
         from workflow.src.runtime import CodexRuntime
+        from workflow.src.service import WorkflowService
         if args.format_docx:
             from workflow.src.formatting import manuscript_paragraphs
             manuscript_paragraphs("# Dependency preflight\n\nText.\n")
@@ -720,46 +774,48 @@ def main(argv=None):
                 from workflow.src.document_adapters import preflight as document_preflight
                 from workflow.src.formatting import select_renderer
                 document_preflight(select_renderer(args.renderer))
-        if args.resume:
-            engine = Engine(args.resume)
-        needs_runtime = args.format_docx or not engine or engine.state()["status"] not in ("COMPLETED", "CANCELLED")
-        runtime_info = preflight(case, args.codex) if needs_runtime or args.preflight else engine.state()["e2e"]["runtime"]
+        service = WorkflowService(args.server_root)
+        run_id = args.resume
+        if run_id:
+            with service.open_run(run_id) as engine:
+                status, saved = engine.state()["status"], engine.state().get("e2e")
+        needs_runtime = args.format_docx or not run_id or status not in ("COMPLETED", "CANCELLED")
+        runtime_info = preflight(case, args.codex) if needs_runtime or args.preflight else saved["runtime"]
         if args.preflight:
             print(f"Preflight passed: {runtime_info['version']}. DOCX extraction capability is verified by the preparation stage.")
             return 0
-        if engine is None:
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-            run_dir = args.run_dir or REPO / ".workflow-runs/e2e" / f"{case['spec']['case_id']}-{timestamp}-{uuid.uuid4().hex[:6]}"
-            run_dir = run_dir.resolve()
-            require(not run_dir.exists(), "Run directory already exists; use --resume to continue it.")
-            run_dir.parent.mkdir(parents=True, exist_ok=True)
-            model = args.model or case["spec"]["input"]["runtime"].get("model")
-            engine = Engine.create(run_dir, Path(case["source_path"]), case["spec"]["input"]["source_language"],
-                                   definition=Path(case["definition_path"]), model=model)
-            bind_case(engine, case, runtime_info, model)
-        else:
-            bind_case(engine, case, runtime_info, args.model, resume=True)
-        print(f"Run: {engine.root}\nResume: python workflow/tests/run_e2e.py --case \"{case['case_path']}\" --resume \"{engine.root}\"")
-        engine.store.event("e2e.approval_policy", {"auto_approve_recommended": args.auto_approve_recommended,
-                                                "authorization": "explicit command-line opt-in"})
-        runtime = CaseRuntime(CodexRuntime([runtime_info["executable"], "app-server"], args.timeout),
-                              engine.state()["e2e"]["case"]["task"],
-                              auto_approve_recommended=args.auto_approve_recommended)
-        code = drive(engine, case, runtime, max_turns=args.max_turns,
-                     auto_approve_recommended=args.auto_approve_recommended)
-        if args.format_docx and engine.state()["status"] == "COMPLETED" and code != 1:
-            format_runtime = CaseRuntime(
-                CodexRuntime([runtime_info["executable"], "app-server"], args.timeout),
-                "Consolidate the accepted English chapters into one readable DOCX without editorial changes.",
-                auto_approve_recommended=args.auto_approve_recommended, operation="formatting",
-            )
-            formatted = format_document(
-                engine, format_runtime, documents_skill=args.documents_skill, renderer=args.renderer, purpose=args.format_purpose,
-                model=args.model, auto_approve_recommended=args.auto_approve_recommended, max_turns=args.max_turns,
-            )
-            if formatted:
-                return formatted
-        return code
+        model = args.model or case["spec"]["input"]["runtime"].get("model")
+        if run_id is None:
+            # Each launch uploads the case manuscript, which always creates a new work.
+            run_id = service.create_run(case["template_id"], upload=Path(case["source_path"]),
+                                        manuscript_language=case["spec"]["input"]["manuscript_language"], model=model,
+                                        skip_stages=case["spec"]["input"].get("skip_stages", ()))
+        with service.open_run(run_id) as engine:
+            bind_case(engine, case, runtime_info, model if not args.resume else args.model, resume=bool(args.resume))
+            print(f"Run: {run_id}\nPath: {engine.root}\nResume: python workflow/tests/run_e2e.py --case "
+                  f"\"{case['case_path']}\" --server-root \"{service.root}\" --resume {run_id}")
+            engine.store.event("e2e.approval_policy", {"auto_approve_recommended": args.auto_approve_recommended,
+                                                    "authorization": "explicit command-line opt-in"})
+            runtime = CaseRuntime(CodexRuntime([runtime_info["executable"], "app-server"], args.timeout),
+                                  engine.state()["e2e"]["case"]["task"],
+                                  auto_approve_recommended=args.auto_approve_recommended,
+                                  operation="editing" if engine.state()["workflow"] == "literary-editing" else "translation")
+            code = drive(engine, case, runtime, max_turns=args.max_turns,
+                         auto_approve_recommended=args.auto_approve_recommended)
+            if args.format_docx and engine.state()["status"] == "COMPLETED" and code != 1:
+                format_runtime = CaseRuntime(
+                    CodexRuntime([runtime_info["executable"], "app-server"], args.timeout),
+                    "Consolidate the accepted English chapters into one readable DOCX without editorial changes.",
+                    auto_approve_recommended=args.auto_approve_recommended, operation="formatting",
+                )
+                formatted = format_document(
+                    service, engine, format_runtime, documents_skill=args.documents_skill, renderer=args.renderer,
+                    purpose=args.format_purpose, model=args.model,
+                    auto_approve_recommended=args.auto_approve_recommended, max_turns=args.max_turns,
+                )
+                if formatted:
+                    return formatted
+            return code
     except ModuleNotFoundError as exc:
         print(f"Missing Python dependency: {exc.name}. Rerun with --setup.", file=sys.stderr)
         return 1
@@ -767,11 +823,11 @@ def main(argv=None):
         print(f"E2E launcher: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
-        print("\nInterrupted. Resume the printed run directory; no human approval was inferred.")
+        print("\nInterrupted. Resume the printed run ID; no human approval was inferred.")
         return 130
     finally:
-        if engine:
-            engine.close()
+        if service:
+            service.close()
 
 
 if __name__ == "__main__":

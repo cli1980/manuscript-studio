@@ -1,8 +1,10 @@
 # M1 design draft — Generalized workflow engine
 
 **Status:** Owner-reviewed design (2026-10-26 session); all open questions were
-answered and are incorporated below. Implementation has not started except the
-metadata review gate (section 7).\
+answered and are incorporated below. A 2026-10-27 gap review before
+implementation changed some of it; section 13 records those decisions and takes
+precedence over earlier sections where they conflict. Implemented locally on
+2026-10-27 (steps 1–10); M1 marked done by the owner on 2026-10-27.\
 **Milestone:** [M1 in roadmap.md](../../roadmap.md#m1--generalized-workflow-engine)\
 **Inputs:** 2026-10-26 design discussion (decisions 1–8 below).
 
@@ -239,8 +241,9 @@ hash, receipt, decision source) and moves the run to `translate`.
 gate until `recover --refresh-gate` + `step`. Under
 `--auto-approve-recommended`, the E2E launcher confirms it only on the completed
 preparation turn's `confirm metadata` recommendation and only if no edit
-followed. Still M1 work: the `metadata_review` stage kind in the registry,
-`metadata_versions` / history listing APIs, and agent-edit detection after turns.
+followed. The `metadata_review` stage kind, `metadata_versions` and the
+history/version APIs, agent-edit detection after turns, and library sync were
+added with the rest of M1 on 2026-10-27; `recover` is now `retry`.
 
 - When preparation completes, the run enters stage `metadata` with status
   `WAITING_FOR_HUMAN` and gate kind `metadata_review`.
@@ -634,13 +637,61 @@ Each step keeps the test suite green.
    fake runtime).
 10. Update `architecture.md`, `workflow/README.md`, and `roadmap.md`.
 
-## 13. Open questions
+## 13. Gap review decisions (2026-10-27)
 
-None at this time. Decisions from the 2026-10-26 review are incorporated
-above: metadata edits after confirmation are history-only; formatting uses the
-formatted output's manuscript language; an engine update requires restarting
-unfinished runs; published preparation is reused; and a work has at most one
-unfinished run at a time.
+Decisions from the 2026-10-26 review are incorporated above: metadata edits
+after confirmation are history-only; formatting uses the formatted output's
+manuscript language; an engine update requires restarting unfinished runs; and
+a work has at most one unfinished run at a time.
+
+A pre-implementation review found gaps. The owner decided:
+
+1. **No reuse of published preparation in M1.** Preparation binds
+   `discovery.location` and source locators to the run's own absolute
+   `input/<file>` path, and published revision manifests are immutable, so a
+   package prepared by one run cannot pass another run's source checks. Every
+   run therefore prepares again. `restart_workflow` has no
+   `fresh_preparation` option; prepared revisions are not published to the
+   library in M1 (nothing consumes them). A second run on a work still reuses
+   the published metadata through the metadata sync (section 7). Sections 9
+   and 10 statements about reusing published preparation are superseded.
+2. **Formatting runs count** toward the one-unfinished-run-per-work limit.
+3. **Work-level metadata edits.** When a work has no unfinished run, its shared
+   metadata can be edited through `edit_work_metadata(work_id, field, value,
+   rationale)` using the engine's metadata helper. Each edit is a library
+   publication. History is listed per work (`work_metadata_history`,
+   `work_metadata_version`); run-level history remains available.
+4. **Import.** `import RUN_DIR` creates a work from the run's source snapshot
+   and registers the run. Completed translation runs publish their accepted
+   output so they can be formatted; other imported runs allow only reading and
+   `restart_workflow`.
+
+Settled during the review (no owner decision required):
+
+- The source is stored in the library when the work is created.
+- Library `work.json` is published as a whole file. The engine writes the
+  publishing workflow's `workflows.<name>` summary itself and keeps the other
+  workflows' entries from the library head.
+- Template checkout entries name both the library path and the workspace path.
+- Templates name their `workflow` (the `work.json` workflows key); read-only
+  applies to that workflow, not only to one template ID.
+- Each chapter records a glossary/voice snapshot when it starts
+  (`continuity_before`). Restarting the chapter in progress restores that
+  snapshot, which equals the last completed chapter's snapshot plus user edits
+  made between chapters.
+- Outputs and export follow source chapter order, not completion order.
+- `accept` requires an explicit finalization confirmation
+  (`confirm_final=True`, CLI `--confirm-final`), recorded in the receipt.
+- Service-level metadata edits do not need a gate ID; confirmation binds gate
+  ID and record revision.
+- `--definition PATH` is replaced by `--model` and `--agent-model AGENT=MODEL`;
+  E2E cases name a `template_id`.
+- The CLI creates derived runs with
+  `create --template manuscript-formatting-v1 --work W [--publication P]` plus
+  the formatting options, and adds `works verify`.
+- Non-English TOC labels are deferred; M1 parametrizes the formatting language.
+- Owners are recorded without enforcement. Run creation checks for an
+  unfinished run and writes the index in one transaction.
 
 ## 14. Future considerations
 

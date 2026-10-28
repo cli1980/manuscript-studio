@@ -1,22 +1,52 @@
-# Manuscript workflow — iteration 1
+# Manuscript workflow engine
 
-A local CLI prototype of the architecture's durable execution layer:
+A local CLI over the generalized workflow engine (M1, see
+[docs/m1-design.md](docs/m1-design.md)). The literary translation template is:
 
 ```text
-prepare → translate (chapter/passage human gates) → accept → Markdown export
-                                                           ↓ optional/manual
-                                                   format → verified DOCX
+prepare → metadata review → translate (per chapter, passage human gates) → accept → Markdown export
+                                                                                  ↓ optional derived run
+                                                                         format → verified DOCX
 ```
 
 Literary drafting and source-grounded prose/fidelity review stay together in the
 translation skill. There is no general line-editing or copyediting stage in this
 template. Further editorial feedback belongs in translation review.
 
-Implementation modules live in `workflow/src/`: `engine.py`, `runtime.py`,
-`storage.py`, `formatting.py`, and `cli.py`. The package-level `__main__.py` is a thin launcher
-preserving `python -m workflow`. Workflow definitions live in `definitions/`,
-tests in `tests/`, and architecture documentation in `docs/`. The README and
-requirements remain at the workflow root.
+Implementation modules live in `workflow/src/`:
+
+| Module | Role |
+|---|---|
+| `registry.py` | Discovers `templates/*/template.json`, validates them, resolves engine classes, computes the engine identity |
+| `engine.py` | Base engine: lifecycle, lock, stage walker, template-declared gates, receipts, acceptance, export, retry, stage restart |
+| `prepared.py` | Shared preparation stage, prepared-package verification, per-chapter iterations, restart chapter, metadata review |
+| `translation.py` | `literary-translation-v1` prompts, translation gate rules, chapter completion, accepted-output publication |
+| `editing.py` | `literary-editing-v1`: optional developmental, line, and copy editing, each chapter by chapter with a whole-book pass |
+| `formatting.py` | `manuscript-formatting-v1`, a derived template over an accepted-output publication |
+| `library.py` | Per-work artifact library with an append-only publication log |
+| `service.py` | The service API shared by the CLI and the future web application; run/work index |
+| `cli.py` | Thin CLI client of the service |
+
+`storage.py` and `runtime.py` hold per-run SQLite state and the Codex App Server
+adapter. Templates live in `templates/`, tests in `tests/`, and architecture
+documentation in `docs/`.
+
+### Server root
+
+Every command takes `--server-root` (default `.workflow-runs`):
+
+```text
+<server_root>/
+  index.sqlite3        works, per-workflow read-only status, runs (a cache; `reindex` rebuilds it)
+  works/<work_id>/     engine-owned work library: sources/, work.json, metadata-history/,
+                       translation/<target>/, accepted/, objects/, publications.jsonl
+  runs/<run_id>/       per-run state.sqlite3, input/, skills/, workspace/, objects/, export/, archive/
+```
+
+Uploading a manuscript always creates a new work, even for an identical file. A
+work has at most one unfinished run at a time, across all workflows including
+formatting. Final acceptance publishes the accepted artifacts into the work
+library and makes that workflow read-only on the work.
 
 The case-driven [E2E launcher](tests/run_e2e.py) accepts an explicit workflow
 manifest. Live model execution is separate from the deterministic unit-test suite,
@@ -32,9 +62,11 @@ python workflow/tests/run_e2e.py --case workflow/tests/cases/translation-ciqing-
 ```
 
 This example requires the local case and fixture. `--case` is required; the launcher
-never selects a long manuscript implicitly. Codex must already be installed and authenticated. The launcher creates or
-resumes a run, presents each human gate, checks restart/replay behavior, verifies
-the export, and writes an E2E report. See the case README for pause/resume, runtime
+never selects a long manuscript implicitly. Codex must already be installed and authenticated. The launcher creates
+(through the service, under `--server-root`, default `.workflow-runs/e2e`) or resumes
+(`--resume RUN_ID`) a run, presents each human gate, checks restart/replay behavior, verifies
+the export, and writes an E2E report. Cases name a `template_id` and a
+`manuscript_language`. See the case README for pause/resume, runtime
 options, and the distinction between workflow checks and literary quality.
 
 For explicitly delegated acceptance of the agent's structured recommendations,
@@ -67,24 +99,31 @@ preparation. Start with a short UTF-8 Markdown manuscript.
 
 ## Run a manuscript
 
-Create the parent directory for runs, then snapshot one explicitly designated
-source file. This iteration prepares the whole file, including its real chapters.
-The destination must be new; it never initializes over an existing project.
+Choose a workflow, then upload one explicitly designated source file (a new work)
+or select an existing work. This iteration prepares the whole file, including its
+real chapters. Commands after `create` take the printed run ID.
 
 ```text
-mkdir .workflow-runs
-.venv-workflow/Scripts/python.exe -m workflow create .workflow-runs/my-book --source "C:/Manuscripts/book.md" --source-language zh-CN
-.venv-workflow/Scripts/python.exe -m workflow step .workflow-runs/my-book
-.venv-workflow/Scripts/python.exe -m workflow status .workflow-runs/my-book
+.venv-workflow/Scripts/python.exe -m workflow templates
+.venv-workflow/Scripts/python.exe -m workflow create --template literary-translation-v1 --source "C:/Manuscripts/book.md" --manuscript-language zh-CN
+.venv-workflow/Scripts/python.exe -m workflow step RUN
+.venv-workflow/Scripts/python.exe -m workflow status RUN
+.venv-workflow/Scripts/python.exe -m workflow create --template literary-translation-v1 --work WORK_ID
 ```
 
-`create --model MODEL` sets the model for both agents. Alternatively copy
-[`definitions/translation.json`](definitions/translation.json), set each agent's `model`, and pass
-`create --definition PATH`. The configuration is snapshotted at creation.
-The translation template retains this five-stage topology (prepare → metadata →
-translate → accept → export) and these skill bundles;
-the configuration loader rejects other targets, stages, and incomplete bundles.
-An omitted model uses the installed Codex default.
+`--work` starts the workflow on an existing work's source; it is refused with
+`work_busy` while another run on that work is unfinished and with
+`workflow_read_only` once that workflow is finalized on the work. Every run
+prepares again; confirmed shared metadata is reused from the work library.
+`works list`, `works show WORK`, `works publications WORK`, and `works verify WORK`
+inspect works and their libraries.
+
+`create --model MODEL` sets the model for every agent; `--agent-model AGENT=MODEL`
+sets one agent. The template is snapshotted at creation with the engine identity.
+The template declares its stages, gates, agents, and skill bundles; custom
+definition files are no longer accepted. An omitted model uses the installed
+Codex default. `status RUN` reports `available_actions`, each with `enabled`, the
+`reason` when disabled, `irreversible`, and a `confirmation` message.
 
 Each `step` runs one agent turn, re-presents a refreshed metadata review, or
 performs the final deterministic export.
@@ -97,7 +136,7 @@ referenced resources; this is instruction-based use, not automatic plugin instal
 ## Review and resume
 
 ```text
-.venv-workflow/Scripts/python.exe -m workflow review .workflow-runs/my-book
+.venv-workflow/Scripts/python.exe -m workflow review RUN
 ```
 
 The CLI displays the saved gate ID, agent's explanation, structured review items
@@ -116,8 +155,8 @@ Use only commands actually offered by the current sheet. Send the exact displaye
 gate ID:
 
 ```text
-.venv-workflow/Scripts/python.exe -m workflow reply .workflow-runs/my-book --gate GATE-ID --response-file response.txt
-.venv-workflow/Scripts/python.exe -m workflow step .workflow-runs/my-book
+.venv-workflow/Scripts/python.exe -m workflow reply RUN --gate GATE-ID --response-file response.txt
+.venv-workflow/Scripts/python.exe -m workflow step RUN
 ```
 
 The parser binds these fallback lines to the saved sheet/revision. Old gate IDs,
@@ -143,31 +182,46 @@ value, origin, review status, and confidence, plus unknown and stale fields. No
 agent runs at this gate. Edit one field at a time with a JSON value file:
 
 ```text
-.venv-workflow/Scripts/python.exe -m workflow metadata .workflow-runs/my-book --gate GATE-ID --field /genres --value-file genres.json --reason "Author correction"
+.venv-workflow/Scripts/python.exe -m workflow metadata RUN --gate GATE-ID --field /genres --value-file genres.json --reason "Author correction"
 ```
 
 Each edit goes through the pinned `prepare_metadata.py set` helper: it increments
 `record_revision`, keeps the previous record under `metadata-history/`, and
 records the field as a confirmed user edit. The engine also snapshots each
-presented record and logs a `metadata.edited` event. Every edit presents a new
-gate ID, so a confirmation always refers to the record you last saw.
-`/manuscript_language` is locked once the run exists.
+version into the run's object store and logs a `metadata.edited` event. Every
+edit at the gate presents a new gate ID, so a confirmation always refers to the
+record you last saw. `/manuscript_language` is locked once the run exists.
 
 To continue, reply to the current gate with a response file containing exactly
-`confirm metadata`. The confirmation receipt is bound to the inspected record
-revision and hash, and translation becomes `READY`. If `work.json` is changed
-outside the gate, the reply is refused; run `recover --refresh-gate`, then `step`,
-to present the current record again.
+`confirm metadata` (the service's `confirm_metadata` also binds the inspected
+record revision). The confirmation receipt is bound to that revision and hash,
+the record is published to the work library, and translation becomes `READY`. If
+`work.json` is changed outside the gate, the reply is refused; run
+`retry RUN --refresh-gate`, then `step`, to present the current record again.
+Before the gate is presented, the run adopts the work library's latest shared
+metadata, so a later run on the same work starts from the confirmed record.
+
+After confirmation, `metadata RUN --field ... --value-file ...` (without `--gate`)
+still edits metadata while no agent turn runs; such edits and agent edits are
+recorded as new versions and library publications without re-confirmation.
+`metadata-history RUN [--version N]` lists or shows the run's versions. While no
+run is unfinished, `works edit-metadata WORK --field ... --value-file ...` edits
+the work's shared metadata and `works metadata WORK [--history | --version N]`
+shows it.
 
 ### Final acceptance
 
 Once all chapters finish, `review` displays the immutable English outputs beside
-their original prepared chapters and an acceptance ID. Accept only after reviewing
-the final text:
+their original prepared chapters, an acceptance ID, and the finalization notice.
+**Acceptance is irreversible:** it publishes the accepted chapters, glossary,
+voice, and accepted-output manifest to the work library and makes literary
+translation read-only on this work. Nothing in the run can be restarted
+afterwards, and changes require adding the manuscript again as a new work.
+Accept only after reviewing the final text:
 
 ```text
-.venv-workflow/Scripts/python.exe -m workflow accept .workflow-runs/my-book --acceptance-id ACCEPTANCE-ID
-.venv-workflow/Scripts/python.exe -m workflow step .workflow-runs/my-book
+.venv-workflow/Scripts/python.exe -m workflow accept RUN --acceptance-id ACCEPTANCE-ID --confirm-final
+.venv-workflow/Scripts/python.exe -m workflow step RUN
 ```
 
 `export/` contains source-ordered Markdown chapters, glossary, voice record, and
@@ -175,32 +229,63 @@ a provenance manifest. Export reads accepted snapshots, not arbitrary working
 files. It refuses to overwrite differing files. It does not modify the uploaded
 source or claim to create a formatted edition.
 
+## Literary editing (first M4 iteration)
+
+```text
+prepare → metadata review → [developmental, optional] → line edit → copyedit → accept → Markdown export
+```
+
+Upload the text to edit (for example an accepted translation's assembled
+Markdown) as a new work and skip optional stages at creation:
+
+```text
+.venv-workflow/Scripts/python.exe -m workflow create --template literary-editing-v1 --source book.en.md --manuscript-language en-US --skip-stage developmental
+```
+
+The engine copies the verified prepared chapters verbatim into
+`manuscript/chapters/`. Line and copy editing each run chapter by chapter, sharing
+`editorial/style-sheet.md`, `continuity-concordance.md`, and `editorial-brief.md`,
+and end with a whole-book consistency pass. Each job uses three gates: an
+`editorial_review` decision sheet with separate closure (or, with no proposals,
+the exact reply `approve review`), then an `apply_authorization` gate requiring
+exactly `apply accepted changes`, and only then application. A chapter cannot
+complete if its text changed without that authorization, and other chapters
+cannot change outside their own jobs. The optional developmental stage collects
+chapter evidence and ends with one whole-book verdict and `DEV-###`
+recommendations; it never changes text. Final acceptance publishes the edited
+chapters under `literary-editing/` and an `accepted-markdown-chapters/1`
+publication, so formatting works unchanged. Restarting a completed editorial
+chapter, and other details, are deferred to the rest of M4.
+
 ## Optional final manuscript formatter
 
 The final formatter consolidates the accepted English chapters into one readable
 DOCX. It uses `format-manuscript`, `review-approval-sheet`, `prepare-manuscript`,
 and the bundled [local document adapter](adapters/documents-local/SKILL.md).
-It does not line-edit or
-retranslate the manuscript. The separate
-[`definitions/formatting.json`](definitions/formatting.json) describes that agent.
+It does not line-edit or retranslate the manuscript. It is the derived template
+[`manuscript-formatting-v1`](templates/manuscript-formatting-v1/template.json): it
+reads a work's `accepted-markdown-chapters/1` publication (not a parent run's
+state) and uses that output's manuscript language. The built-in builder currently
+supports English manuscripts only.
 
-For any completed run, including an existing run created before formatting was added:
+For a work whose translation is finalized:
 
 ```powershell
 .\.venv-workflow\Scripts\python.exe -m pip install -r workflow/requirements-docx.txt
-.\.venv-workflow\Scripts\python.exe -m workflow format `
-  .workflow-runs/my-book `
-  --renderer word `
-  --purpose reader-facing
+.\.venv-workflow\Scripts\python.exe -m workflow create --template manuscript-formatting-v1 `
+  --work WORK_ID --renderer word --purpose reader-facing
 ```
 
-This creates or reuses a job under `<run>/formatting/edition-.../` and prints its
-path. Use the normal commands on **that job directory**:
+`--publication PUB` selects a specific accepted-output publication (default: the
+latest). This creates a run under `runs/` and prints its ID; an unchanged request
+reuses the existing edition, and `--new-edition` creates a distinct one. Formatting
+runs count toward the one-unfinished-run-per-work limit, publish nothing into the
+work, and never make formatting read-only. Use the normal commands on that run:
 
 ```powershell
-.\.venv-workflow\Scripts\python.exe -m workflow step "PRINTED-FORMATTING-JOB" --codex "C:/path/to/codex.exe"
-.\.venv-workflow\Scripts\python.exe -m workflow review "PRINTED-FORMATTING-JOB"
-.\.venv-workflow\Scripts\python.exe -m workflow reply "PRINTED-FORMATTING-JOB" --gate GATE-ID --response-file response.txt
+.\.venv-workflow\Scripts\python.exe -m workflow step FORMAT-RUN --codex "C:/path/to/codex.exe"
+.\.venv-workflow\Scripts\python.exe -m workflow review FORMAT-RUN
+.\.venv-workflow\Scripts\python.exe -m workflow reply FORMAT-RUN --gate GATE-ID --response-file response.txt
 ```
 
 The formatter proposes a manuscript-bound format specification and machine
@@ -212,11 +297,10 @@ The CLI uses the skill's text fallback. `--purpose` also supports
 `editorial-review` and `submission`; source wording and order remain protected
 for every profile.
 
-The job has its own pinned input/skill snapshots, runtime context, review records,
-and SQLite state. It preserves the completed translation run and its acceptance.
-Repeated unchanged requests reuse the same job; use `--new-edition` to request a
-distinct edition, preserving prior results. Resume failures with `recover` on
-the formatting job, subject to the same stopped-process rules as translation.
+The formatting run has its own pinned input/skill snapshots, runtime context,
+review records, and SQLite state. It preserves the completed translation run and
+the work's publications. Retry failures with `retry` on the formatting run,
+subject to the same stopped-process rules as translation.
 
 Document construction and rendering are separate capabilities:
 
@@ -228,7 +312,7 @@ Document construction and rendering are separate capabilities:
 | Content checks and visual-review gate | Shared workflow checks | The same checks |
 
 Choose `--renderer word` or `--renderer libreoffice`. The default is controlled by
-`document_backend.renderer` in `definitions/formatting.json`; `platform-default`
+`document_backend.renderer` in the formatting template; `platform-default`
 selects Word on Windows and LibreOffice elsewhere. Builder code, renderer identity,
 settings, and the accepted manuscript are bound to the edition. Switching renderers
 creates a distinct edition and requires fresh design review/rendering/QA; page
@@ -278,7 +362,7 @@ unsupported blocks such as images, raw HTML, and thematic-break markup are
 rejected rather than silently omitted. More specialized literary structures
 need an extended audit contract before delivery.
 
-The verified result is `<formatting-job>/export/manuscript.docx`, accompanied by
+The verified result is `runs/<formatting-run>/export/manuscript.docx`, accompanied by
 its provenance manifest. Format specifications and render evidence remain in the
 job's workspace/snapshots. The accepted English text is the formatter's source;
 the original Chinese preparation is never substituted for it.
@@ -290,7 +374,7 @@ python workflow/tests/run_e2e.py --case PATH_TO_CASE_JSON --setup --format-docx 
   --renderer word
 ```
 
-Use `--case PATH_TO_CASE_JSON --resume COMPLETED-TRANSLATION-RUN --format-docx ...` to add it to an existing
+Use `--case PATH_TO_CASE_JSON --resume COMPLETED-TRANSLATION-RUN-ID --format-docx ...` to add it to an existing
 E2E run without repeating translation. `--format-purpose` selects the profile.
 Explicit `--auto-approve-recommended` also applies to recommended format decisions,
 with the same separate-closure and delegated-decision audit rules. Formatting has
@@ -302,7 +386,7 @@ translation-quality checks into passes.
 To monitor status and performance from another terminal without changing the run:
 
 ```text
-python workflow/tests/monitor_performance.py .workflow-runs/e2e/RUN-DIRECTORY --watch --output .workflow-runs/e2e/RUN-DIRECTORY/performance-report.json
+python workflow/tests/monitor_performance.py .workflow-runs/e2e/runs/RUN-ID --watch --output .workflow-runs/e2e/runs/RUN-ID/performance-report.json
 ```
 
 Omit `--watch` for a one-time table; `--interval` defaults to 60 seconds.
@@ -328,8 +412,8 @@ The run directory holds:
 | `skills/` | Pinned complete skill bundle |
 | `workspace/` | Agent-writable prepared package and translation project |
 | `objects/` | Immutable snapshots named by SHA-256 |
-| `export/` | Accepted final Markdown and provenance |
-| `formatting/` | Optional isolated formatting jobs, specifications, page evidence, and DOCX exports |
+| `export/` | Accepted final Markdown and provenance (or the DOCX for a formatting run) |
+| `archive/` | Workspace paths moved aside by chapter and stage restarts; never deleted |
 
 The source snapshot, skill bundle, prepared chapter/asset/manifest hashes, and
 completed outputs are checked before advancing. Preparation uses the repository
@@ -348,24 +432,54 @@ The actual filesystem sandbox is supplied by the installed Codex runtime.
 Inspect status and events after failure:
 
 ```text
-.venv-workflow/Scripts/python.exe -m workflow events .workflow-runs/my-book --after 0
-.venv-workflow/Scripts/python.exe -m workflow recover .workflow-runs/my-book
-.venv-workflow/Scripts/python.exe -m workflow step .workflow-runs/my-book
+.venv-workflow/Scripts/python.exe -m workflow events RUN --after 0
+.venv-workflow/Scripts/python.exe -m workflow retry RUN
+.venv-workflow/Scripts/python.exe -m workflow step RUN
 ```
 
-Recovery verifies protected inputs and starts a new thread with saved checkpoints
+`retry` verifies protected inputs and starts a new thread with saved checkpoints
 and any unconsumed user receipt; the domain skill must reconcile that receipt
 against its records before applying it. No automatic retry is performed.
 After a hard controller crash leaves the database `RUNNING`, stop any surviving
-Codex/agent processes before using `recover --confirm-stopped`. This iteration
+Codex/agent processes before using `retry --confirm-stopped`. This iteration
 does not reconcile an active remote turn or terminate an orphan process tree.
 Normal successive turns resume the persisted thread.
 
-If an awaiting review was changed, `recover --refresh-gate` requests fresh domain
+If an awaiting review was changed, `retry --refresh-gate` requests fresh domain
 validation and a new review rather than treating the stale response as approval.
 Protected source corruption must be resolved from retained snapshots before
-recovery; the command does not silently overwrite user files. `cancel` terminates
-an idle run; interrupt an active step first.
+recovery; the command does not silently overwrite user files. `stop` cancels
+an idle run permanently, keeping its artifacts and history; interrupt an active
+step first.
+
+There is no checkpoint rollback. When saved state is not sound, restart instead:
+
+```text
+.venv-workflow/Scripts/python.exe -m workflow restart-chapter RUN --chapter CHAPTER_ID --reason "..."
+.venv-workflow/Scripts/python.exe -m workflow restart-stage RUN --stage translate --reason "..."
+.venv-workflow/Scripts/python.exe -m workflow restart RUN --reason "..."
+```
+
+- **Restart chapter** archives the chapter's working directory (and, for a
+  completed chapter, its output) under `archive/`, resets that chapter to a new
+  attempt, and translates only it again. Restarting the chapter in progress
+  restores glossary and voice from that chapter's start (the last completed
+  chapter's versions plus any edits made between chapters); restarting a completed
+  chapter, allowed only when no chapter is in progress, keeps the current ones.
+  Outputs stay in source order.
+- **Restart stage** archives the workspace paths owned by that stage and every
+  later stage and resets their state. Receipts and events are kept; old receipts
+  cannot satisfy the new attempt's gates.
+- **Restart workflow** stops the run and creates a linked new run of the same
+  template on the same work with the current engine. It prepares again and carries
+  glossary and voice from the last completed chapter.
+
+All restarts are refused after final acceptance (`run_finalized`). Each run
+records an engine identity (a hash of `workflow/src/` and its template directory);
+after an engine update an unfinished run allows only reading and `restart`
+(`engine_updated`). `import RUN_DIR` registers a pre-M1 run directory as a new
+work; a completed translation publishes its accepted output so it can still be
+formatted, and other imported runs allow only reading and `restart`.
 
 ## Prototype limits and verification
 
@@ -399,9 +513,13 @@ Run deterministic tests (install `requirements-docx.txt` to include builder test
 Tests use synthetic manuscripts and a scripted runtime, plus a real subprocess
 speaking the App Server JSONL protocol. They cover gates, stale/replayed responses,
 source mutation, recovery, concurrent writers, export identity, and protocol
-interleaving/timeouts, plus formatting approval/content/QA guards. They do not call
-a model or establish literary or visual quality. The live translation workflow
-has also completed the ten-section 《刺秦》 case with Codex on Windows; that run is
+interleaving/timeouts, plus formatting approval/content/QA guards. They also cover
+the M1 engine: a test-only template registered from `tests/templates/`, chapter
+and stage restarts, workflow restart with carried glossary/voice, engine-update
+refusals, library publications and hand-edit conflicts, work-level metadata
+edits, import, the CLI, and index rebuilds. They do not call
+a model or establish literary or visual quality. Before M1 the live translation
+workflow completed the ten-section 《刺秦》 case with Codex on Windows; that run is
 separate from the deterministic fixtures and does not establish formatter quality.
 The first live formatting attempt using the external desktop Documents package saved a proposal but returned
 `blocked-adapter`: the installed Documents instructions were available, while

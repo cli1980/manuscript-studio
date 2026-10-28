@@ -1,0 +1,50 @@
+{
+  "id": "literary-translation-v1",
+  "title": "Literary translation",
+  "workflow": "literary-translation",
+  "engine": "workflow.src.translation:TranslationEngine",
+  "target_language": "en-US",
+  "locked_metadata": ["/manuscript_language"],
+  "agents": {
+    "prepare": {
+      "skill": "prepare-manuscript",
+      "skills": ["prepare-manuscript"],
+      "model": null
+    },
+    "translate": {
+      "skill": "literary-translation",
+      "skills": ["prepare-manuscript", "literary-translation", "review-approval-sheet"],
+      "model": null
+    }
+  },
+  "library": {
+    "checkout": [
+      {"artifact": "translation/{target}/glossary.md", "path": "translation/glossary.md"},
+      {"artifact": "translation/{target}/voice.md", "path": "translation/voice.md"}
+    ],
+    "areas": ["translation/{target}/", "accepted/literary-translation.json"]
+  },
+  "gates": {
+    "passage_map": {"sheet": "required", "binding": "required", "closure": "required"},
+    "translation_issue": {"sheet": "optional", "binding": "required"},
+    "chapter_sanity": {"sheet": "optional", "binding": "required", "closure": "required", "item_binding": true},
+    "continuation": {},
+    "question": {}
+  },
+  "stages": [
+    {"id": "prepare", "kind": "agent", "agent": "prepare", "preparation": true, "gates": ["question"],
+     "owns": ["prepared/"]},
+    {"id": "metadata", "kind": "metadata_review"},
+    {"id": "translate", "kind": "agent", "agent": "translate", "iterate": "chapters",
+     "gates": ["passage_map", "translation_issue", "chapter_sanity", "continuation", "question"],
+     "owns": ["translation/"],
+     "iteration": {
+       "owns": ["translation/.literary-translation-work/{work_id}/{chapter_id}/"],
+       "carry_forward": ["translation/glossary.md", "translation/voice.md"],
+       "restartable": true
+     }},
+    {"id": "accept", "kind": "acceptance"},
+    {"id": "export", "kind": "export"}
+  ],
+  "produces": "accepted-markdown-chapters/1"
+}

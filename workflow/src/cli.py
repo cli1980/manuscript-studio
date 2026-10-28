@@ -1,4 +1,4 @@
-"""CLI implementation, exposed through python -m workflow."""
+"""Thin CLI client of the workflow service, exposed through python -m workflow."""
 
 from __future__ import annotations
 
@@ -8,23 +8,17 @@ import shutil
 import sys
 from pathlib import Path
 
-from .engine import DEFAULT_DEFINITION, Engine
+from .engine import finalization_notice
 from .runtime import CodexRuntime
+from .service import WorkflowService
+
+
+def emit(value):
+    print(json.dumps(value, ensure_ascii=False, indent=2))
 
 
 def display(engine, state, *, review=False):
-    summary = {key: state.get(key) for key in
-               ("id", "status", "stage", "chapter_index", "attempts", "error", "export_path", "document_path")}
-    if state.get("format_jobs"):
-        summary["format_jobs"] = state["format_jobs"]
-    if state.get("gate"):
-        summary["gate_id"] = state["gate"]["id"]
-        summary["gate_kind"] = state["gate"]["kind"]
-        if state["gate"]["kind"] == "metadata_review":
-            summary["metadata_record_revision"] = state["gate"]["record_revision"]
-    if state.get("acceptance_id"):
-        summary["acceptance_id"] = state["acceptance_id"]
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    emit(engine.summary(state))
     if not review:
         return
     if state.get("gate"):
@@ -50,47 +44,92 @@ def display(engine, state, *, review=False):
         elif gate["kind"] == "chapter_sanity":
             print("\nReply 'approve chapter' to approve the empty-diff chapter review, or provide feedback.")
         elif gate["kind"] == "metadata_review":
-            print("\nEdit: python -m workflow metadata RUN_DIR --gate GATE-ID --field /PATH --value-file VALUE.json"
+            print("\nEdit: python -m workflow metadata RUN --gate GATE-ID --field /PATH --value-file VALUE.json"
                   "\nEach edit presents a new gate ID. Confirm with a reply containing exactly 'confirm metadata'.")
     if state["status"] == "WAITING_FOR_ACCEPTANCE":
-        print("\nReview these immutable English outputs against the source before accepting.")
+        print("\nReview these immutable outputs against the source before accepting.")
         for artifact in state["outputs"]:
             print(f"\nChapter: {artifact['chapter_id']}\nSHA-256: {artifact['sha256']}")
             source = next(chapter for chapter in state["chapters"] if chapter["chapter_id"] == artifact["chapter_id"])
             print("Original:\n" + engine.store.content(state["prepared"]["files"][source["path"]]).decode("utf-8"))
-            if artifact["content_changed_after_sanity_review"]:
+            if artifact.get("content_changed_after_sanity_review"):
                 print("Text changed after the approved sanity-review base; inspect the applied changes.")
-            print("English:\n" + engine.store.content(artifact).decode("utf-8"))
+            print("Accepted candidate:\n" + engine.store.content(artifact).decode("utf-8"))
+        print("\nIMPORTANT: " + finalization_notice(state["workflow"]))
+        print("Accept with: python -m workflow accept RUN --acceptance-id ACCEPTANCE-ID --confirm-final")
+    if engine.finalized(state):
+        print(f"\nFINAL: this run is finalized and {state['workflow']} is read-only on work {state['work_id']}. "
+              "Changes require adding the manuscript again as a new work.")
+
+
+def show(service, run_id, *, review=False):
+    with service.open_run(run_id) as engine:
+        display(engine, engine.state(), review=review)
+
+
+def agent_models(values):
+    result = {}
+    for value in values or []:
+        name, separator, model = value.partition("=")
+        if not separator or not name or not model:
+            raise ValueError("Use --agent-model AGENT=MODEL.")
+        result[name] = model
+    return result
 
 
 def parser():
-    result = argparse.ArgumentParser(description="Human-supervised literary translation workflow (CLI prototype).")
+    result = argparse.ArgumentParser(description="Human-supervised manuscript workflows (CLI client of the service).")
+    result.add_argument("--server-root", type=Path, default=Path(".workflow-runs"),
+                        help="Server root holding the run/work index, work libraries, and runs.")
+    result.add_argument("--owner", help="Owner recorded on new works and runs (default: OS user name).")
     sub = result.add_subparsers(dest="command", required=True)
-    create = sub.add_parser("create", help="Snapshot one source file and pin the skill bundle.")
-    create.add_argument("run_dir", type=Path)
-    create.add_argument("--source", type=Path, required=True)
-    create.add_argument("--source-language", required=True)
-    create.add_argument("--definition", type=Path, default=DEFAULT_DEFINITION)
-    create.add_argument("--model")
-    formatter = sub.add_parser("format", help="Create/reuse a final DOCX formatting job for an accepted translation.")
-    formatter.add_argument("run_dir", type=Path)
-    backend = formatter.add_mutually_exclusive_group()
-    backend.add_argument("--documents-skill", type=Path, help="Optional external Documents skill instead of the built-in adapters.")
-    backend.add_argument("--renderer", choices=("word", "libreoffice"),
-                         help="Built-in renderer; defaults to Word on Windows, LibreOffice elsewhere.")
-    formatter.add_argument("--purpose", choices=("reader-facing", "editorial-review", "submission"), default="reader-facing")
-    formatter.add_argument("--model")
-    formatter.add_argument("--new-edition", action="store_true", help="Create a distinct job instead of reusing an unchanged edition.")
-    metadata = sub.add_parser("metadata", help="Edit one shared metadata field at the metadata review gate.")
-    metadata.add_argument("run_dir", type=Path)
-    metadata.add_argument("--gate", required=True)
+    sub.add_parser("templates", help="List registered workflow templates.")
+    sub.add_parser("reindex", help="Rebuild the index from work libraries and per-run state.")
+    works = sub.add_parser("works", help="Inspect works and their libraries.")
+    work_sub = works.add_subparsers(dest="works_command", required=True)
+    work_sub.add_parser("list")
+    for name in ("show", "verify", "publications"):
+        work_sub.add_parser(name).add_argument("work")
+    work_metadata = work_sub.add_parser("metadata", help="Show the work's shared metadata or its history.")
+    work_metadata.add_argument("work")
+    work_metadata.add_argument("--history", action="store_true")
+    work_metadata.add_argument("--version", type=int)
+    work_edit = work_sub.add_parser("edit-metadata", help="Edit shared metadata while no run is unfinished.")
+    work_edit.add_argument("work")
+    work_edit.add_argument("--field", required=True)
+    work_edit.add_argument("--value-file", required=True, type=Path)
+    work_edit.add_argument("--reason", default="Explicit metadata edit.")
+    create = sub.add_parser("create", help="Create a run: --source makes a new work; --work uses an existing work.")
+    create.add_argument("--template", required=True)
+    origin = create.add_mutually_exclusive_group(required=True)
+    origin.add_argument("--source", type=Path, help="Upload a manuscript; always creates a new work.")
+    origin.add_argument("--work", help="Start this workflow on an existing work.")
+    create.add_argument("--manuscript-language", help="Required with --source, e.g. zh-CN.")
+    create.add_argument("--publication", help="Derived templates: the accepted-output publication (default: latest).")
+    create.add_argument("--model", help="Model for every agent.")
+    create.add_argument("--agent-model", action="append", metavar="AGENT=MODEL", help="Model for one agent.")
+    create.add_argument("--skip-stage", action="append", metavar="STAGE",
+                        help="Skip an optional stage of the template (see `templates`).")
+    backend = create.add_mutually_exclusive_group()
+    backend.add_argument("--documents-skill", type=Path, help="Formatting: external Documents skill.")
+    backend.add_argument("--renderer", choices=("word", "libreoffice"), help="Formatting: built-in renderer.")
+    create.add_argument("--purpose", choices=("reader-facing", "editorial-review", "submission"), default="reader-facing")
+    create.add_argument("--new-edition", action="store_true", help="Formatting: create a distinct edition.")
+    runs = sub.add_parser("runs", help="List runs.")
+    runs.add_argument("--work")
+    metadata = sub.add_parser("metadata", help="Edit one shared metadata field of a run.")
+    metadata.add_argument("run")
+    metadata.add_argument("--gate", help="The metadata review gate ID, when the run waits at that gate.")
     metadata.add_argument("--field", required=True, help="Metadata field path, such as /genres or /edition/label.")
-    metadata.add_argument("--value-file", required=True, type=Path,
-                          help="UTF-8 JSON value, including null or [].")
+    metadata.add_argument("--value-file", required=True, type=Path, help="UTF-8 JSON value, including null or [].")
     metadata.add_argument("--reason", default="Explicit metadata edit.")
-    for command in ("step", "status", "review", "reply", "accept", "recover", "cancel", "events"):
+    history = sub.add_parser("metadata-history", help="List a run's metadata versions or show one.")
+    history.add_argument("run")
+    history.add_argument("--version", type=int)
+    for command in ("step", "status", "review", "reply", "accept", "retry", "stop", "events",
+                    "restart-stage", "restart-chapter", "restart"):
         child = sub.add_parser(command)
-        child.add_argument("run_dir", type=Path)
+        child.add_argument("run")
         if command == "step":
             child.add_argument("--codex", default="codex", help="Codex executable path (not a shell command).")
             child.add_argument("--timeout", type=float, default=900)
@@ -99,64 +138,28 @@ def parser():
             child.add_argument("--response-file", required=True, type=Path)
         elif command == "accept":
             child.add_argument("--acceptance-id", required=True)
-        elif command == "recover":
+            child.add_argument("--confirm-final", action="store_true",
+                               help="Confirm that accepting finalizes the run and makes the workflow read-only.")
+        elif command == "retry":
             child.add_argument("--confirm-stopped", action="store_true")
             child.add_argument("--refresh-gate", action="store_true")
         elif command == "events":
             child.add_argument("--after", type=int, default=0)
+        elif command.startswith("restart"):
+            child.add_argument("--reason", required=True)
+            if command == "restart-stage":
+                child.add_argument("--stage", required=True)
+            elif command == "restart-chapter":
+                child.add_argument("--chapter", required=True)
+    sub.add_parser("import", help="Register an existing run directory.").add_argument("run_dir", type=Path)
     return result
 
 
 def main(argv=None):
     args = parser().parse_args(argv)
-    engine = None
     try:
-        if args.command == "create":
-            engine = Engine.create(args.run_dir, args.source, args.source_language,
-                                   definition=args.definition, model=args.model)
-            display(engine, engine.state())
-            return 0
-        engine = Engine.open(args.run_dir)
-        if args.command == "format":
-            from .formatting import FormattingEngine
-            job = FormattingEngine.create_from_run(
-                engine, documents_skill=args.documents_skill, renderer=args.renderer, purpose=args.purpose,
-                model=args.model, new_edition=args.new_edition,
-            )
-            try:
-                display(job, job.state())
-                print(f"\nFormatting job: {job.root}")
-                print(f'Next: python -m workflow step "{job.root}" --codex PATH-TO-CODEX')
-            finally:
-                job.close()
-            return 0
-        if args.command == "step":
-            if args.timeout <= 0:
-                raise ValueError("Timeout must be positive.")
-            if engine.state()["stage"] not in ("export", "metadata") and shutil.which(args.codex) is None:
-                raise ValueError("Codex executable not found. Install/sign in to Codex or pass --codex PATH.")
-            state = engine.advance(CodexRuntime([args.codex, "app-server"], args.timeout))
-        elif args.command == "metadata":
-            value = json.loads(args.value_file.read_text(encoding="utf-8-sig"))
-            state = engine.edit_metadata(args.gate, args.field, value, reason=args.reason)
-            display(engine, state, review=True)
-            return 0
-        elif args.command == "reply":
-            state = engine.reply(args.gate, args.response_file.read_text(encoding="utf-8"))
-        elif args.command == "accept":
-            state = engine.accept(args.acceptance_id)
-        elif args.command == "recover":
-            state = engine.recover(confirm_stopped=args.confirm_stopped, refresh_gate=args.refresh_gate)
-        elif args.command == "cancel":
-            state = engine.cancel()
-        elif args.command == "events":
-            for event in engine.store.events(args.after):
-                print(json.dumps(event, ensure_ascii=False))
-            return 0
-        else:
-            state = engine.state()
-        display(engine, state, review=args.command == "review")
-        return 0
+        with WorkflowService(args.server_root, owner=args.owner) as service:
+            return run(service, args)
     except ModuleNotFoundError as exc:
         print(f"workflow: missing dependency ({exc}); install workflow/requirements-docx.txt for native formatting.",
               file=sys.stderr)
@@ -167,9 +170,96 @@ def main(argv=None):
     except KeyboardInterrupt:
         print("workflow: interrupted; the run remains paused with its recorded state.", file=sys.stderr)
         return 130
-    finally:
-        if engine:
-            engine.close()
+
+
+def run(service, args):
+    command = args.command
+    if command == "templates":
+        emit(service.list_templates())
+    elif command == "reindex":
+        emit(service.reindex())
+    elif command == "works":
+        sub = args.works_command
+        if sub == "list":
+            emit(service.list_works())
+        elif sub == "show":
+            emit(service.get_work(args.work))
+        elif sub == "verify":
+            emit(service.verify_work(args.work))
+        elif sub == "publications":
+            emit(service.work_publications(args.work))
+        elif sub == "metadata":
+            emit(service.work_metadata_version(args.work, args.version) if args.version is not None else
+                 service.work_metadata_history(args.work) if args.history else service.get_work_metadata(args.work))
+        else:
+            value = json.loads(args.value_file.read_text(encoding="utf-8-sig"))
+            emit(service.edit_work_metadata(args.work, args.field, value, args.reason))
+    elif command == "create":
+        from . import registry
+        template = registry.get(args.template)
+        if "consumes" in template:
+            if args.source or args.manuscript_language:
+                raise ValueError("Derived templates start from an existing work's publication; use --work.")
+            run_id = service.create_derived_run(
+                args.work, args.template, publication_id=args.publication, model=args.model,
+                agent_models=agent_models(args.agent_model), new_edition=args.new_edition,
+                options={"documents_skill": args.documents_skill, "renderer": args.renderer, "purpose": args.purpose})
+        else:
+            if args.publication or args.renderer or args.documents_skill or args.new_edition:
+                raise ValueError("Formatting options apply only to derived templates.")
+            run_id = service.create_run(args.template, upload=args.source, work_id=args.work,
+                                        manuscript_language=args.manuscript_language, model=args.model,
+                                        agent_models=agent_models(args.agent_model),
+                                        skip_stages=args.skip_stage or ())
+        show(service, run_id)
+        print(f'\nNext: python -m workflow --server-root "{service.root}" step {run_id}')
+    elif command == "runs":
+        emit(service.list_runs(work_id=args.work))
+    elif command == "import":
+        run_id = service.import_run(args.run_dir)
+        emit(service.get_run(run_id))
+    elif command == "events":
+        for event in service.events(args.run, args.after):
+            print(json.dumps(event, ensure_ascii=False))
+    elif command == "metadata-history":
+        emit(service.metadata_version(args.run, args.version) if args.version is not None else
+             service.metadata_history(args.run))
+    elif command == "status":
+        emit(service.get_run(args.run))
+    elif command == "review":
+        show(service, args.run, review=True)
+    else:
+        review = False
+        if command == "step":
+            if args.timeout <= 0:
+                raise ValueError("Timeout must be positive.")
+            with service.open_run(args.run) as engine:
+                kind = engine._stage_or_empty(engine.state()).get("kind")
+            if kind == "agent" and shutil.which(args.codex) is None:
+                raise ValueError("Codex executable not found. Install/sign in to Codex or pass --codex PATH.")
+            service.step(args.run, CodexRuntime([args.codex, "app-server"], args.timeout))
+        elif command == "metadata":
+            value = json.loads(args.value_file.read_text(encoding="utf-8-sig"))
+            service.edit_metadata(args.run, args.field, value, args.reason, gate_id=args.gate)
+            review = True
+        elif command == "reply":
+            service.reply(args.run, args.gate, args.response_file.read_text(encoding="utf-8"))
+        elif command == "accept":
+            service.accept(args.run, args.acceptance_id, confirm_final=args.confirm_final)
+        elif command == "retry":
+            service.retry(args.run, confirm_stopped=args.confirm_stopped, refresh_gate=args.refresh_gate)
+        elif command == "stop":
+            service.stop(args.run)
+        elif command == "restart-stage":
+            service.restart_stage(args.run, args.stage, reason=args.reason)
+        elif command == "restart-chapter":
+            service.restart_chapter(args.run, args.chapter, reason=args.reason)
+        elif command == "restart":
+            new_id = service.restart_workflow(args.run, reason=args.reason)
+            print(f"Run {args.run} stopped; restarted as {new_id}.")
+            args.run = new_id
+        show(service, args.run, review=review)
+    return 0
 
 
 if __name__ == "__main__":

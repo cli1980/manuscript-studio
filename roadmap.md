@@ -43,9 +43,10 @@ Agreed in the 2026-10-26 M1 design review (details in
   started by selecting the work, not by uploading. A work has at most one
   unfinished run at a time.
 - **Per-work artifact library.** Artifacts that outlive a run (sources,
-  prepared revisions, shared metadata, accepted outputs) are shared across
-  workflows through an engine-owned library per work. Git versioning is a
-  future consideration.
+  shared metadata, accepted outputs) are shared across workflows through an
+  engine-owned library per work. Git versioning is a future consideration.
+  Published preparation is not reused in M1; every run prepares again (decided
+  in the 2026-10-27 gap review).
 - **Metadata review.** A required human gate after preparation lets users
   inspect and edit metadata. Later edits are recorded in history only.
 - **Recovery without rollback.** Users can retry the current step, restart a
@@ -67,10 +68,10 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 ### M1 — Generalized workflow engine
 
-- **Status:** `in_progress`
+- **Status:** `done` (marked done by the owner on 2026-10-27)
 - **Owner:** `cli1980`
 - **Design:** [workflow/docs/m1-design.md](workflow/docs/m1-design.md)
-  (owner-reviewed 2026-10-26)
+  (owner-reviewed 2026-10-26; gap-review decisions 2026-10-27 in its section 13)
 - **Outcome:** Workflows are pluggable templates, the CLI and the web
   application share one engine service layer, and artifacts are shared per work
   across workflows.
@@ -90,8 +91,9 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - A server-level run and work index with an owner on every record, alongside
     the existing per-run state.
   - A per-work artifact library with checkout and publish, an append-only
-    publication log, one unfinished run per work, and workflows that become
-    read-only on a work after finalization.
+    publication log, one unfinished run per work (formatting runs included),
+    and workflows that become read-only on a work after finalization. Shared
+    metadata can also be edited at the work level while no run is unfinished.
   - A required metadata review gate after preparation. Versioned metadata edits:
     each change increments `record_revision`, retains a snapshot, and records an
     event. Edits are refused while an agent turn is running, fields the run
@@ -108,16 +110,33 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - Metadata history can be listed and each version inspected.
   - Formatting runs as a derived template on an accepted-output publication and
     uses that output's manuscript language.
-  - A second run on an existing work reuses the published prepared revision and
-    metadata; creating a run on a work with an unfinished run is refused.
+  - A second run on an existing work reuses the published metadata (it prepares
+    again); creating a run on a work with an unfinished run is refused.
   - Restarting a chapter archives its work, restores glossary and voice from the
     last completed chapter, and translates only that chapter again; restarting a
     stage or an unfinished workflow keeps receipts and events.
   - After final acceptance, restarts and new runs of that workflow on the work
     are refused; after an engine update, unfinished runs allow only reading and
     restarting the workflow.
-- **Progress:** the metadata review gate is implemented in the current engine
-  and CLI (2026-10-26). The remaining scope has not started.
+- **Progress:** the metadata review gate was implemented first (2026-10-26).
+  On 2026-10-27 the remaining scope was implemented: the template registry and
+  `template.json` files, the split into
+  `Engine` / `PreparedManuscriptEngine` / `TranslationEngine`, template-declared
+  gates, per-chapter iterations, retry and chapter/stage/workflow restarts, the
+  engine-update check, the work library, the service API and index, the thin
+  CLI with `--server-root`, formatting as a derived template, work-level
+  metadata edits, import, and the test-only template. Each acceptance criterion
+  has a deterministic test (`workflow.tests.test_workflow`: 51 passed). A live
+  《刺秦》 E2E run (Codex 0.163.0, `--auto-approve-recommended --format-docx
+  --renderer word`) completed on 2026-10-27 through the service: preparation
+  of the DOCX into ten sections, delegated metadata confirmation published to
+  the work library, ten chapters each in its own agent thread (56 delegated
+  decisions), finalization that published the accepted output and made
+  translation read-only on the work, and a derived formatting run that produced
+  a verified 38-page Word DOCX. All automated checks passed. The human-only
+  evidence checks and literary quality remain unreviewed (launcher exit 2,
+  as designed). The owner marked M1 done on 2026-10-27 after these results; no
+  separate line-by-line code review is recorded.
 
 ### M2 — DOCX manuscript intake
 
@@ -188,13 +207,41 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 ### M4 — Literary Edit workflow
 
-- **Status:** `planned`
+- **Status:** `in_progress` (CLI template started ahead of M2/M3 at the owner's
+  direction on 2026-10-27; web support still depends on M3)
 - **Owner:** `cli1980`
 - **Depends on:** M1; M3 for web support
 - **Outcome:** A Literary Edit workflow is available in both the CLI and the web
   GUI.
-- **Scope:** To be defined before work starts. The workflow follows the
-  cross-cutting decisions above.
+- **Scope agreed so far (2026-10-27):** template `literary-editing-v1`:
+  preparation (reused) → metadata review → optional developmental editing
+  (chapter evidence, then one whole-book verdict and `DEV-###` recommendations
+  at a revision/approval gate; report only, no text changes) → line editing →
+  copy editing (each chapter by chapter with shared style sheet, continuity
+  concordance, and editorial brief; per chapter a decision review with separate
+  closure, then an explicit apply authorization; each stage ends with a
+  whole-book consistency pass with its own gate) → final acceptance → export.
+  Formatting reuses the unchanged derived template after acceptance. Text to
+  edit, including a translation, is uploaded as a new work.
+- **Deferred to the remaining M4 work:** developmental-stage details,
+  restarting a completed editorial chapter, linking an edited translation to
+  its source work, and web support.
+- **Progress:** first CLI implementation (local, uncommitted): optional stages
+  (`--skip-stage`), several chapter stages per template with a concluding
+  whole-book step, template-declared gate commands, the `EditingEngine`, and a
+  deterministic test of line and copy editing with developmental skipped
+  (`workflow.tests.test_workflow`: 52 passed). A live E2E on the translated
+  《刺秦》 text (uploaded as a new en-US work, developmental skipped,
+  `--auto-approve-recommended --format-docx --renderer word`) completed on
+  2026-10-27: preparation into a title unit plus ten sections, line and copy
+  editing of all 11 units plus both whole-book passes (24 jobs, 25 delegated
+  decisions), final acceptance published to the work library, and a derived
+  38-page Word DOCX. All automated checks passed; human evidence checks remain
+  unreviewed. The agent proposed no changes in any job (all verdicts ready, 5/5),
+  so the live run did not exercise the proposal, closure, and apply path; only
+  the deterministic test covers it. During the run the launcher's delegated-mode
+  prompt was fixed: completed editing turns lacked guidance for the required
+  recommendation field, which made the model stall until the turn timeout.
 
 ### Later (unordered)
 
@@ -286,3 +333,40 @@ documentation change. Do not mark work complete while required review is pending
     one-unfinished-run-per-work limit) still awaits confirmation.
   - **Blockers:** none.
   - **Next step:** continue M1 as planned.
+- **2026-10-27** — M1 generalized engine and first M4 literary editing
+  template, committed locally (not yet pushed).
+  - **Changes:** the M1 gap review (decisions recorded in
+    [m1-design.md](workflow/docs/m1-design.md) section 13: no reuse of
+    published preparation, formatting counts toward the one-run limit,
+    work-level metadata edits, import publishes completed translations) and
+    the complete M1 implementation: template registry and `template.json`
+    files, engine split, template-declared gates, per-chapter iterations,
+    retry and chapter/stage/workflow restarts, engine-update check, per-work
+    library, service API and index, thin CLI with `--server-root`, formatting
+    as a derived template, and the test-only template. M4's first iteration
+    adds optional stages, several chapter stages with a concluding whole-book
+    step, gate commands, and `literary-editing-v1` with `EditingEngine`. The
+    E2E launcher creates runs through the service; its delegated-mode prompt
+    now covers editing gates.
+  - **Milestones:** M1 moves to `done` at the owner's direction. M4 moves to
+    `in_progress` with its agreed scope; the remaining M4 work is listed in
+    its section. M2 and M3 are unaffected.
+  - **Validation:** with Python 3.12.10: `workflow.tests.test_workflow` 52
+    passed, `test_validate_preparation` 25 passed, `test_approval_review` 28
+    passed (1 skip), pyflakes clean on the changed workflow modules. Live
+    Codex 0.163.0 E2E runs completed: translation of 《刺秦》 with DOCX
+    formatting (all automated checks passed), and literary editing of the
+    translated text with developmental skipped and DOCX formatting (all
+    automated checks passed; no edits were proposed, so the apply path was not
+    exercised live). Human-only evidence checks and literary quality were not
+    reviewed.
+  - **Human review:** the owner answered the M1 and M4 design questions in
+    the 2026-10-27 session and marked M1 done. No separate line-by-line code
+    review is recorded.
+  - **Notes:** local, gitignored E2E cases and fixtures
+    (`workflow/tests/cases/*-ciqing-001/`, `workflow/tests/fixtures/`) were
+    updated or added and are not committed.
+  - **Blockers:** none.
+  - **Next step:** define the remaining M4 details (developmental stage,
+    completed-chapter restarts, linking an edited translation to its source
+    work) and exercise the apply path in a live editing run.
