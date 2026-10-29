@@ -78,23 +78,7 @@ def validators():
 
 
 def manuscript_language(work):
-    key = "source_language" if work["schema_version"] == 1 else "manuscript_language"
-    return work["metadata"][key]
-
-
-def legacy_metadata(work):
-    """Compatibility view for existing evaluation expectations; never persisted."""
-    metadata = work["metadata"]
-    if work["schema_version"] == 1:
-        return metadata
-    return {
-        "title": metadata["title"],
-        "authors": [person["name"] for person in metadata["contributors"] if "author" in person["roles"]],
-        "source_language": metadata["manuscript_language"],
-        "work_type": metadata["work_type"],
-        "genre": metadata["genres"][0] if metadata["genres"] else None,
-        "edition": metadata["edition"]["label"],
-    }
+    return work["metadata"]["manuscript_language"]
 
 
 def schema_check(validator, value, label):
@@ -110,9 +94,8 @@ def validate(work_path, *, check_sources=False):
     work_validator, revision_validator = validators()
     work = load_json(work_path)
     schema_check(work_validator, work, "work")
-    if work["schema_version"] == 2:
-        ids = [person["id"] for person in work["metadata"]["contributors"]]
-        require(len(ids) == len(set(ids)), "Contributor IDs must be unique.")
+    ids = [person["id"] for person in work["metadata"]["contributors"]]
+    require(len(ids) == len(set(ids)), "Contributor IDs must be unique.")
     preparation = work["preparation"]
     current_revision = preparation["current_revision"]
     loaded = {}
@@ -169,7 +152,11 @@ def validate(work_path, *, check_sources=False):
         return manifest
 
     manifest = revision(current_revision) if current_revision else None
-    if work["schema_version"] == 2 and work["metadata"]["extent"] is not None:
+    if manifest is not None:
+        roles = [chapter["role"] for chapter in manifest["chapters"]]
+        require(roles[:1] == ["front_matter"] and roles.count("front_matter") == 1,
+                "A prepared revision starts with exactly one front_matter unit.")
+    if work["metadata"]["extent"] is not None:
         extent = work["metadata"]["extent"]
         basis = revision(extent["basis_revision"])
         scope = extent["scope"]

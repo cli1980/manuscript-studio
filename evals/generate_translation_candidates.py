@@ -86,8 +86,8 @@ def publish(root, case_id, task, candidate_id, text, provenance):
                     and read_bytes(file, path.parent) == raw):
                 return "unchanged"
             raise EvaluationError("Candidate ID already exists with different content or provenance.")
-        metadata_path = reference(path.parent, case["source_metadata_file"], root / "fixtures/manuscripts")
-        source = object_json(read_bytes(metadata_path, root / "fixtures/manuscripts"))
+        metadata_path = reference(path.parent, case["source_metadata_file"], root.parent / "fixtures/manuscripts")
+        source = object_json(read_bytes(metadata_path, root.parent / "fixtures/manuscripts"))
         rights = source.get("provenance", {})
         usage_rights = rights.get("usage_rights", "pending")
         attribution = (

@@ -114,7 +114,7 @@ class Store:
         self.root = plain(root)
         if not (self.root / "state.sqlite3").is_file():
             raise ValueError(f"Not a workflow run: {root}")
-        self.db = sqlite3.connect(self.root / "state.sqlite3", timeout=5)
+        self.db = sqlite3.connect(self.root / "state.sqlite3", timeout=5, check_same_thread=False)
         self.db.execute("PRAGMA foreign_keys=ON")
 
     @classmethod
@@ -144,9 +144,6 @@ class Store:
     def load(self):
         revision, value = self.db.execute("SELECT revision, state FROM run WHERE id=1").fetchone()
         state = json.loads(value)
-        # Pre-M1 runs: the next save persists the unified name.
-        if "source_language" in state and "manuscript_language" not in state:
-            state["manuscript_language"] = state.pop("source_language")
         return revision, state
 
     def save(self, revision, state, kind, payload=None):

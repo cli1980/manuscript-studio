@@ -28,7 +28,7 @@
   },
   "library": {
     "checkout": [],
-    "areas": ["literary-editing/", "accepted/literary-editing.json"]
+    "areas": ["literary-editing/"]
   },
   "gates": {
     "editorial_review": {"sheet": "optional", "binding": "required", "closure": "required",

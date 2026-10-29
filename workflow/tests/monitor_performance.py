@@ -33,7 +33,7 @@ def work_category(stage, input_gate, receipt_type, output_gate):
     """Classify the work following a receipt, not just the gate it produces."""
     if stage == "prepare":
         return "preparation"
-    if input_gate == "passage_map":
+    if input_gate == "map_exceptions":
         return ("drafting_and_source_review" if receipt_type == "final-closure"
                 else "map_decision_recording")
     if input_gate == "translation_issue":

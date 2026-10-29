@@ -147,7 +147,7 @@ data mounts:
 | Mount | Permission |
 | --- | --- |
 | `evals/cases/` | Read/write |
-| `evals/fixtures/manuscripts/` | Read-only |
+| `fixtures/manuscripts/` | Read-only |
 | `evals/rubrics/` | Read-only |
 
 Skill instructions, `.git/`, results, and other repository files are not mounted.

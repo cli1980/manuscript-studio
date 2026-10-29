@@ -9,7 +9,7 @@ See [the schema](../../schemas/translation-case.schema.json).
   "schema_version": 2,
   "case_id": "example",
   "revision": 1,
-  "source_file": "../../../fixtures/manuscripts/example/source.zh.txt",
+  "source_file": "../../../../fixtures/manuscripts/example/source.zh.txt",
   "source_revision": 1,
   "target_language": "en",
   "translation_instructions": null,
@@ -134,17 +134,7 @@ does not change the source-task revision or invalidate other candidates' ratings
 Change the case revision when its source binding or translation task changes.
 Keep all candidates and passages from a work's `group_id` in one dataset split.
 
-Legacy version-1 cases remain readable as one `baseline` candidate. Migrate them:
-
-```text
-python evals/migrate_translation_cases.py
-python evals/migrate_translation_cases.py --write
-```
-
-Migration preserves text bytes, provenance, ratings, and historical revisions,
-adds candidate bindings, and saves original records under ignored `evals/results/`.
-It is idempotent. Finish pending review submissions before maintainer migrations,
-then restart the review server to load the changed records.
+Cases must use schema version 2 with explicit candidates; version-1 cases are not supported.
 
 Convert descriptive candidate IDs and filenames to opaque ones with:
 

@@ -1,0 +1,425 @@
+{
+  "schema_version": 1,
+  "case_id": "works-intake-multiple-001",
+  "title": "Upload multiple manuscripts from shared fixtures and verify the Works list and work pages",
+  "steps": [
+    {
+      "action": "get",
+      "path": "/api/works",
+      "expect": [
+        {
+          "op": "empty"
+        }
+      ]
+    },
+    {
+      "action": "upload_work",
+      "fixture": "manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt",
+      "name": "guxiang.zh.txt",
+      "manuscript_language": "zh",
+      "save_as": "guxiang",
+      "expect": [
+        {
+          "path": "id",
+          "op": "matches",
+          "value": "guxiang-zh-[0-9a-f]{6}"
+        },
+        {
+          "path": "title",
+          "value": "guxiang.zh"
+        },
+        {
+          "path": "manuscript_language",
+          "value": "zh"
+        },
+        {
+          "path": "runs",
+          "op": "empty"
+        },
+        {
+          "path": "unfinished_run",
+          "value": null
+        },
+        {
+          "path": "workflows",
+          "op": "empty"
+        },
+        {
+          "path": "publications.0.stage",
+          "value": "create"
+        },
+        {
+          "path": "source_sha256",
+          "value": "$guxiang._fixture.sha256"
+        },
+        {
+          "path": "metadata.metadata.title",
+          "value": null
+        },
+        {
+          "path": "metadata.metadata.contributors",
+          "op": "empty"
+        },
+        {
+          "path": "metadata.metadata.genres",
+          "op": "empty"
+        },
+        {
+          "path": "metadata.metadata.manuscript_language",
+          "value": "zh"
+        },
+        {
+          "path": "heads.*keys",
+          "op": "length",
+          "value": 2
+        },
+        {
+          "path": "heads.*keys",
+          "op": "contains",
+          "value": "work.json"
+        },
+        {
+          "path": "publications.*len",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "action": "upload_work",
+      "fixture": "manuscripts/contemporary-steak-please/passage-001/source.zh.txt",
+      "name": "steak-please.zh.txt",
+      "manuscript_language": "zh-CN",
+      "save_as": "steak",
+      "expect": [
+        {
+          "path": "manuscript_language",
+          "value": "zh-CN"
+        },
+        {
+          "path": "title",
+          "value": "steak-please.zh"
+        }
+      ]
+    },
+    {
+      "action": "upload_work",
+      "fixture": "manuscripts/contemporary-dig/passage-045/source.zh.txt",
+      "name": "dig.zh.txt",
+      "manuscript_language": "zh",
+      "save_as": "dig"
+    },
+    {
+      "action": "upload_work",
+      "fixture": "manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt",
+      "name": "guxiang.zh.txt",
+      "manuscript_language": "zh",
+      "save_as": "guxiang_again",
+      "expect": [
+        {
+          "path": "id",
+          "op": "not_equals",
+          "value": "$guxiang.id"
+        },
+        {
+          "path": "source_sha256",
+          "value": "$guxiang.source_sha256"
+        }
+      ]
+    },
+    {
+      "action": "upload_work",
+      "fixture": "manuscripts/contemporary-dig/passage-045/source.zh.txt",
+      "manuscript_language": "chinese",
+      "status": 400
+    },
+    {
+      "action": "get",
+      "path": "/api/works",
+      "save_as": "works",
+      "expect": [
+        {
+          "op": "length",
+          "value": 4
+        },
+        {
+          "path": "id",
+          "op": "unique"
+        },
+        {
+          "path": "title",
+          "op": "contains",
+          "value": "steak-please.zh"
+        },
+        {
+          "path": "runs",
+          "value": [
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "path": "artifacts",
+          "value": [
+            2,
+            2,
+            2,
+            2
+          ]
+        },
+        {
+          "path": "unfinished_run",
+          "value": [
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ]
+    },
+    {
+      "action": "get",
+      "path": "/api/works/$steak.id",
+      "expect": [
+        {
+          "path": "id",
+          "value": "$steak.id"
+        },
+        {
+          "path": "source_name",
+          "value": "steak-please.zh.txt"
+        }
+      ]
+    },
+    {
+      "action": "get",
+      "path": "/api/works/$steak.id/artifact?path=$steak.publications.0.artifact",
+      "expect": [
+        {
+          "value": "$steak._fixture.text"
+        }
+      ]
+    },
+    {
+      "action": "get",
+      "path": "/api/works/$dig.id/artifact?path=$dig.publications.0.artifact",
+      "expect": [
+        {
+          "value": "$dig._fixture.text"
+        }
+      ]
+    },
+    {
+      "action": "get",
+      "path": "/api/works/unknown-work",
+      "status": 404
+    },
+    {
+      "action": "post",
+      "path": "/api/runs",
+      "status": 400,
+      "payload": {
+        "template_id": "literary-translation-v1",
+        "upload": {
+          "name": "x.md",
+          "data": "eA=="
+        }
+      },
+      "expect": [
+        {
+          "path": "detail",
+          "op": "contains",
+          "value": "Works page"
+        }
+      ]
+    },
+    {
+      "action": "post",
+      "path": "/api/works/$dig.id/metadata",
+      "status": 200,
+      "payload": {
+        "field": "/title",
+        "value": "Dig",
+        "rationale": "Author title"
+      },
+      "expect": [
+        {
+          "path": "metadata.metadata.title",
+          "value": "Dig"
+        },
+        {
+          "path": "metadata.provenance./title.review_status",
+          "value": "confirmed"
+        },
+        {
+          "path": "metadata.record_revision",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "action": "post",
+      "path": "/api/works/$dig.id/metadata",
+      "status": 400,
+      "payload": {
+        "field": "/extent",
+        "value": null,
+        "rationale": "x"
+      },
+      "expect": [
+        {
+          "path": "detail",
+          "op": "contains",
+          "value": "computed"
+        }
+      ]
+    },
+    {
+      "action": "get",
+      "path": "/api/works/$dig.id",
+      "expect": [
+        {
+          "path": "metadata_fields.field",
+          "op": "contains",
+          "value": "/series/position"
+        },
+        {
+          "path": "metadata_fields.group",
+          "op": "contains",
+          "value": "computed"
+        }
+      ]
+    },
+    {
+      "action": "post",
+      "path": "/api/works/$dig.id/metadata",
+      "status": 200,
+      "payload": {
+        "field": "/contributors",
+        "value": [
+          {
+            "id": "a-writer",
+            "name": "A Writer",
+            "roles": [
+              "author"
+            ]
+          },
+          {
+            "id": "t-one",
+            "name": "T One",
+            "roles": [
+              "translator",
+              "editor"
+            ]
+          }
+        ],
+        "rationale": "Typed widget"
+      },
+      "expect": [
+        {
+          "path": "metadata.metadata.contributors.name",
+          "value": [
+            "A Writer",
+            "T One"
+          ]
+        }
+      ]
+    },
+    {
+      "action": "post",
+      "path": "/api/works/$dig.id/metadata",
+      "status": 400,
+      "payload": {
+        "field": "/contributors",
+        "value": [
+          {
+            "id": "x",
+            "name": "X",
+            "roles": []
+          }
+        ],
+        "rationale": "Typed widget"
+      },
+      "expect": []
+    },
+    {
+      "action": "post",
+      "path": "/api/works/$dig.id/metadata",
+      "status": 200,
+      "payload": {
+        "field": "/genres",
+        "value": [
+          "Literary fiction",
+          "Science fiction"
+        ],
+        "rationale": "Typed widget"
+      },
+      "expect": [
+        {
+          "path": "metadata.metadata.genres.*len",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "action": "post",
+      "path": "/api/works/$dig.id/metadata",
+      "status": 200,
+      "payload": {
+        "field": "/series/position",
+        "value": 2,
+        "rationale": "Typed widget"
+      },
+      "expect": [
+        {
+          "path": "metadata.metadata.series.position",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "action": "post",
+      "path": "/api/works/$dig.id/metadata",
+      "status": 400,
+      "payload": {
+        "field": "/series/position",
+        "value": -1,
+        "rationale": "Typed widget"
+      },
+      "expect": []
+    },
+    {
+      "action": "post",
+      "path": "/api/works/$dig.id/metadata",
+      "status": 400,
+      "payload": {
+        "field": "/original_language",
+        "value": "Chinese",
+        "rationale": "Typed widget"
+      },
+      "expect": []
+    },
+    {
+      "action": "post",
+      "path": "/api/works/$dig.id/metadata",
+      "status": 200,
+      "payload": {
+        "field": "/audience",
+        "value": "adult",
+        "rationale": "Typed widget"
+      },
+      "expect": [
+        {
+          "path": "metadata.metadata.audience",
+          "value": "adult"
+        }
+      ]
+    },
+    {
+      "action": "page",
+      "path": "/"
+    }
+  ]
+}

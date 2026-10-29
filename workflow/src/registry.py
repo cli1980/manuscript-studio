@@ -47,7 +47,7 @@ TEMPLATE_SCHEMA = {
             "properties": {
                 "sheet": {"enum": ["required", "optional"]},
                 "binding": {"enum": ["required", "optional"]},
-                "closure": {"enum": ["required"]},
+                "closure": {"enum": ["required", "implied"]},
                 "item_binding": {"type": "boolean"},
                 "command": {"type": "string", "minLength": 1},
                 "empty_command": {"type": "string", "minLength": 1},

@@ -11,10 +11,10 @@ import uuid
 from pathlib import Path
 
 from . import registry
-from .engine import LANGUAGE_TAG, SKILLS, TERMINAL, Engine, WorkflowError, engine_for_state, module_at
+from .engine import LANGUAGE_TAG, SKILLS, TERMINAL, Engine, WorkflowError, module_at
 from .library import WorkLibrary
 from .prepared import METADATA_CONFIRMATION, load_metadata_helper
-from .storage import Store, digest, json_bytes, now, plain, read_bytes
+from .storage import Store, json_bytes, now, plain
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS works (
@@ -49,7 +49,8 @@ class WorkflowService:
         (self.root / "works").mkdir(exist_ok=True)
         (self.root / "runs").mkdir(exist_ok=True)
         self.owner = owner or default_owner()
-        self.db = sqlite3.connect(self.root / "index.sqlite3", timeout=10, isolation_level=None)
+        self.db = sqlite3.connect(self.root / "index.sqlite3", timeout=10, isolation_level=None,
+                                  check_same_thread=False)  # One service per request, used sequentially across web threads.
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys=ON")
         self.db.executescript(SCHEMA)
@@ -100,8 +101,9 @@ class WorkflowService:
         library = self.library(work_id)
         workflows = {row["workflow"]: {"status": row["status"], "finalized_run_id": row["finalized_run_id"]}
                      for row in self.db.execute("SELECT * FROM work_workflows WHERE work_id=?", (work_id,))}
-        for record in library.finalized():
-            workflows[record["workflow"]] = {"status": "read_only", "finalized_run_id": record["run_id"]}
+        for record in library.finalized():  # The latest accepted version of each workflow.
+            workflows[record["workflow"]] = {"status": "completed", "finalized_run_id": record["run_id"],
+                                             "version": next((a.split("/")[1] for a in record["areas"]), None)}
         work.update(workflows=workflows, runs=self.list_runs(work_id=work_id),
                     unfinished_run=self._unfinished(work_id),
                     heads={artifact: {key: record.get(key) for key in (
@@ -115,6 +117,11 @@ class WorkflowService:
     def verify_work(self, work_id):
         return self.library(work_id).detect_edits()
 
+    def create_work(self, upload, manuscript_language, *, owner=None):
+        """Intake without a run: store the upload in a new work's library (always a new work)."""
+        with self._transaction():
+            return self._create_work(upload, manuscript_language, owner or self.owner)
+
     def _create_work(self, upload, manuscript_language, owner):
         upload = plain(Path(upload))
         if not upload.is_file():
@@ -127,6 +134,13 @@ class WorkflowService:
                 "manuscript_language": manuscript_language, "source_name": upload.name, "created_at": now()}
         library = WorkLibrary.create(self.root / "works" / work_id, source=upload, source_name=upload.name, info=info)
         _, record = library.source()
+        # User-provided fields start empty so the user can fill them in right after intake.
+        helper, contract = self._current_metadata_helper()
+        work = helper.blank(work_id, manuscript_language, location=upload.name, actor=owner or "user")
+        contract.schema_check(contract.validators()[0], work, "work")
+        library.publish_many([{"artifact": "work.json", "data": json_bytes(work), "expected_head": None,
+                               "review_status": "unreviewed", "basis": {"metadata_record_revision": 1}}],
+                             run_id=None, workflow=None, stage="create")
         self.db.execute("INSERT INTO works VALUES (?,?,?,?,?,?,?)",
                         (work_id, info["title"], owner, record["sha256"], upload.name, manuscript_language,
                          info["created_at"]))
@@ -152,7 +166,7 @@ class WorkflowService:
             row = self._run_row(run_id)
             self.db.execute("INSERT INTO work_workflows VALUES (?,?,?,?) ON CONFLICT(work_id, workflow) "
                             "DO UPDATE SET status=excluded.status, finalized_run_id=excluded.finalized_run_id",
-                            (row["work_id"], row["workflow"], "read_only", run_id))
+                            (row["work_id"], row["workflow"], "completed", run_id))
 
     def _load_state(self, path):
         store = Store(Path(path))
@@ -174,11 +188,6 @@ class WorkflowService:
         active = self._unfinished(work_id)
         if active:
             raise WorkflowError("work_busy", f"Run {active} is unfinished on this work; finish or stop it first.")
-        row = self.db.execute("SELECT status FROM work_workflows WHERE work_id=? AND workflow=?",
-                              (work_id, workflow)).fetchone()
-        if (row and row["status"] == "read_only") or self.library(work_id).finalized(workflow):
-            raise WorkflowError("workflow_read_only", f"{workflow} is finalized on this work; changes require "
-                                                      "adding the manuscript again as a new work.")
 
     @contextlib.contextmanager
     def open_run(self, run_id):
@@ -350,7 +359,7 @@ class WorkflowService:
         with self.open_run(run_id) as engine:
             return engine.events(after)
 
-    def restart_workflow(self, run_id, *, reason, owner=None):
+    def restart_workflow(self, run_id, *, reason, owner=None, confirm_stopped=False):
         """Stop an unfinished run and start the same template on the same work with the current engine."""
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("A restart reason is required.")
@@ -362,8 +371,10 @@ class WorkflowService:
                                                      "adding the manuscript again as a new work.")
             if state["status"] == "CANCELLED":
                 raise WorkflowError("run_cancelled", "This run was already stopped.")
-            if state["status"] == "RUNNING":
-                raise ValueError("An agent turn is running; interrupt it first.")
+            if state["status"] == "RUNNING" and not confirm_stopped:
+                # A server restart can strand a run as RUNNING; the user confirms no agent process remains.
+                raise ValueError("An agent turn is running; interrupt it first, or confirm that no agent "
+                                 "process remains.")
             carry = engine.carry_forward(state)
             template_id = state.get("template_id") or state["definition"]["id"]
             agents = state["definition"].get("agents", {})
@@ -373,13 +384,13 @@ class WorkflowService:
             owner = owner or state.get("owner") or self.owner
             if "consumes" in template:
                 options = state.get("options") or {}
-                engine.cancel(superseded_by="pending")
+                engine.cancel(superseded_by="pending", confirm_stopped=confirm_stopped)
                 new_id = self.create_derived_run(row["work_id"], template_id, publication_id=state["publication_id"],
                                                  owner=owner, options=options, agent_models=agent_models,
                                                  restart_of=run_id)
             else:
                 # The old run is cancelled first, so the one-run-per-work rule does not block the restart.
-                engine.cancel(superseded_by="pending")
+                engine.cancel(superseded_by="pending", confirm_stopped=confirm_stopped)
                 with self._transaction():
                     new_id = self._create(template, row["work_id"], owner, state["manuscript_language"], None,
                                           agent_models, restart_of=run_id,
@@ -433,6 +444,32 @@ class WorkflowService:
         contract = module_at(SKILLS / "prepare-manuscript/scripts/validate_preparation.py")
         return load_metadata_helper(SKILLS / "prepare-manuscript", contract), contract
 
+    def metadata_fields(self):
+        """Every metadata field with its group, input kind, and allowed values, for clients to render."""
+        helper, contract = self._current_metadata_helper()
+        schema = contract.load_json(SKILLS / "prepare-manuscript/schemas/manuscript-metadata.schema.json")
+
+        def spec(item):
+            ref = item.get("$ref", "")
+            return schema["$defs"][ref.rsplit("/", 1)[1]] if ref.startswith("#/$defs/") else item
+
+        result = []
+        for field in helper.FIELDS:
+            parts = field.strip("/").split("/")
+            item = schema["properties"][parts[0]]
+            for part in parts[1:]:
+                item = spec(item)["properties"][part]
+            ref, item = item.get("$ref", ""), spec(item)
+            kind = ("people" if field == "/contributors" else "extent" if field == "/extent" else "enum" if "enum" in item
+                    else "list" if ref.endswith("/terms") else "language" if ref.endswith("/language")
+                    else "number" if any(t in str(item.get("type")) for t in ("number", "integer")) else "text")
+            group = "author" if field in helper.AUTHOR else "computed" if field in helper.COMPUTED else "suggested"
+            options = item.get("enum") or (item["items"]["properties"]["roles"]["items"]["enum"] if kind == "people" else [])
+            result.append({"field": field, "group": group, "kind": kind,
+                           "options": [option for option in options if option is not None],
+                           "pattern": item.get("pattern"), "minimum": item.get("minimum")})
+        return result
+
     def get_work_metadata(self, work_id):
         head = self.library(work_id).head("work.json")
         if head is None:
@@ -447,6 +484,8 @@ class WorkflowService:
         if field == "/manuscript_language":
             raise ValueError("/manuscript_language is fixed for a work; add the manuscript again as a new work.")
         helper, contract = self._current_metadata_helper()
+        if field in helper.COMPUTED:
+            raise ValueError(f"{field} is computed from the prepared manuscript and cannot be edited.")
         library = self.library(work_id)
         with self._transaction():
             active = self._unfinished(work_id)
@@ -455,7 +494,7 @@ class WorkflowService:
             head = library.head("work.json")
             if head is None:
                 raise ValueError("This work has no confirmed metadata yet; confirm it in a run first.")
-            work = helper.migrate(json.loads(library.read(head)))
+            work = json.loads(library.read(head))
             helper.put(work["metadata"], field, value)
             helper.record(work, field, "user_edit", actor=actor or self.owner, rationale=rationale, review="confirmed")
             work["record_revision"] += 1
@@ -485,53 +524,3 @@ class WorkflowService:
                 return work
         raise ValueError(f"No published metadata version {record_revision}.")
 
-    # ----- import ---------------------------------------------------------------------------
-
-    def import_run(self, path, *, owner=None):
-        """Register an existing run directory; completed translations publish their accepted output."""
-        path = plain(Path(path))
-        state = self._load_state(path)
-        if state.get("kind") == "manuscript-formatting":
-            raise ValueError("Import translation runs; their nested formatting jobs stay readable on disk.")
-        if self.db.execute("SELECT 1 FROM runs WHERE id=?", (state["id"],)).fetchone():
-            raise ValueError(f"Run {state['id']} is already registered.")
-        template_id = state.get("template_id") or state["definition"]["id"]
-        template = registry.get(template_id)
-        source = path / "input" / state["source_name"]
-        if digest(read_bytes(plain(source))) != state["source_hash"]:
-            raise ValueError("The run's input snapshot changed; it cannot be imported.")
-        owner = owner or state.get("owner") or self.owner
-        with self._transaction():
-            work_id = self._create_work(source, state["manuscript_language"], owner)
-            state.update(work_id=work_id, template_id=template_id, workflow=template["workflow"])
-            self._insert_run(state, path)
-            if state["status"] == "COMPLETED" and state.get("acceptance"):
-                self._publish_imported(path, state, template)
-            self.db.execute("UPDATE runs SET status=?, stage=? WHERE id=?", (state["status"], state["stage"], state["id"]))
-        return state["id"]
-
-    def _publish_imported(self, path, state, template):
-        library = self.library(state["work_id"])
-        engine = engine_for_state(state)(path)
-        try:
-            state.setdefault("target_language", template.get("target_language"))
-            state["definition"] = {**state["definition"], "produces": template["produces"]}
-            accepted = {**engine.accepted_output(state), "imported": True}
-            entries = [{"artifact": c["artifact"], "data": engine.store.content(c), "expected_head": None}
-                       for c in accepted["chapters"]]
-            entries += [{"artifact": item["artifact"], "data": engine.store.content(item), "expected_head": None}
-                        for item in accepted["continuity"].values()]
-            entries.append({"artifact": f"accepted/{template['workflow']}.json", "data": json_bytes(accepted),
-                            "expected_head": None, "contract": accepted["contract"]})
-            if state.get("prepared"):
-                work = json.loads(engine.file(state["prepared"]["work_record"]).read_text(encoding="utf-8"))
-                work["work_id"] = state["work_id"]
-                entries.append({"artifact": "work.json", "data": json_bytes(work), "expected_head": None})
-            areas = [area.format(target=state["target_language"]) for area in template["library"]["areas"]]
-            library.publish_many(entries, run_id=state["id"], workflow=template["workflow"], stage="import",
-                                 receipts=[state["acceptance"]["id"]], finalize=areas)
-        finally:
-            engine.close()
-        self.db.execute("INSERT INTO work_workflows VALUES (?,?,?,?) ON CONFLICT(work_id, workflow) DO UPDATE SET "
-                        "status=excluded.status, finalized_run_id=excluded.finalized_run_id",
-                        (state["work_id"], template["workflow"], "read_only", state["id"]))

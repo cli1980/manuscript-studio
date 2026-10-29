@@ -10,7 +10,7 @@ skill. The stored English text and its ratings must not enter translator inputs.
 
 This case remains a dataset placeholder while its metadata is being completed.
 The user-provided Chinese passage
-is stored in the [shared source fixture](../../../fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt);
+is stored in the [shared source fixture](../../../../fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt);
 the English translation is referenced by `case.json.candidates[].translation_file`.
 Human reviews are recorded in `judgments.jsonl`; submitting a review does not
 complete the remaining dataset metadata. Exclude placeholder cases and pending
@@ -20,7 +20,7 @@ judgments from training, validation, and test datasets.
 
 1. Review the supplied passage and translation. Both are UTF-8 plain text.
    Resolve `source_file` and `source_metadata_file` relative to `case.json`.
-2. Complete the shared [passage metadata](../../../fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json)
+2. Complete the shared [passage metadata](../../../../fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json)
    with verified work information, source provenance, usage rights, and any shared
    context. `modern-lu-xun-guxiang` identifies the source work, and
    `modern-lu-xun-guxiang-passage-001` identifies this excerpt. In `case.json.candidates`,

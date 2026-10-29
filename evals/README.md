@@ -50,9 +50,6 @@ evals/
 │   ├── literary-agent-querying/
 │   ├── format-manuscript/
 │   └── review-approval-sheet/
-├── fixtures/
-│   ├── manuscripts/
-│   └── reference-outputs/
 ├── rubrics/
 ├── server/
 └── results/
@@ -60,10 +57,11 @@ evals/
 
 - `cases/<skill>/`: scenarios for one skill, including prompts, input references,
   any follow-up author responses, expected behavior, and checks.
-- `fixtures/manuscripts/`: small synthetic or appropriately licensed source texts
-  and supporting inputs. Record provenance and permission to redistribute.
-- `fixtures/reference-outputs/`: reviewed examples and expected artifacts.
-  Keep these separate from newly generated run outputs.
+- [`../fixtures/`](../fixtures/) (repository root): fixtures shared by every component,
+  which each create their own test cases from them. `fixtures/manuscripts/` holds small
+  synthetic or appropriately licensed source texts and supporting inputs (record provenance
+  and permission to redistribute); `fixtures/reference-outputs/` holds reviewed examples and
+  expected artifacts, kept separate from newly generated run outputs.
 - `rubrics/`: shared and skill-specific scoring criteria, with guidance for
   human review and any future automated judges.
 - `server/`: the local web interface, restricted data repository, authentication,

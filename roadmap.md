@@ -22,8 +22,17 @@ workflow supported in both the CLI and the web GUI.
 
 Agreed in the 2026-10-26 planning session:
 
-- **Workflow first.** The user chooses a workflow, then uploads the manuscript
-  for that run. Preparation remains the run's first stage.
+- **Licensing** (owner decision, 2026-10-27; applies from the next commit). The
+  copyright holder is Crossborder Art & Media LLC. Skills (`plugins/`) and
+  `evals/` stay MIT. `workflow/` and `studio/` are licensed under PolyForm
+  Noncommercial 1.0.0; commercial use requires a separate license negotiated
+  with the copyright holder. Already-published MIT versions of `workflow/` stay
+  MIT. `fixtures/` keep the terms recorded with each fixture.
+- **Intake on the Works page** (revised by the owner on 2026-10-27; originally
+  "workflow first, then upload"). Manuscripts are added on the Works page, each
+  upload creating a new work, and the Works page is the standard place for
+  workflow intake and outcomes. Workflows are started from the workflow page on
+  an existing work; preparation remains each run's first stage.
 - **Manuscripts are immutable.** Manuscript text changes only through workflow
   stages and their human gates. The GUI presents the original upload, prepared
   chapters, and workflow outputs read-only.
@@ -92,7 +101,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     the existing per-run state.
   - A per-work artifact library with checkout and publish, an append-only
     publication log, one unfinished run per work (formatting runs included),
-    and workflows that become read-only on a work after finalization. Shared
+    and accepted output published as immutable versions (`<workflow>/vNNN/`); a completed run never blocks a new run (owner correction, 2026-10-28). Shared
     metadata can also be edited at the work level while no run is unfinished.
   - A required metadata review gate after preparation. Versioned metadata edits:
     each change increments `record_revision`, retains a snapshot, and records an
@@ -115,7 +124,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - Restarting a chapter archives its work, restores glossary and voice from the
     last completed chapter, and translates only that chapter again; restarting a
     stage or an unfinished workflow keeps receipts and events.
-  - After final acceptance, restarts and new runs of that workflow on the work
+  - After final acceptance, the run's own chapters and stages cannot be restarted (new runs on the work publish the next version), and
     are refused; after an engine update, unfinished runs allow only reading and
     restarting the workflow.
 - **Progress:** the metadata review gate was implemented first (2026-10-26).
@@ -152,15 +161,26 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 ### M3 — Web MVP for literary translation
 
-- **Status:** `planned`
+- **Status:** `in_progress` (started 2026-10-27 at the owner's direction, before M2)
 - **Owner:** `cli1980`
+- **Progress (2026-10-27, local and uncommitted):** FastAPI backend
+  (`studio/server/`, localhost-only with an explicit loopback preview-origin
+  option) over the M1 service, a background worker that runs turns until a human
+  is needed with pause-after-turn and resume, and a React/TypeScript (Vite)
+  frontend (`studio/frontend/`) with three views: Works (manuscript intake, work list, library,
+  metadata, publication log, derived formatting), Workflows (dashboard, start a
+  workflow on a work, run view with `available_actions` controls, native gate
+  forms for approval sheets, exact commands, metadata, and irreversible final
+  acceptance, plus a timeline), and an in-run chapter browser (prepared chapters
+  beside each stage's completed output). Immediate pause by interruption, login
+  for remote mode, and a live event stream (the UI polls) remain.
 - **Depends on:** M1, M2
 - **Outcome:** A user can run a complete literary-translation workflow from the
   browser.
 - **Scope:**
   - FastAPI backend and React/TypeScript frontend built on the M1 service API.
-  - Choose a workflow, then upload a DOCX or Markdown manuscript (creating a new
-    work) or select an existing work, and create the run.
+  - Add a DOCX or Markdown manuscript on the Works page (creating a new work);
+    start a workflow on an existing work from the workflow page.
   - A background worker runs agent turns automatically until the run needs a
     human (gate, acceptance, blocker, or failure); replies resume it.
   - An intuitive workflow dashboard and run view for inspecting status: overall
@@ -186,6 +206,19 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - All translation gates as native forms driven by the approval-sheet JSON and
     submitted through the existing validator and parser; final acceptance with
     source and English side by side; Markdown export download.
+  - Whole-book translation consistency (added by the owner on 2026-10-28; not yet
+    implemented). Chapters already carry continuity through shared files
+    (`glossary.md`, `voice.md`, completed English chapters, and the chapter
+    brief), but each chapter is checked only against those files. After the last
+    chapter and before final acceptance, the translation workflow runs one
+    whole-book consistency pass over all English chapters against the source and
+    continuity files: names and terminology, forms of address, voice drift per
+    character or narrator, and cross-chapter references. It proposes only fixes
+    for objective inconsistencies, as one approval sheet decided in a single
+    submission with separate closure; it does not retranslate or restyle.
+    Approved fixes are applied and the affected chapters re-verified before
+    acceptance. The literary-translation skill defines the pass, and the
+    template adds it as a concluding whole-book step.
   - Localhost by default. A documented remote deployment requires login and a
     configured HTTPS origin when not bound to loopback. Codex credentials are
     configured server-wide.
@@ -198,6 +231,21 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     saved state other than the chapter or stage being explicitly restarted.
   - Final acceptance cannot be submitted without confirming the finalization
     notice, and finalized runs clearly show that they are read-only.
+  - Final acceptance is offered only after the whole-book consistency pass is
+    closed, and every applied consistency fix is recorded against the chapter
+    it changed.
+- **Implied closure for advice-type sheets** (owner decision, 2026-10-28;
+  scheduled with the front-matter change, after the current 黑松石 run
+  completes): the separate closure is redundant where a later step shows the
+  full result. For translation advice and map exceptions, a submission that
+  decides every item with resolving decisions counts as final closure; a
+  discuss or revise decision still produces a new revision of the same sheet.
+  Chapter approval keeps its own decision: "Approve chapter" without edits, and,
+  when the final check proposes edits, a separate closure presented as approving
+  the chapter with those edits, because nothing later shows the final text.
+  Changes the approval-sheet and translation skill contracts, the engine's
+  closure handling, the translation template, the studio review screen, and
+  tests; unfinished runs need a workflow restart.
   - Manuscript text cannot be modified from the GUI outside workflow gates.
   - Metadata edits are versioned and visible in history.
   - Remote mode refuses unauthenticated access.
@@ -242,6 +290,93 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   the deterministic test covers it. During the run the launcher's delegated-mode
   prompt was fixed: completed editing turns lacked guidance for the required
   recommendation field, which made the model stall until the turn timeout.
+
+### UX enhancement — studio interface structure
+
+- **Status:** `planned` (recorded by the owner on 2026-10-28 from a design review)
+- **Owner:** `cli1980`
+- **Depends on:** M3 studio as implemented locally (`studio/`)
+- **Outcome:** The studio is organized as four distinct interfaces: an
+  evolving page viewer, a separate run inspector, a separate works explorer,
+  and one unified decision GUI for every kind of approval. The workflow engine
+  and its gate model do not change.
+- **Findings (design review, 2026-10-28):**
+
+  | Perspective | Fit today | Main gaps |
+  |---|---|---|
+  | Evolving page viewer | Partial | Chapter text is shown as whole blocks without paragraph alignment; the viewer exists only inside a run, not for accepted versions |
+  | Separate run inspector | Partial | The run page still hosts the metadata review and final acceptance forms; the timeline is a raw event list |
+  | Works explorer | Mostly | The work page mixes browsing with actions; the library is a flat file list rather than workflow → version |
+  | Unified approval GUI | No (UI level) | Six different form components for one engine gate model |
+
+- **Scope:**
+  1. **Unified decision panel.** The engine already models every decision the
+     same way (kind, optional bound text, optional approval sheet, offered
+     commands, closure, recorded receipt), but the UI uses six components:
+     the item-by-item review (translation advice), the list form (map
+     exceptions and other sheets), free replies (questions, continuation), the
+     chapter approval panel, the metadata gate, and final acceptance. Replace
+     them with one decision panel driven by the gate: a header saying what is
+     being decided and why, the conversation so far (the reviewer's feedback
+     and the agent's answer), a body by shape (the item-by-item review for every
+     sheet, command buttons, a feedback box), one closure pattern, and one
+     style for irreversible actions. Metadata review and final acceptance keep
+     their own bodies inside the same frame.
+  2. **Run inspector.** The run page becomes inspection and control only:
+     stage progress, chapter progress, a readable decision history (receipts,
+     already summarized in each version's `run.json`), errors, and controls,
+     with no forms. Metadata review moves to the work page next to the metadata
+     form; final acceptance moves to the page viewer as an "all chapters
+     approved, finalize" step; the dashboard drops its duplicate start form and
+     only lists runs.
+  3. **Works explorer.** The library is browsed as workflow → version → files,
+     using the version preview card from the format panel (`run.json` and
+     `manifest.json`). The work page is organized into sections: overview and
+     metadata, versions (with formatting and downloads), runs, and library and
+     publication log. Add downloads, a preview of the original source
+     document, and comparison between metadata versions. Intake stays on the
+     Works list.
+  4. **Evolving page viewer.** Give the viewer its own document model: the
+     prepared paragraphs plus per-stage versions, numbered by paragraph (as the
+     passage map already is). The content source is selectable: the run in
+     progress or an accepted version (`<workflow>/vNNN`). Split the viewer into
+     a reading area and a decision area so new layouts (aligned source and
+     target, diffs for line and copy editing, single-language reading,
+     highlighting of sheet item locations) do not touch decision logic, and so
+     several editing stages and the whole-book pass fit in one view.
+- **Metadata review on the front-matter chapter** (owner decision, 2026-10-28;
+  scheduled after the current 黑松石 translation run, `a5ba4ee7`, completes so
+  no translated chapters are discarded):
+  - Every prepared work starts with exactly one front-matter unit, split
+    verbatim from the source: the material before the first chapter, and at
+    least the title heading. The prepare-manuscript skill contract and its
+    validator enforce it; workflow, studio, skill, and evaluation fixtures are
+    updated accordingly.
+  - The engine attaches the metadata review gate to that front-matter chapter
+    (the metadata record itself stays work-level and shared), so the studio
+    shows metadata review in the page viewer beside the prepared front matter,
+    through the same routing as every other chapter decision, without a
+    special case.
+  - Applies to the translation and editing templates; unfinished runs need a
+    workflow restart when it lands.
+  - Open: what preparation does when the source has no title or opening
+    material (stop and ask the user, or allow an empty front-matter unit).
+- **Suggested order:** 1 (unified decision panel), 2 (run inspector), 3 (works
+  explorer by version), 4 (paragraph-aligned page viewer; the largest piece,
+  needed before the editing workflow reaches the GUI). All four are frontend
+  and web-API changes; runs in progress are unaffected.
+- **Acceptance criteria:**
+  - Every human decision, of any kind, is presented by the same decision panel
+    with a consistent header, conversation, closure, and irreversible-action
+    style.
+  - The run page contains no decision forms; chapter decisions open in the page
+    viewer, metadata review on the work page, and final acceptance in the page
+    viewer.
+  - A work's accepted versions can be browsed, previewed, formatted, and
+    downloaded from the works explorer.
+  - The page viewer shows source and output aligned by paragraph for both a run
+    in progress and an accepted version, and highlights the location of each
+    sheet item under review.
 
 ### Later (unordered)
 
@@ -333,6 +468,29 @@ documentation change. Do not mark work complete while required review is pending
     one-unfinished-run-per-work limit) still awaits confirmation.
   - **Blockers:** none.
   - **Next step:** continue M1 as planned.
+- **2026-10-28** — Studio web MVP progress, shared fixtures, and pre-release cleanup,
+  committed locally (not yet pushed).
+  - **Changes:** `studio/` (FastAPI server, background worker, React/TypeScript
+    frontend: works explorer with intake, typed metadata form and versioned
+    format panel; run inspector; chapter viewer with live status, every chapter
+    decision, item-by-item review screen); fixtures moved to `fixtures/`
+    (北京一夜 added under MIT, Lin Shaw); versioned accepted output with
+    `run.json`; implied closure for translation advice and map exceptions;
+    internal passage map with engine-checked coverage; mandatory front-matter
+    unit carrying the metadata review; metadata field groups and blank record
+    at intake; prior-record consolidation; one unfinished run per work with no
+    read-only rule; removal of version-1 work records, pre-M1 run shims,
+    `import_run`, and legacy evals cases; licensing split (PolyForm
+    Noncommercial for `workflow/` and `studio/`, Crossborder Art & Media LLC).
+  - **Milestones:** M3 `in_progress`; UX enhancement item `planned`; M1 rules
+    corrected (no read-only workflows).
+  - **Validation:** workflow, web, and studio case tests 58 passed (1 live case
+    skipped); prepare-manuscript skill 24; evals 127 passed (7 skipped);
+    browser smoke test through the chapter viewer; live studio runs translated
+    北京一夜 and 黑松石 to final acceptance.
+  - **Human review:** the owner directed and exercised each change in the
+    studio; no line-by-line code review is recorded.
+  - **Next step:** UX enhancement item, step 1 (unified decision panel).
 - **2026-10-27** — M1 generalized engine and first M4 literary editing
   template, committed locally (not yet pushed).
   - **Changes:** the M1 gap review (decisions recorded in

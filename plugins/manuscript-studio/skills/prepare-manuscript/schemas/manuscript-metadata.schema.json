@@ -97,7 +97,7 @@
         "type": "object", "additionalProperties": false,
         "required": ["origin", "review_status", "confidence", "basis_revision", "evidence", "rationale", "value_sha256", "updated_at", "updated_by"],
         "properties": {
-          "origin": {"enum": ["provided", "extracted", "inferred", "computed", "user_edit", "legacy"]},
+          "origin": {"enum": ["provided", "extracted", "inferred", "computed", "user_edit"]},
           "review_status": {"enum": ["proposed", "confirmed", "unreviewed", "stale"]},
           "confidence": {"enum": [null, "low", "medium", "high"]},
           "basis_revision": {"type": ["string", "null"], "pattern": "^r[0-9]{4,}$"},

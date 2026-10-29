@@ -38,7 +38,7 @@ class PreparationTests(unittest.TestCase):
             chapters.append({
                 "chapter_id": f"chapter-{number}", "order": number,
                 "source_number": str(number), "title": f"Chapter {number}",
-                "role": "chapter", "file": f"chapters/{number:04d}.md",
+                "role": "front_matter" if number == 1 else "chapter", "file": f"chapters/{number:04d}.md",
                 "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                 "source_spans": [{"source_id": "original", "locator": f"Heading {number} to next heading or EOF"}],
                 "status": "verified",
@@ -56,9 +56,13 @@ class PreparationTests(unittest.TestCase):
             "verification": {"performed_by": "test", "verified_at": NOW, "coverage_complete": True, "issues": []},
         }
         self.work = {
-            "schema_version": 1, "work_id": "example-work", "record_revision": 1, "updated_at": NOW,
-            "metadata": {"title": "Example work", "authors": [], "source_language": "zh",
-                         "work_type": "fiction", "genre": None, "edition": None},
+            "schema_version": 2, "work_id": "example-work", "record_revision": 1, "updated_at": NOW,
+            "metadata": {"title": "Example work", "subtitle": None, "contributors": [], "original_language": None,
+                         "manuscript_language": "zh", "work_type": "fiction", "form": None, "genres": [],
+                         "audience": None, "keywords": [], "description": None,
+                         "edition": {"label": None, "status": None},
+                         "series": {"name": None, "position": None, "relationship": None}, "extent": None},
+            "metadata_provenance": {},
             "discovery": {"location_kind": "directory", "location": str(self.sources),
                           "recursive": False, "selection_status": "confirmed", "notes": []},
             "preparation": {"status": "ready", "current_revision": "r0001", "blockers": []},
@@ -96,7 +100,7 @@ class PreparationTests(unittest.TestCase):
     def test_discovery_only_record_does_not_claim_readiness(self):
         self.work["preparation"] = {"status": "not_started", "current_revision": None, "blockers": []}
         self.work["discovery"]["selection_status"] = "unresolved"
-        self.work["metadata"]["source_language"] = None
+        self.work["metadata"]["manuscript_language"] = None
         self.assertIsNone(self.validate()["current_revision"])
         self.work["preparation"]["status"] = "ready"
         with self.assertRaisesRegex(ValueError, "verified revision"):
@@ -245,32 +249,18 @@ class PreparationTests(unittest.TestCase):
     def read_work(self):
         return validator.load_json(self.root / "work.json")
 
-    def test_metadata_migration_preserves_source_and_existing_workflow_state(self):
-        self.work["metadata"]["authors"] = ["作者甲", "Author B"]
-        self.work["metadata"]["genre"] = "Literary fiction"
-        self.work["metadata"]["edition"] = "Author revision"
-        self.workflow(status="completed")
-        self.save()
-        original_manifest = (self.revision / "manifest.json").read_bytes()
-        before = (self.root / "work.json").read_bytes()
-        result = metadata.update(self.root / "work.json", "migrate")
-        work = self.read_work()
-        self.assertTrue(result["written"])
-        self.assertEqual(work["schema_version"], 2)
-        self.assertEqual(validator.legacy_metadata(work), self.work["metadata"])
-        self.assertIsNone(work["metadata"]["original_language"])
-        self.assertEqual(work["workflows"], self.work["workflows"])
-        self.assertEqual((self.revision / "manifest.json").read_bytes(), original_manifest)
-        self.assertEqual(next((self.root / "metadata-history").iterdir()).read_bytes(), before)
-        self.assertFalse(metadata.update(self.root / "work.json", "migrate")["written"])
-
     def test_inference_is_grounded_proposed_and_does_not_replace_existing_values(self):
-        proposals = [self.proposal(), self.proposal("/title", "Different title", origin="extracted")]
+        for field, value in (("/title", "Different title"), ("/audience", "adult"),
+                             ("/contributors", [{"id": "a", "name": "A", "roles": ["author"]}])):
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "provided by the user"):
+                metadata.update(self.root / "work.json", "enrich", actor="prepare-manuscript",
+                                proposals=[self.proposal(field, value, origin="extracted")])
+        proposals = [self.proposal()]
         result = metadata.update(self.root / "work.json", "enrich", proposals=proposals, actor="prepare-manuscript")
         work = self.read_work()
         self.assertEqual(work["metadata"]["genres"], ["Literary fiction"])
         self.assertEqual(work["metadata"]["title"], "Example work")
-        self.assertEqual(result["skipped"], ["/title"])
+        self.assertEqual(result["skipped"], [])
         self.assertEqual(work["metadata_provenance"]["/genres"]["review_status"], "proposed")
         self.assertIsNone(work["metadata"]["extent"]["word_count"])
         self.assertGreater(work["metadata"]["extent"]["non_whitespace_character_count"], 0)
@@ -342,7 +332,8 @@ class PreparationTests(unittest.TestCase):
     def test_metadata_update_rejects_concurrent_edits(self):
         path = self.root / "work.json"
         before = path.read_bytes()
-        candidate = metadata.migrate(self.work)
+        candidate = copy.deepcopy(self.work)
+        candidate["metadata"]["genres"] = ["Fiction"]  # A real change, so the write is attempted.
         self.work["metadata"]["title"] = "Concurrent correction"
         self.save()
         with self.assertRaisesRegex(ValueError, "concurrently"):

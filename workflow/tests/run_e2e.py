@@ -394,7 +394,7 @@ def write_report(engine, case):
                             if receipt["gate"].get("chapter_id") == output["chapter_id"]
                             and receipt["gate"].get("attempt") == output.get("attempt")
                             and receipt["parsed"]["type"] == "final-closure"]
-                maps = [number for number, gate in closures if gate["kind"] == "passage_map"]
+                maps = [number for number, gate in closures if gate["kind"] == "map_exceptions"]
                 sanity = [number for number, gate in closures if gate["kind"] == "chapter_sanity"
                           and gate["binding"]["sha256"] == output["sanity_review_sha256"]]
                 require(maps and sanity and min(maps) < max(sanity),

@@ -190,7 +190,7 @@ class FormattingEngine(Engine):
         inventory = pin_directories(sources)
         source_manifest = {
             "publication_id": publication_id, "parent_run_id": accepted["run_id"], "acceptance": accepted["acceptance"],
-            "manuscript_language": language,
+            "workflow": accepted["workflow"], "version": accepted["version"], "manuscript_language": language,
             "chapters": [{"chapter_id": c["chapter_id"], "sha256": c["sha256"], "file": f"chapters/{index:04d}.md"}
                          for index, c in enumerate(accepted["chapters"], 1)],
             "manuscript_sha256": identity, "content_reference": "content.json",
@@ -203,6 +203,7 @@ class FormattingEngine(Engine):
             manuscript_language=language, chapters=source_manifest["chapters"], purpose=options["purpose"],
             format_approval=None, source_name="manuscript.md", source_hash=identity,
             publication_id=publication_id, parent_run_id=accepted["run_id"], accepted_sha256=accepted_sha256,
+            source_version=accepted["version"],
             edition=cls.edition_identity(accepted_sha256, options, model),
             options={"purpose": options["purpose"], "renderer": backend and backend["renderer"],
                      "documents_skill": None if backend else str(adapter)},
@@ -406,7 +407,7 @@ class FormattingEngine(Engine):
         state.update(outputs=[document], qa=qa_artifact, rendered_pages=evidence, status="COMPLETED")
         export = plain(self.root / "export")
         export.mkdir(exist_ok=True)
-        target = export / "manuscript.docx"
+        target = export / f"manuscript-{state['source_version']}.docx"
         data = self.store.content(document)
         if target.exists():
             require(target.read_bytes() == data, "Existing formatted export differs; start a new edition.")

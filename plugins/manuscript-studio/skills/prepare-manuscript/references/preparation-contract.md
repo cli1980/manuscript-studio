@@ -127,6 +127,15 @@ do not silently discard it or replace chapter Markdown with a PDF/DOCX deliverab
 
 A self-contained short story, essay, or poem without chapters is one `standalone`
 unit. Front and back matter are typed units in the same ordered Markdown set.
+
+Every prepared revision starts with exactly one `front_matter` unit. It holds
+the source material before the first chapter or standalone body (title page,
+dedication, epigraph, and similar), split verbatim from the source, and at least
+the work's title heading; for a standalone work, move the title heading out of the
+body into the front matter. Never write front matter that the source does not
+contain. When the source has no title or opening material at all, do not mark
+preparation ready: stop and ask the user to supply or confirm the opening
+material. Workflows attach the shared metadata review to this unit.
 A partial excerpt from a larger chapter is `incomplete`, not a standalone work.
 Do not manufacture chapters to fit processing limits.
 

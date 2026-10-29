@@ -15,9 +15,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import run_judge as judge
-from translation_cases import migrate_case, candidates, discover_cases
+from translation_cases import candidates, discover_cases
 from prepare_translation import prepare_tasks
-from migrate_translation_cases import migrate
 import generate_translation_candidates as generator
 from anonymize_translation_candidates import anonymize
 
@@ -30,32 +29,37 @@ PREDICTION = {
 }
 
 
+def single_candidate(case_root):
+    """A version-2 fixture with one candidate, "baseline" (the user-provided translation), for focused tests."""
+    path = case_root / "case.json"
+    case = json.loads(path.read_text(encoding="utf-8"))
+    baseline = next(c for c in case["candidates"] if c["provenance"]["translation_origin"] == "user-provided")
+    (case_root / "translation.en.txt").write_bytes((case_root / baseline["translation_file"]).read_bytes())
+    baseline.update(candidate_id="baseline", revision=1, translation_file="translation.en.txt")
+    baseline.pop("derived_from", None)
+    case["candidates"] = [baseline]
+    path.write_text(json.dumps(case), encoding="utf-8")
+    return case
+
+
 class JudgeTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve() / "evals"
         for relative in (
-            f"cases/literary-translation/{CASE_ID}",
-            "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001", "rubrics",
-            "judges/literary-translation-judge",
+            f"cases/literary-translation/{CASE_ID}", "rubrics", "judges/literary-translation-judge",
         ):
             shutil.copytree(judge.ROOT / relative, self.root / relative)
+        # Shared fixtures live beside evals/ at the repository root.
+        fixture = "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001"
+        shutil.copytree(judge.ROOT.parent / fixture, self.root.parent / fixture)
         self.case_root = self.root / f"cases/literary-translation/{CASE_ID}"
-        # Keep legacy coverage explicit even after repository fixtures migrate.
-        path = self.case_root / "case.json"
-        case = json.loads(path.read_text(encoding="utf-8"))
-        if case.get("schema_version") == 2:
-            baseline = next(c for c in case.pop("candidates") if c["provenance"]["translation_origin"] == "user-provided")
-            original = (self.case_root / baseline["translation_file"]).read_bytes()
-            (self.case_root / "translation.en.txt").write_bytes(original)
-            case.update(schema_version=1, translation_file="translation.en.txt",
-                        provenance=baseline["provenance"])
-            case.pop("translation_instructions", None)
-            path.write_text(json.dumps(case), encoding="utf-8")
+        single_candidate(self.case_root)
         self.history = self.case_root / "judgments.jsonl"
         self.older = {
             "judgment_id": "older", "case_id": CASE_ID, "case_revision": 1,
+            "candidate_id": "baseline", "candidate_revision": 1,
             "passage_id": "modern-lu-xun-guxiang-passage-001", "source_revision": 1,
             "rubric_version": "literary-translation-quality-v1",
             "rater_id": REVIEWER, "status": "complete", "overall_score": 2,
@@ -109,7 +113,7 @@ class JudgeTests(unittest.TestCase):
         inputs = json.loads(request["messages"][1]["content"])
         self.assertEqual(set(inputs), {"source_text", "translation_text"})
         self.assertEqual(inputs["source_text"].encode("utf-8"),
-                         (self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt").read_bytes())
+                         (self.root.parent / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt").read_bytes())
         self.assertEqual(inputs["translation_text"].encode("utf-8"), (self.case_root / "translation.en.txt").read_bytes())
         for marker in (REVIEWER, "SECRET_HUMAN_REASON", "SECRET_HUMAN_ISSUE", "supersedes_judgment_id"):
             self.assertNotIn(marker, json.dumps(request))
@@ -117,7 +121,7 @@ class JudgeTests(unittest.TestCase):
     def test_prepare_excludes_all_case_context_and_extra_metadata(self):
         for path in (
             self.case_root / "case.json",
-            self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json",
+            self.root.parent / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json",
             self.root / "rubrics/literary-translation-quality-v1.json",
         ):
             metadata = json.loads(path.read_text(encoding="utf-8"))
@@ -136,7 +140,7 @@ class JudgeTests(unittest.TestCase):
     def test_case_references_choose_the_texts_without_guessing_filenames(self):
         translation = self.case_root / "candidate-version-2.txt"
         translation.write_text("A separately referenced candidate.", encoding="utf-8")
-        source_root = self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001"
+        source_root = self.root.parent / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001"
         source = source_root / "alternate-source.zh.txt"
         source.write_text("另一个原文段落。", encoding="utf-8")
         source_metadata = json.loads((source_root / "passage.json").read_text(encoding="utf-8"))
@@ -144,7 +148,7 @@ class JudgeTests(unittest.TestCase):
         (source_root / "passage.json").write_text(json.dumps(source_metadata), encoding="utf-8")
         path = self.case_root / "case.json"
         case = json.loads(path.read_text(encoding="utf-8"))
-        case["translation_file"] = translation.name
+        case["candidates"][0]["translation_file"] = translation.name
         case["source_file"] = Path(os.path.relpath(source, self.case_root)).as_posix()
         path.write_text(json.dumps(case), encoding="utf-8")
         prepared = self.prepared()
@@ -167,19 +171,22 @@ class JudgeTests(unittest.TestCase):
                 destination, manifest = judge.run(self.args(model=None))
         self.assertEqual(manifest["status"], "prepared")
         self.assertFalse(manifest["benchmark_eligible"])
-        self.assertTrue((destination / CASE_ID / "request.json").is_file())
-        self.assertFalse((destination / CASE_ID / "prediction.json").exists())
+        self.assertTrue((destination / CASE_ID / "baseline" / "request.json").is_file())
+        self.assertFalse((destination / CASE_ID / "baseline" / "prediction.json").exists())
         self.assertFalse((destination / "summary.json").exists())
 
     def make_ready(self):
         for path in (
             self.case_root / "case.json",
-            self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json",
+            self.root.parent / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json",
         ):
             metadata = json.loads(path.read_text(encoding="utf-8"))
-            metadata["provenance"]["usage_rights"] = "permitted"
             if path.name == "case.json":
                 metadata["status"] = "ready"
+                metadata["candidates"][0]["status"] = "ready"
+                metadata["candidates"][0]["provenance"]["usage_rights"] = "permitted"
+            else:
+                metadata["provenance"]["usage_rights"] = "permitted"
             path.write_text(json.dumps(metadata), encoding="utf-8")
 
     def test_training_export_uses_human_scores_only_as_assistant_targets(self):
@@ -210,7 +217,7 @@ class JudgeTests(unittest.TestCase):
         self.assertEqual(index["human_judgment_id"], "latest")
         self.assertEqual(index["group_id"], "modern-lu-xun-guxiang")
         self.assertEqual(self.history.read_bytes(), before)
-        self.assertFalse((destination / CASE_ID / "prediction.json").exists())
+        self.assertFalse((destination / CASE_ID / "baseline" / "prediction.json").exists())
 
     def test_training_export_retains_actual_human_explanation_when_present(self):
         target = judge.training_target(self.latest)
@@ -261,7 +268,7 @@ class JudgeTests(unittest.TestCase):
         self.assertEqual(manifest["status"], "completed")
         self.assertFalse(manifest["benchmark_eligible"])
         self.assertEqual(manifest["cases"][0]["candidate_source"], "external_translation")
-        self.assertFalse((destination / CASE_ID / "comparison.json").exists())
+        self.assertFalse((destination / CASE_ID / "baseline" / "comparison.json").exists())
         summary = json.loads((destination / "summary.json").read_text())
         self.assertEqual(summary["cases_judged"], 1)
         self.assertNotIn("metrics", summary)
@@ -274,7 +281,7 @@ class JudgeTests(unittest.TestCase):
 
     def multi_candidate(self):
         path = self.case_root / "case.json"
-        case, history = migrate_case(json.loads(path.read_text(encoding="utf-8")), [self.older, self.latest])
+        case, history = json.loads(path.read_text(encoding="utf-8")), [self.older, self.latest]
         case["candidates"].append({
             "candidate_id": "adverse", "revision": 1, "translation_file": "adverse.en.txt",
             "status": "ready", "derived_from": "baseline",
@@ -408,24 +415,6 @@ class JudgeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unique"):
             candidates(case)
 
-    def test_case_migration_preserves_text_scores_history_and_is_idempotent(self):
-        source_path = self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt"
-        source = source_path.read_bytes()
-        english = (self.case_root / "translation.en.txt").read_bytes()
-        old = self.history.read_bytes()
-        self.assertEqual(migrate(self.root)["files"], 2)
-        self.assertEqual(self.history.read_bytes(), old)
-        report = migrate(self.root, write=True)
-        self.assertTrue(Path(report["backup"]).is_dir())
-        history = [json.loads(line) for line in self.history.read_text().splitlines()]
-        for before, after in zip((self.older, self.latest), history):
-            self.assertEqual({key: after[key] for key in before}, before)
-            self.assertEqual(after["candidate_id"], "baseline")
-            self.assertEqual(after["candidate_revision"], before["case_revision"])
-        self.assertEqual(source_path.read_bytes(), source)
-        self.assertEqual((self.case_root / "translation.en.txt").read_bytes(), english)
-        self.assertEqual(migrate(self.root, write=True)["files"], 0)
-
     def test_anonymization_preserves_text_ratings_and_private_mapping(self):
         case = self.multi_candidate()
         before_text = {c["candidate_id"]: (self.case_root / c["translation_file"]).read_bytes() for c in case["candidates"]}
@@ -506,7 +495,7 @@ class JudgeTests(unittest.TestCase):
             ))
         self.assertEqual(manifest["status"], "prepared")
         self.assertEqual(manifest["purpose"], "judge")
-        self.assertTrue((destination / CASE_ID / "request.json").exists())
+        self.assertTrue((destination / CASE_ID / "baseline" / "request.json").exists())
 
     def test_judge_mode_rejects_skill_files_as_translation_outputs(self):
         with self.assertRaisesRegex(judge.EvaluationError, "not skill instructions"):
@@ -539,7 +528,7 @@ class JudgeTests(unittest.TestCase):
                 ))
         self.assertEqual(manifest["status"], "failed")
         self.assertIn("Inputs changed", manifest["cases"][0]["error"])
-        self.assertFalse((destination / CASE_ID / "comparison.json").exists())
+        self.assertFalse((destination / CASE_ID / "baseline" / "comparison.json").exists())
 
     def test_current_case_requires_explicit_smoke_mode(self):
         with self.assertRaisesRegex(judge.EvaluationError, "smoke-test"):
@@ -676,7 +665,7 @@ class JudgeTests(unittest.TestCase):
                 pass
 
         def reference_after_prediction(prepared, reviewer):
-            predictions = list((test.root / "results").glob(f"*/{CASE_ID}/prediction.json"))
+            predictions = list((test.root / "results").glob(f"*/{CASE_ID}/baseline/prediction.json"))
             test.assertEqual(len(predictions), 1)
             events.append("prediction_saved")
             return human_reader(prepared, reviewer)
@@ -703,7 +692,7 @@ class JudgeTests(unittest.TestCase):
         self.assertEqual(set(json.loads(captured[0]["messages"][1]["content"])), {"source_text", "translation_text"})
         self.assertNotIn(REVIEWER, json.dumps(captured[0]))
         self.assertNotIn("SECRET_HUMAN", json.dumps(captured[0]))
-        comparison = json.loads((destination / CASE_ID / "comparison.json").read_text(encoding="utf-8"))
+        comparison = json.loads((destination / CASE_ID / "baseline" / "comparison.json").read_text(encoding="utf-8"))
         self.assertEqual(comparison["human_judgment_id"], "latest")
         self.assertEqual(comparison["scores"]["overall_score"]["absolute_error"], 1)
         summary = json.loads((destination / "summary.json").read_text())
@@ -732,7 +721,7 @@ class JudgeTests(unittest.TestCase):
             with patch.object(judge, "call_model", return_value=response):
                 destination, manifest = judge.run(self.args(prepare_only=False))
         self.assertEqual(manifest["status"], "failed")
-        self.assertFalse((destination / CASE_ID / "comparison.json").exists())
+        self.assertFalse((destination / CASE_ID / "baseline" / "comparison.json").exists())
         summary = json.loads((destination / "summary.json").read_text())
         self.assertEqual(summary["cases_failed"], 1)
         self.assertEqual(summary["cases_compared"], 0)
@@ -782,8 +771,8 @@ class JudgeTests(unittest.TestCase):
             with patch.object(judge, "call_model", side_effect=call):
                 destination, manifest = judge.run(self.args(prepare_only=False))
         self.assertEqual(manifest["status"], "failed")
-        self.assertTrue((destination / CASE_ID / "prediction.json").is_file())
-        self.assertFalse((destination / CASE_ID / "comparison.json").exists())
+        self.assertTrue((destination / CASE_ID / "baseline" / "prediction.json").is_file())
+        self.assertFalse((destination / CASE_ID / "baseline" / "comparison.json").exists())
 
     def test_cli_prepare_all_and_smoke_scope(self):
         output = io.StringIO()

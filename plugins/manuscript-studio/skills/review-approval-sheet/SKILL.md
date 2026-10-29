@@ -16,7 +16,7 @@ Provide a common human-review surface without taking ownership of domain meaning
 5. Require a note when the selected decision declares `requires_note: true`.
 6. Treat decisions whose effect is `reopen` as feedback requiring domain propagation, never as approval of the resulting replacement.
 7. Do not apply manuscript, translation, ledger, query-package, or source changes. Return validated dispositions to the originating skill.
-8. Keep final closure separate. Offer it only from a newly rendered sheet whose saved domain state contains no unresolved items.
+8. Keep final closure separate unless the originating skill or workflow declares closure implied for that sheet, because a later step shows the user the complete result. Then a submission that resolves every open item is the final closure; a reopening decision still produces a new revision. Otherwise, offer closure only from a newly rendered sheet whose saved domain state contains no unresolved items.
 9. Present every successfully rendered fragment as an inline Codex visualization. A filesystem path or Markdown link does not count as presenting the review interface.
 
 ## Workflow
@@ -72,6 +72,8 @@ Use `--output <parsed.json>` for a durable machine-readable receipt. Reject unkn
 Give the validated receipt to the originating skill. That skill must persist the response, interpret qualifications and corrections, update domain content, propagate dependencies, revalidate bindings, determine resolved/reopened state, create the next revision, and authorize downstream application only under its own rules.
 
 Render only resulting unresolved items when incremental follow-up is valid. Never make the user re-review unaffected resolved items.
+
+Carry every resolved item into the next revision exactly as the user decided it: keep its `id`, `summary`, `details`, `allowed_decisions`, and `dependencies` unchanged from the revision that received the decision, and change only its `status`, `status_label`, and `response`. Record applied results, such as the revised wording, in the originating skill's domain state or checkpoint, never by editing a resolved item. If an applied decision means the item itself must change, reopen it as a pending item for a new decision instead of marking it resolved.
 
 Present every new revision inline using the same directive contract; do not merely report that a replacement HTML file exists.
 

@@ -70,6 +70,39 @@ Present the resulting values together, identifying inferred, unknown, and stale
 fields, and invite corrections without adding a mandatory metadata approval gate.
 Existing workflow-specific approval gates still apply.
 
+## Field groups
+
+Every metadata field belongs to exactly one group; `scripts/prepare_metadata.py`
+exposes them as `AUTHOR`, `SUGGESTED`, and `COMPUTED`.
+
+| Group | Fields | Who sets them |
+|---|---|---|
+| Provided by the user | `/title`, `/subtitle`, `/contributors`, `/audience`, `/edition/label`, `/edition/status`, `/series/name`, `/series/position`, `/series/relationship` | Initialized empty (null or `[]`) when the work is added; the user fills them in afterwards. Agents never propose them (`enrich` refuses), even when the manuscript appears to state them. |
+| Suggested from the manuscript | `/work_type`, `/form`, `/genres`, `/keywords`, `/description`, `/original_language` | Agents propose them through `enrich` with evidence and confidence; they stay `proposed` until the user confirms or corrects them. |
+| Computed | `/manuscript_language`, `/extent` | Manuscript language is fixed when the work is added; extent is measured from the prepared revision. Neither is edited by hand in workflows. |
+
+A user may still correct any user-provided or suggested field with `set`.
+
+## Prior work record (input/output contract)
+
+When the caller supplies the latest shared record for the work (for example a
+workflow engine's `prior_work_record`), that record is the metadata input:
+
+- **Input:** start `work.json` from the prior record's `metadata`,
+  `metadata_provenance`, `metadata_history`, and `record_revision` verbatim, with
+  the new discovery and preparation sections. Do not re-infer fields that already
+  have a value, whatever their review status.
+- **Consolidation:** only fill fields that are null, empty, or absent, through
+  `enrich` with evidence from the new prepared revision. Recompute extent for
+  the new revision. If the new source contradicts an existing value, leave the
+  value unchanged, mark it stale through the helper, and report the conflict for
+  the user to resolve; never overwrite it.
+- **Output:** every field that had a value in the prior record keeps the same
+  value and provenance (extent excepted). Newly filled fields stay `proposed`
+  until the user confirms them.
+
+Without a prior record, infer missing values as described above.
+
 ## Helper and proposal format
 
 Install `requirements.txt` from this skill. Run commands from the skill directory

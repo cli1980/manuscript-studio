@@ -249,3 +249,18 @@ The creative advantage still belongs to the person with an exceptional idea and 
 ## License
 
 See [LICENSE](LICENSE).
+
+## License
+
+Copyright (c) 2026 Crossborder Art & Media LLC. The repository uses two licenses
+(see [LICENSE](LICENSE)):
+
+- **Skills** (`plugins/manuscript-studio/`) and **evaluations** (`evals/`): MIT,
+  free for any use, including commercial use.
+- **Workflow engine** (`workflow/`) and **Manuscript Studio** (`studio/`):
+  [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0),
+  source-available for personal, research, educational, and other noncommercial
+  use. Commercial use requires a separate license negotiated with Crossborder
+  Art & Media LLC. Versions of `workflow/` published before this change remain
+  under MIT.
+- **Fixtures** (`fixtures/`): the terms recorded with each fixture.

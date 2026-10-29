@@ -24,21 +24,21 @@ def prepare_tasks(root, case_ids, *, instructions=None):
             raise EvaluationError("Invalid translation task.")
         if case.get("schema_version") not in {1, 2}:
             raise EvaluationError("Unsupported translation case version.")
-        source_meta_path = reference(directory, case.get("source_metadata_file"), root / "fixtures/manuscripts")
+        source_meta_path = reference(directory, case.get("source_metadata_file"), root.parent / "fixtures/manuscripts")
         if source_meta_path.name != "passage.json":
             raise EvaluationError("Expected shared passage metadata.")
-        source = object_json(read_bytes(source_meta_path, root / "fixtures/manuscripts"))
+        source = object_json(read_bytes(source_meta_path, root.parent / "fixtures/manuscripts"))
         if any(case.get(key) != source.get(key) for key in ("group_id", "passage_id", "source_language")):
             raise EvaluationError("Source identity does not match the case.")
         if (type(case.get("source_revision")) is not int or case["source_revision"] < 1
                 or type(source.get("revision")) is not int or case["source_revision"] != source["revision"]):
             raise EvaluationError("Invalid source revision.")
-        source_path = reference(directory, case.get("source_file"), root / "fixtures/manuscripts")
+        source_path = reference(directory, case.get("source_file"), root.parent / "fixtures/manuscripts")
         if source_path.suffix != ".txt":
             raise EvaluationError("Shared source must be a text file.")
         if source_path != reference(source_meta_path.parent, source.get("source_file"), source_meta_path.parent):
             raise EvaluationError("Source references disagree.")
-        raw = read_bytes(source_path, root / "fixtures/manuscripts")
+        raw = read_bytes(source_path, root.parent / "fixtures/manuscripts")
         source_text = raw.decode("utf-8")
         if not source_text.strip():
             raise EvaluationError("Translator input requires nonempty source text.")

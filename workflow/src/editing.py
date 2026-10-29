@@ -230,6 +230,7 @@ class EditingEngine(PreparedManuscriptEngine):
         context = {
             "stage": stage["id"], "source": str(self.root / "input" / state["source_name"]),
             "manuscript_language": state["manuscript_language"], "required_work_id": state["work_id"],
+            "prior_work_record": (state.get("prior_work_record") or {}).get("path"),
             "work_record": state["prepared"]["work_record"] if state["prepared"] else None,
             "domain_state": state["domain_state"], "user_receipt": state["next_input"],
             "metadata_approval": state.get("metadata_approval"),

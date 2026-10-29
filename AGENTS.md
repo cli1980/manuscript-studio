@@ -9,6 +9,11 @@ Read [roadmap.md](roadmap.md) before starting project work. Keep progress accura
 and understandable to both agents and humans. Do not invent priorities,
 milestones, completed checks, or human approvals.
 
+## Compatibility
+
+Until the product's first formal release, do not preserve backward compatibility
+when doing so would complicate schemas; prefer the cleaner schema.
+
 ## Required before every push
 
 Before every push of local commits to any remote:

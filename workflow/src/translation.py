@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 
 from .prepared import PreparedManuscriptEngine
@@ -43,16 +44,25 @@ PROMPT = (
     "RETURN CONTRACT: final message is JSON matching the supplied schema; use null for "
     "unused fields. All paths are workspace-relative with forward slashes. state_path is "
     "the saved domain review/state Markdown. needs_human_input must name a gate: "
-    "passage_map (review_path=approval JSON, binding_path=an immutable complete map "
-    "proposal copy, separate from the map's mutable approval-status record); "
-    "translation_issue (optional review JSON, binding_path=current English checkpoint); "
+    "map_exceptions ONLY when the chapter's passage map lists exceptions (review_path=approval JSON with one "
+    "item per exception, binding_path=the map file); the map itself is internal and needs no approval. "
+    "Before drafting, ALWAYS save translation/maps/<chapter_id>.json as {chapter_id, passages: [{id, "
+    "first_paragraph, last_paragraph}], exceptions: [{id, kind: exclude|special|reorder, first_paragraph, "
+    "last_paragraph, reason}]}; paragraphs are the prepared chapter's blank-line-separated blocks numbered "
+    "from 1, and passages cover every paragraph exactly once, in order. "
+    "translation_issue (review_path REQUIRED, even for a single item: ONE approval JSON holding every "
+    "translation-advice item of the whole chapter, drafted completely first, per the skill's chapter advice "
+    "sheet; the user decides all items in one submission; binding_path=current English checkpoint); "
     "chapter_sanity (review JSON for proposed edits, or null for an empty diff; "
     "binding_path=assembled chapter); continuation or question (no sheet required). "
-    "For passage_map/chapter_sanity sheets, closure_required must be true. Never mark "
-    "items resolved before the user's explicit matching dispositions. After dispositions "
-    "save a NEW sheet revision and return the next review, including a separate closure "
-    "request when all items resolve. Never confirm final closure yourself. After map "
-    "closure, do not change that map; return a new map review if boundaries change. "
+    "For map_exceptions and translation_issue sheets, a user submission that resolves every item IS the "
+    "final closure (its receipt has implied_closure: true): apply the decisions and continue without asking "
+    "for closure; a discuss or revise decision still needs a NEW sheet revision. For chapter_sanity sheets, "
+    "closure_required must be true and closure stays a separate request. Never mark "
+    "items resolved before the user's explicit matching dispositions. After chapter_sanity "
+    "dispositions save a NEW sheet revision and return it with a separate closure request "
+    "when all items resolve. Never confirm final closure yourself. After exception "
+    "closure, do not change that map; return a new exceptions review if it must change. "
     "For empty chapter diff, save 'No textual changes proposed' in the sanity review and "
     "request explicit chapter approval. message must contain the full human-facing "
     "translation/review/question required by the skill, not merely a file link. "
@@ -87,11 +97,12 @@ class TranslationEngine(PreparedManuscriptEngine):
             "stage": stage["id"], "source": str(self.root / "input" / state["source_name"]),
             "manuscript_language": state["manuscript_language"], "target_language": state["target_language"],
             "required_work_id": state["work_id"],
+            "prior_work_record": (state.get("prior_work_record") or {}).get("path"),
             "work_record": state["prepared"]["work_record"] if state["prepared"] else None,
             "chapter": chapter, "chapter_attempt": item["attempt"] if item else None,
             "chapter_workdir": self.chapter_workdir(state, item)[0] if item else None,
             "domain_state": state["domain_state"],
-            "map_approval": state["approvals"].get("passage_map"),
+            "map_exceptions_approval": state["approvals"].get("map_exceptions"),
             "sanity_approval": state["approvals"].get("chapter_sanity"),
             "metadata_approval": state.get("metadata_approval"),
             "previous_outputs": state["outputs"], "continuity": state["continuity"],
@@ -110,18 +121,60 @@ class TranslationEngine(PreparedManuscriptEngine):
         if stage.get("iterate") and result["outcome"] != "blocked" and not result["state_path"]:
             raise ValueError("Translation requires persisted domain state.")
 
+    def chapter_map(self, state):
+        """The agent's internal passage map, checked for complete in-order coverage of the prepared chapter."""
+        chapter_id = self.current_iteration(state)["chapter_id"]
+        relative = f"translation/maps/{chapter_id}.json"
+        if not (self.workspace / relative).is_file():
+            raise ValueError(f"Save the chapter's passage map at {relative} before drafting.")
+        path = self.file(relative)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        chapter = next(c for c in state["chapters"] if c["chapter_id"] == chapter_id)
+        text = self.store.content(state["prepared"]["files"][chapter["path"]]).decode("utf-8")
+        count = len([block for block in re.split(r"\n\s*\n", text.strip()) if block.strip()])
+        expected = 1
+        for passage in data.get("passages") or []:
+            first, last = passage.get("first_paragraph"), passage.get("last_paragraph")
+            if first != expected or not isinstance(last, int) or last < first:
+                raise ValueError(f"The passage map must cover paragraphs 1-{count} once, in order "
+                                 f"(problem at {passage.get('id')}).")
+            expected = last + 1
+        if expected != count + 1:
+            raise ValueError(f"The passage map covers paragraphs 1-{expected - 1}, but the chapter has {count}.")
+        for exception in data.get("exceptions") or []:
+            first, last = exception.get("first_paragraph"), exception.get("last_paragraph")
+            if exception.get("kind") not in ("exclude", "special", "reorder") or not str(exception.get("reason") or "").strip() \
+                    or not (isinstance(first, int) and isinstance(last, int) and 1 <= first <= last <= count):
+                raise ValueError(f"Invalid passage-map exception {exception.get('id')}.")
+        return relative, data
+
+    def require_map(self, state):
+        relative, data = self.chapter_map(state)
+        approved = state["approvals"].get("map_exceptions")
+        if data.get("exceptions") and not approved:
+            raise ValueError("The passage map lists exceptions; raise a map_exceptions sheet and get closure first.")
+        if approved and digest(read_bytes(self.file(approved["path"]))) != approved["sha256"]:
+            raise ValueError("The approved passage map changed.")
+
     def on_waiting(self, state, stage, result):
-        if result["gate"] in ("translation_issue", "chapter_sanity", "continuation") \
-                and "passage_map" not in state["approvals"]:
-            raise ValueError("Passage-map closure is required before drafting/review.")
+        if result["gate"] in ("translation_issue", "chapter_sanity", "continuation"):
+            self.require_map(state)
 
     def on_gate(self, state, gate, result):
-        if gate["kind"] == "passage_map":
+        if gate["kind"] == "map_exceptions":
             state["approvals"].pop("chapter_sanity", None)
         if gate["kind"] == "chapter_sanity" and not gate["sheet"]:
-            evidence = self.store.content(state["domain_state"]).decode("utf-8")
+            # The explicit empty-diff statement must be recorded: in the saved review state or in the gate
+            # message, which the engine persists with the gate and its receipt.
+            evidence = self.store.content(state["domain_state"]).decode("utf-8") + "\n" + (gate.get("message") or "")
             if "no textual changes proposed" not in evidence.casefold():
-                raise ValueError("An empty-diff sanity gate requires the saved explicit no-changes record.")
+                raise ValueError("An empty-diff sanity gate requires the explicit statement 'No textual changes "
+                                 "proposed' in the saved review state or the gate message.")
+
+    def gate_commands(self, state, gate):
+        if gate.get("sheet"):
+            return []
+        return {"chapter_sanity": ["approve chapter"], "continuation": ["continue"]}.get(gate["kind"], [])
 
     def parse_free_reply(self, state, gate, text):
         if gate["kind"] == "chapter_sanity":
@@ -132,10 +185,9 @@ class TranslationEngine(PreparedManuscriptEngine):
 
     def complete_chapter(self, state, result):
         approvals = state["approvals"]
-        if "passage_map" not in approvals or "chapter_sanity" not in approvals:
-            raise ValueError("Translation cannot complete without map closure and chapter approval.")
-        if digest(read_bytes(self.file(approvals["passage_map"]["path"]))) != approvals["passage_map"]["sha256"]:
-            raise ValueError("Approved passage map changed.")
+        if "chapter_sanity" not in approvals:
+            raise ValueError("Translation cannot complete without chapter approval.")
+        self.require_map(state)
         relative = result["output_path"]
         if not relative or not relative.startswith("translation/translated_english/") or not relative.endswith(".md"):
             raise ValueError("Completed English chapters belong under translation/translated_english/.")
@@ -151,5 +203,3 @@ class TranslationEngine(PreparedManuscriptEngine):
     def output_language(self, state):
         return state["target_language"]
 
-    def library_prefix(self, state):
-        return f"translation/{state['target_language']}"

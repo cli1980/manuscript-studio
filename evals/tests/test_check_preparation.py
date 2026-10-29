@@ -45,11 +45,11 @@ class PreparationEvaluationTests(unittest.TestCase):
             title = ("First", "Second")[number - 1]
             chapters.append({
                 "chapter_id": f"chosen-by-worker-{number}", "order": number, "source_number": str(number),
-                "title": title, "role": "chapter", "file": "chapters/" + filename, "sha256": checker.digest(actual),
+                "title": title, "role": "front_matter" if number == 1 else "chapter", "file": "chapters/" + filename, "sha256": checker.digest(actual),
                 "source_spans": [{"source_id": "worker-source", "locator": title}], "status": "verified",
             })
             units.append({
-                "unit_id": f"reference-{number}", "title": title, "source_number": str(number), "role": "chapter",
+                "unit_id": f"reference-{number}", "title": title, "source_number": str(number), "role": "front_matter" if number == 1 else "chapter",
                 "file": "../../../fixtures/reference-outputs/sample/" + filename, "sha256": checker.digest(golden),
                 "source_locator": title,
             })
@@ -57,7 +57,7 @@ class PreparationEvaluationTests(unittest.TestCase):
             "schema_version": 1, "case_id": "markdown-test-001", "task": "manuscript-preparation",
             "input_location": "../../../fixtures/manuscripts/sample", "recursive": False,
             "sources": [{"source_id": "reference-source", "file": "manuscript.md", "sha256": checker.digest(self.source)}],
-            "reference_file": "reference-map.json", "expected_metadata": {"title": "Example", "source_language": "en"},
+            "reference_file": "reference-map.json", "expected_metadata": {"manuscript_language": "en", "work_type": "fiction"},
             "expected_preparation_status": "ready", "scope_kind": "whole_work",
             "expected_workflows": {name: {"status": "not_started"} for name in (
                 "literary-editing", "literary-translation", "literary-agent-querying", "format-manuscript")},
@@ -81,9 +81,13 @@ class PreparationEvaluationTests(unittest.TestCase):
             "verification": {"performed_by": "test", "verified_at": NOW, "coverage_complete": True, "issues": []},
         }
         self.work = {
-            "schema_version": 1, "work_id": "worker-selected-id", "record_revision": 1, "updated_at": NOW,
-            "metadata": {"title": "Example", "authors": [], "source_language": "en",
-                         "work_type": "fiction", "genre": None, "edition": None},
+            "schema_version": 2, "work_id": "worker-selected-id", "record_revision": 1, "updated_at": NOW,
+            "metadata": {"title": None, "subtitle": None, "contributors": [], "original_language": None,
+                         "manuscript_language": "en", "work_type": "fiction", "form": None, "genres": [],
+                         "audience": None, "keywords": [], "description": None,
+                         "edition": {"label": None, "status": None},
+                         "series": {"name": None, "position": None, "relationship": None}, "extent": None},
+            "metadata_provenance": {},
             "discovery": {"location_kind": "directory", "location": str(self.inputs), "recursive": False,
                           "selection_status": "confirmed", "notes": []},
             "preparation": {"status": "ready", "current_revision": "r0001", "blockers": []},
@@ -226,7 +230,7 @@ class PreparationEvaluationTests(unittest.TestCase):
             self.assertEqual(self.statuses(report)[name], "not_checked")
 
     def test_metadata_and_premature_downstream_progress_fail(self):
-        self.work["metadata"]["title"] = "Wrong title"
+        self.work["metadata"]["work_type"] = "memoir"
         self.work["workflows"]["literary-translation"] = {
             "status": "in_progress", "basis_revision": "r0001", "scope": copy.deepcopy(self.manifest["scope"]),
             "operation": "translate", "state_locator": "translation-state", "updated_at": NOW,
@@ -235,18 +239,12 @@ class PreparationEvaluationTests(unittest.TestCase):
         self.assertEqual(self.statuses(report)["metadata"], "failed")
         self.assertEqual(self.statuses(report)["downstream_ownership"], "failed")
 
-    def test_v2_metadata_supports_legacy_expectations_and_common_fields(self):
-        template = checker.read_json(checker.SKILL / "references/work.example.json")
-        self.work["schema_version"] = 2
-        self.work["metadata"] = template["metadata"]
-        self.work["metadata"].update(title="Example", manuscript_language="en", genres=["Literary fiction"])
-        self.work["metadata_provenance"] = {}
-        self.case["expected_metadata"].update(
-            edition=None, contributors=[], manuscript_language="en", genres=["Literary fiction"],
-        )
+    def test_suggested_metadata_fields_are_compared(self):
+        self.work["metadata"]["genres"] = ["Literary fiction"]
+        self.case["expected_metadata"]["genres"] = ["Literary fiction"]
         self.assertEqual(self.statuses(self.evaluate())["metadata"], "passed")
-        self.case["expected_metadata"]["edition"] = {"label": None, "status": None}
-        self.assertEqual(self.statuses(self.evaluate())["metadata"], "passed")
+        self.case["expected_metadata"]["genres"] = ["Satire"]
+        self.assertEqual(self.statuses(self.evaluate())["metadata"], "failed")
 
     def test_resume_case_can_require_preservation_of_existing_workflow_state(self):
         existing = {

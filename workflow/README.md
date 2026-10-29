@@ -229,6 +229,11 @@ a provenance manifest. Export reads accepted snapshots, not arbitrary working
 files. It refuses to overwrite differing files. It does not modify the uploaded
 source or claim to create a formatted edition.
 
+## Web application
+
+The Manuscript Studio web application (M3) is a separate client of the same
+service API and lives in [`studio/`](../studio/README.md).
+
 ## Literary editing (first M4 iteration)
 
 ```text

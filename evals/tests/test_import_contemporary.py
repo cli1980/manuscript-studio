@@ -129,7 +129,7 @@ class CorpusImportTests(unittest.TestCase):
         (directory / "case.json").write_text('{"keep":"local work"}', encoding="utf-8")
         with self.assertRaises(importer.EvaluationError):
             importer.import_corpus(self.corpus, self.output)
-        self.assertFalse((self.output / "fixtures").exists())
+        self.assertFalse((self.output.parent / "fixtures").exists())
         self.assertEqual((directory / "case.json").read_text(), '{"keep":"local work"}')
 
     def test_snapshot_mismatch_is_rejected(self):

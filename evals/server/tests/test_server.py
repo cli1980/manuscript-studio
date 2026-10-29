@@ -17,7 +17,6 @@ from fastapi.testclient import TestClient
 from evals.server.app import COOKIE, MAX_BODY, create_app
 from evals.server.repository import DataError, plain_path
 from evals.server.workspace import snapshot
-from evals.translation_cases import migrate_case
 
 EVALS = Path(__file__).resolve().parents[2]
 ORIGIN = "http://127.0.0.1:8765"
@@ -26,28 +25,32 @@ PASSAGE_ID = "modern-lu-xun-guxiang-passage-001"
 RUBRIC = "literary-translation-quality-v1"
 
 
+def single_candidate(case_root):
+    """A version-2 fixture with one candidate, "baseline" (the user-provided translation), for focused tests."""
+    path = case_root / "case.json"
+    case = json.loads(path.read_text(encoding="utf-8"))
+    baseline = next(c for c in case["candidates"] if c["provenance"]["translation_origin"] == "user-provided")
+    (case_root / "translation.en.txt").write_bytes((case_root / baseline["translation_file"]).read_bytes())
+    baseline.update(candidate_id="baseline", revision=1, translation_file="translation.en.txt")
+    baseline.pop("derived_from", None)
+    case["candidates"] = [baseline]
+    path.write_text(json.dumps(case), encoding="utf-8")
+    return case
+
+
 def sample_copy(root):
     if root.resolve() == EVALS.resolve():
         raise ValueError("Tests must not write to real evaluation data.")
-    for relative in (
-        f"cases/literary-translation/{CASE_ID}",
-        "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001",
-        "rubrics",
-    ):
+    for relative in (f"cases/literary-translation/{CASE_ID}", "rubrics"):
         shutil.copytree(EVALS / relative, root / relative)
+    # Shared fixtures live beside evals/ at the repository root.
+    fixture = "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001"
+    shutil.copytree(EVALS.parent / fixture, root.parent / fixture)
     case_root = root / f"cases/literary-translation/{CASE_ID}"
-    case = json.loads((case_root / "case.json").read_text(encoding="utf-8"))
-    # Legacy fixtures exercise compatibility; dedicated tests migrate them below.
-    if case.get("schema_version") == 2:
-        baseline = next(c for c in case.pop("candidates") if c["provenance"]["translation_origin"] == "user-provided")
-        original = (case_root / baseline["translation_file"]).read_bytes()
-        (case_root / "translation.en.txt").write_bytes(original)
-        case.update(schema_version=1, translation_file="translation.en.txt",
-                    provenance=baseline["provenance"])
-        case.pop("translation_instructions", None)
-        (case_root / "case.json").write_text(json.dumps(case), encoding="utf-8")
+    case = single_candidate(case_root)
     pending = {
         "judgment_id": f"{CASE_ID}-judgment-001", "case_id": CASE_ID,
+        "candidate_id": "baseline", "candidate_revision": 1,
         "case_revision": case["revision"], "passage_id": case["passage_id"],
         "source_revision": case["source_revision"], "rater_id": None,
         "rubric_version": None, "status": "pending", "overall_score": None,
@@ -98,7 +101,7 @@ class ServerTests(unittest.TestCase):
 
     def test_sample_read_is_exact_and_has_no_generated_score(self):
         case = self.get_case()
-        self.assertEqual(case["source"]["text"], (EVALS / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt").read_bytes().decode("utf-8"))
+        self.assertEqual(case["source"]["text"], (EVALS.parent / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt").read_bytes().decode("utf-8"))
         original_case = json.loads((EVALS / f"cases/literary-translation/{CASE_ID}/case.json").read_text(encoding="utf-8"))
         original_file = next(c["translation_file"] for c in original_case["candidates"]
                              if c["provenance"]["translation_origin"] == "user-provided")
@@ -116,7 +119,7 @@ class ServerTests(unittest.TestCase):
     def multi_candidate(self):
         path = self.root / f"cases/literary-translation/{CASE_ID}/case.json"
         history = path.parent / "judgments.jsonl"
-        case, judgments = migrate_case(json.loads(path.read_text()), [json.loads(line) for line in history.read_text().splitlines()])
+        case, judgments = json.loads(path.read_text()), [json.loads(line) for line in history.read_text().splitlines()]
         case["candidates"].append({
             "candidate_id": "variant", "revision": 1, "translation_file": "variant.en.txt",
             "status": "ready", "derived_from": "baseline", "provenance": {},
@@ -487,10 +490,10 @@ class ServerTests(unittest.TestCase):
         baseline = snapshot(workspace.source)
         for path in (
             self.root / f"cases/literary-translation/{CASE_ID}/translation.en.txt",
-            self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt",
+            self.root.parent / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt",
             self.root / f"rubrics/{RUBRIC}.json",
             self.root / f"cases/literary-translation/{CASE_ID}/case.json",
-            self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json",
+            self.root.parent / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/passage.json",
         ):
             with self.subTest(path=path):
                 old = path.read_bytes()
@@ -512,7 +515,7 @@ class ServerTests(unittest.TestCase):
         repository = self.app.state.repository
         for path, area in (
             (self.root / f"cases/literary-translation/{CASE_ID}/case.json", repository.cases),
-            (self.root / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt", repository.passages),
+            (self.root.parent / "fixtures/manuscripts/modern-lu-xun-guxiang/passage-001/source.zh.txt", repository.passages),
         ):
             before = path.read_bytes()
             with self.assertRaises(DataError):
@@ -641,7 +644,7 @@ class ServerTests(unittest.TestCase):
             if path == metadata_path and not changed:
                 changed = True
                 newer = json.loads(content)
-                newer["provenance"]["translation_origin"] = "External edit during read"
+                (newer["candidates"][0] if "candidates" in newer else newer)["provenance"]["translation_origin"] =                     "External edit during read"
                 metadata_path.write_text(json.dumps(newer), encoding="utf-8")
             return content
 
@@ -699,7 +702,7 @@ class ServerTests(unittest.TestCase):
     def test_symlink_or_junction_is_rejected(self):
         outside = self.source_root.parent / "private"
         outside.mkdir()
-        target = self.root / "fixtures/manuscripts/linked"
+        target = self.root.parent / "fixtures/manuscripts/linked"
         try:
             target.symlink_to(outside, target_is_directory=True)
         except OSError:
@@ -754,10 +757,8 @@ class BrowserTests(unittest.TestCase):
             sample_copy(root)
             directory = root / f"cases/literary-translation/{CASE_ID}"
             history_path = directory / "judgments.jsonl"
-            case, history = migrate_case(
-                json.loads((directory / "case.json").read_text()),
-                [json.loads(line) for line in history_path.read_text().splitlines()],
-            )
+            case = json.loads((directory / "case.json").read_text())
+            history = [json.loads(line) for line in history_path.read_text().splitlines()]
             case["candidates"].append({
                 "candidate_id": "variant", "revision": 1, "translation_file": "variant.en.txt",
                 "status": "ready", "derived_from": "baseline", "provenance": {},

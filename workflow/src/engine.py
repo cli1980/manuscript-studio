@@ -77,9 +77,9 @@ def item_signature(sheet, item, binding_hash):
 
 
 def finalization_notice(workflow):
-    return (f"Accepting finalizes this run. The {workflow} workflow becomes read-only on this work: "
-            "no chapter or stage can be restarted afterwards, no new run of this workflow can start on "
-            "this work, and any change requires adding the manuscript again as a new work.")
+    return (f"Accepting finalizes this run: its output is published as the next {workflow} version on this "
+            "work and that version can never change. No chapter or stage of this run can be restarted afterwards; "
+            "a later run on the work publishes a new version.")
 
 
 def configure(template, model=None, agent_models=None):
@@ -294,7 +294,7 @@ class Engine:
     def stage_def(state, stage_id=None):
         stage_id = stage_id or state["stage"]
         stage = next((stage for stage in state["definition"]["stages"]
-                      if isinstance(stage, dict) and stage["id"] == stage_id), None)
+                      if stage["id"] == stage_id), None)
         if stage is None:
             raise ValueError(f"Unknown stage for this run: {stage_id}")
         return stage
@@ -399,6 +399,15 @@ class Engine:
 
     def on_completed(self, state, stage, result):
         self._advance_stage(state)
+
+    def gate_commands(self, state, gate):
+        """Exact replies a client can offer as buttons for a gate without an approval sheet."""
+        if gate.get("sheet"):
+            return []
+        if gate["kind"] == "metadata_review":
+            return []
+        rules = state["definition"]["gates"].get(gate["kind"], {})
+        return [command for command in (rules.get("command"), rules.get("empty_command")) if command]
 
     def parse_free_reply(self, state, gate, text):
         """Without a sheet, only the gate's exact declared command closes it; anything else is feedback."""
@@ -574,7 +583,7 @@ class Engine:
         elif rules.get("sheet") == "required":
             raise ValueError(f"The {kind} gate requires an approval sheet, even for one item.")
         self.on_gate(state, gate, result)
-        if rules.get("closure") == "required":
+        if rules.get("closure") in ("required", "implied"):
             state["approvals"].pop(kind, None)  # A new review invalidates an earlier closure.
         state.update(status="WAITING_FOR_HUMAN", gate=gate)
 
@@ -629,12 +638,22 @@ class Engine:
                 sheet = json.loads(self.store.content(gate["sheet"]))
                 self._verify_dispositions(state, gate, sheet)
                 parsed = self.approval.parse_response(sheet, text)
+                if parsed["type"] == "dispositions":
+                    # One complete submission per sheet revision: every open item must be decided together.
+                    decided = {d["item_id"] for d in parsed["dispositions"]}
+                    missing = [i["id"] for i in sheet["items"] if i["status"] != "resolved" and i["id"] not in decided]
+                    if missing:
+                        raise ValueError(f"Decide all open items before submitting; missing: {', '.join(missing)}.")
+                    # Where a later step shows the full result, a complete resolving submission is the closure.
+                    rules = state["definition"]["gates"].get(gate["kind"], {})
+                    if rules.get("closure") == "implied" and all(d["effect"] == "resolve" for d in parsed["dispositions"]):
+                        parsed = {**parsed, "implied_closure": True}
             else:
                 parsed = self.parse_free_reply(state, gate, text)
             receipt = {"id": str(uuid.uuid4()), "created_at": now(), "gate": gate, "text": text,
                        "parsed": parsed, "decision_source": decision_source}
             state["receipts"].append(receipt)
-            if parsed["type"] == "final-closure":
+            if parsed["type"] == "final-closure" or parsed.get("implied_closure"):
                 self._record_closure(state, gate)
             state.update(next_input=receipt, status="READY", gate=None)
             self.store.save(revision, state, "review.received", {"receipt_id": receipt["id"], "gate_id": gate_id})
@@ -712,7 +731,7 @@ class Engine:
             self.store.save(revision, state, "execution.retried")
             return state
 
-    def cancel(self, *, superseded_by=None):
+    def cancel(self, *, superseded_by=None, confirm_stopped=False):
         with self.store.locked():
             revision, state = self.store.load()
             if state["status"] in TERMINAL:
@@ -721,7 +740,7 @@ class Engine:
                 self._guard(state, "stop")
             if self.finalized(state):
                 raise WorkflowError("run_finalized", "A finalized run can only complete its export.")
-            if state["status"] == "RUNNING":
+            if state["status"] == "RUNNING" and not confirm_stopped:
                 raise ValueError("Interrupt the active step first, or retry after confirming it stopped.")
             state["status"] = "CANCELLED"
             if superseded_by:
@@ -808,6 +827,7 @@ class Engine:
         if state.get("gate"):
             result["gate_id"] = state["gate"]["id"]
             result["gate_kind"] = state["gate"]["kind"]
+            result["gate_chapter_id"] = state["gate"].get("chapter_id")
             if state["gate"]["kind"] == "metadata_review":
                 result["metadata_record_revision"] = state["gate"]["record_revision"]
         if state.get("acceptance_id") and state["status"] == "WAITING_FOR_ACCEPTANCE":
@@ -819,7 +839,7 @@ class Engine:
         terminal = status in TERMINAL
         outdated = not terminal and self.engine_outdated(state)
         iterating = any(stage.get("iteration", {}).get("restartable")
-                        for stage in state["definition"].get("stages", []) if isinstance(stage, dict))
+                        for stage in state["definition"]["stages"])
         locked_reason = ("run_cancelled: This run was stopped." if status == "CANCELLED" else
                          "run_finalized: This run is finalized; changes require adding the manuscript "
                          "again as a new work." if finalized else

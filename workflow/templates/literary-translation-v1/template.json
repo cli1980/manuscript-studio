@@ -18,15 +18,12 @@
     }
   },
   "library": {
-    "checkout": [
-      {"artifact": "translation/{target}/glossary.md", "path": "translation/glossary.md"},
-      {"artifact": "translation/{target}/voice.md", "path": "translation/voice.md"}
-    ],
-    "areas": ["translation/{target}/", "accepted/literary-translation.json"]
+    "checkout": [],
+    "areas": ["literary-translation/"]
   },
   "gates": {
-    "passage_map": {"sheet": "required", "binding": "required", "closure": "required"},
-    "translation_issue": {"sheet": "optional", "binding": "required"},
+    "map_exceptions": {"sheet": "required", "binding": "required", "closure": "implied"},
+    "translation_issue": {"sheet": "required", "binding": "required", "closure": "implied"},
     "chapter_sanity": {"sheet": "optional", "binding": "required", "closure": "required", "item_binding": true},
     "continuation": {},
     "question": {}
@@ -36,7 +33,7 @@
      "owns": ["prepared/"]},
     {"id": "metadata", "kind": "metadata_review"},
     {"id": "translate", "kind": "agent", "agent": "translate", "iterate": "chapters",
-     "gates": ["passage_map", "translation_issue", "chapter_sanity", "continuation", "question"],
+     "gates": ["map_exceptions", "translation_issue", "chapter_sanity", "continuation", "question"],
      "owns": ["translation/"],
      "iteration": {
        "owns": ["translation/.literary-translation-work/{work_id}/{chapter_id}/"],

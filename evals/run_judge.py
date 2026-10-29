@@ -162,10 +162,10 @@ def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=Non
         candidate = select_candidate(case, candidate_id) if translation_file is None else None
     except ValueError as exc:
         raise EvaluationError(str(exc)) from exc
-    source_meta_path = reference(case_root, case.get("source_metadata_file"), root / "fixtures/manuscripts")
+    source_meta_path = reference(case_root, case.get("source_metadata_file"), root.parent / "fixtures/manuscripts")
     if source_meta_path.name != "passage.json":
         raise EvaluationError("Expected shared passage metadata.")
-    source = object_json(read("source_metadata", source_meta_path, root / "fixtures/manuscripts"))
+    source = object_json(read("source_metadata", source_meta_path, root.parent / "fixtures/manuscripts"))
     if any(case.get(key) != source.get(key) for key in ("passage_id", "group_id", "source_language")):
         raise EvaluationError("Case and source identifiers do not match.")
     identifier(case.get("passage_id"))
@@ -186,7 +186,7 @@ def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=Non
     )
     if not eligible and not smoke_test and purpose != "judge":
         raise UnavailableCase("Case/candidate is not benchmark-ready. Use --smoke-test for an explicitly exploratory run.")
-    source_path = reference(case_root, case.get("source_file"), root / "fixtures/manuscripts")
+    source_path = reference(case_root, case.get("source_file"), root.parent / "fixtures/manuscripts")
     if source_path != reference(source_meta_path.parent, source.get("source_file"), source_meta_path.parent):
         raise EvaluationError("Case and passage reference different source texts.")
     if translation_file is None:
@@ -204,7 +204,7 @@ def prepare_case(root, case_id, *, model=None, smoke_test=False, temperature=Non
             raise EvaluationError("Provide translated text, not skill instructions or rubric files.")
     if source_path.suffix != ".txt" or translation_path.suffix.lower() not in {".txt", ".md"}:
         raise EvaluationError("Source and translation must be text files.")
-    source_text = read("source", source_path, root / "fixtures/manuscripts").decode("utf-8")
+    source_text = read("source", source_path, root.parent / "fixtures/manuscripts").decode("utf-8")
     translation_text = read("translation", translation_path, translation_area).decode("utf-8")
     if not source_text.strip() or not translation_text.strip():
         raise UnavailableCase("Both source and translation must be populated.")
@@ -504,7 +504,7 @@ def run(args):
         case = item["case"]
         candidate = item["candidate"]
         cid = candidate["candidate_id"] if candidate else "generated"
-        artifact_dir = case["case_id"] if case.get("schema_version", 1) == 1 else f"{case['case_id']}/{cid}"
+        artifact_dir = f"{case['case_id']}/{cid}"
         case_dir = destination / artifact_dir
         case_dir.mkdir(parents=True)
         write_json(case_dir / "request.json", item["request"])

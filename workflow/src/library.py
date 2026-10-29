@@ -118,8 +118,8 @@ class WorkLibrary:
         for record in self.finalized():
             for area in record["areas"]:
                 if artifact == area or (area.endswith("/") and artifact.startswith(area)):
-                    raise WorkflowError("workflow_read_only",
-                                        f"{record['workflow']} is finalized on this work; {artifact} is read-only.")
+                    raise WorkflowError("version_immutable",
+                                        f"{artifact} belongs to an accepted version and cannot change.")
 
     def _detect(self, artifacts=None):
         found = []
@@ -163,8 +163,6 @@ class WorkLibrary:
                 if (head["id"] if head else None) != entry["expected_head"]:
                     raise WorkflowError("library_conflict",
                                         f"{entry['artifact']} changed in the work library since this run read it.")
-            if finalize is not None and self.finalized(workflow):
-                raise WorkflowError("workflow_read_only", f"{workflow} is already finalized on this work.")
             records = []
             for entry in entries:
                 head = self.head(entry["artifact"])

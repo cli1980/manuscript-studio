@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "case_id": "beijing-night-translation-gui-001",
+  "title": "Live literary translation of 北京一夜 (DOCX); every reviewer choice is clicked in the studio pages",
+  "runtime": {
+    "kind": "codex",
+    "turn_timeout": 900,
+    "client": "browser"
+  },
+  "steps": [
+    {
+      "action": "upload_work",
+      "fixture": "manuscripts/short-story-beijing-night/beijing-night.zh.docx",
+      "name": "北京一夜.docx",
+      "manuscript_language": "zh",
+      "save_as": "work",
+      "expect": [
+        {
+          "path": "metadata.metadata.title",
+          "value": null
+        },
+        {
+          "path": "source_name",
+          "value": "北京一夜.docx"
+        },
+        {
+          "path": "runs",
+          "op": "empty"
+        }
+      ]
+    },
+    {
+      "action": "post",
+      "path": "/api/works/$work.id/metadata",
+      "payload": {
+        "field": "/title",
+        "value": "北京一夜",
+        "rationale": "Author input before starting a workflow"
+      },
+      "expect": [
+        {
+          "path": "metadata.metadata.title",
+          "value": "北京一夜"
+        }
+      ]
+    },
+    {
+      "action": "start_run",
+      "template_id": "literary-translation-v1",
+      "work_id": "$work.id",
+      "save_as": "run",
+      "expect": [
+        {
+          "path": "stage",
+          "value": "prepare"
+        }
+      ]
+    },
+    {
+      "action": "drive_run",
+      "run_id": "$run.id",
+      "until": "COMPLETED",
+      "accept": true,
+      "timeout": 21600,
+      "save_as": "done",
+      "expect": [
+        {
+          "path": "finalized",
+          "value": true
+        },
+        {
+          "path": "progress.completed",
+          "value": "$done.progress.total"
+        }
+      ]
+    },
+    {
+      "action": "get",
+      "path": "/api/runs/$run.id/chapters",
+      "save_as": "chapters",
+      "expect": [
+        {
+          "path": "prepared",
+          "value": true
+        },
+        {
+          "path": "chapters.outputs.translate.ready",
+          "op": "every_startswith",
+          "value": "True"
+        }
+      ]
+    },
+    {
+      "action": "get",
+      "path": "/api/runs/$run.id/chapters/$chapters.chapters.0.chapter_id",
+      "expect": [
+        {
+          "path": "outputs.*len",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "action": "get",
+      "path": "/api/works/$work.id",
+      "expect": [
+        {
+          "path": "workflows.literary-translation.status",
+          "value": "read_only"
+        },
+        {
+          "path": "metadata.metadata.title",
+          "value": "北京一夜"
+        }
+      ]
+    },
+    {
+      "action": "page",
+      "path": "/"
+    }
+  ]
+}

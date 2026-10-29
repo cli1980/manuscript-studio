@@ -21,10 +21,16 @@ import validate_preparation as contract
 
 SKILL = Path(__file__).resolve().parents[1]
 FIELDS = contract.load_json(SKILL / "schemas/manuscript-metadata.schema.json")["$defs"]["field"]["enum"]
-INFERABLE = {
-    "/manuscript_language", "/work_type", "/form", "/genres", "/audience",
-    "/keywords", "/description", "/series/relationship",
+# Field groups (see references/manuscript-metadata.md): the user provides AUTHOR fields after intake
+# (initialized empty, never proposed by an agent); agents propose SUGGESTED fields with evidence for the
+# user to confirm; COMPUTED fields are fixed at intake or measured from the prepared revision.
+AUTHOR = {
+    "/title", "/subtitle", "/contributors", "/audience", "/edition/label", "/edition/status",
+    "/series/name", "/series/position", "/series/relationship",
 }
+COMPUTED = {"/manuscript_language", "/extent"}
+SUGGESTED = set(FIELDS) - AUTHOR - COMPUTED
+INFERABLE = {"/manuscript_language", "/work_type", "/form", "/genres", "/keywords", "/description"}
 
 
 def now():
@@ -67,31 +73,29 @@ def record(work, field, origin, *, actor, rationale, basis=None, evidence=None,
     }
 
 
-def migrate(work):
-    """Return a v2 copy. Preserve original-language uncertainty and all workflow state."""
-    result = copy.deepcopy(work)
-    if result["schema_version"] == 2:
-        return result
-    old = result["metadata"]
-    result["metadata"] = copy.deepcopy(contract.load_json(
-        SKILL / "references/work.example.json",
-    )["metadata"])
-    result["metadata"].update({
-        "title": old["title"], "manuscript_language": old["source_language"],
-        "work_type": old["work_type"], "genres": [old["genre"]] if old["genre"] else [],
-        "contributors": [
-            {"id": f"author-{index}", "name": name, "roles": ["author"]}
-            for index, name in enumerate(old["authors"], 1)
-        ],
-    })
-    result["metadata"]["edition"]["label"] = old["edition"]
-    result["schema_version"] = 2
-    result["metadata_provenance"] = {}
-    for field in FIELDS:
-        if not missing(field_value(result["metadata"], field)):
-            record(result, field, "legacy", actor="prepare-metadata",
-                   rationale="Preserved from schema version 1; confirmation history is unknown.")
-    return result
+def blank(work_id, manuscript_language, *, location, actor):
+    """A newly added work: every user-provided and suggested field empty; only the manuscript language set."""
+    work = {
+        "schema_version": 2, "work_id": work_id, "record_revision": 1, "updated_at": now(),
+        "metadata": {
+            "title": None, "subtitle": None, "contributors": [], "original_language": None,
+            "manuscript_language": manuscript_language, "work_type": None, "form": None, "genres": [],
+            "audience": None, "keywords": [], "description": None,
+            "edition": {"label": None, "status": None},
+            "series": {"name": None, "position": None, "relationship": None}, "extent": None,
+        },
+        "metadata_provenance": {},
+        "discovery": {"location_kind": "file", "location": location, "recursive": False,
+                      "selection_status": "confirmed", "notes": []},
+        "preparation": {"status": "not_started", "current_revision": None, "blockers": []},
+        "workflows": {name: {"status": "not_started", "basis_revision": None, "scope": None, "operation": None,
+                             "state_locator": None, "updated_at": None}
+                      for name in ("literary-editing", "literary-translation", "literary-agent-querying",
+                                   "format-manuscript")},
+    }
+    record(work, "/manuscript_language", "user_edit", actor=actor, review="confirmed",
+           rationale="Set when the manuscript was added.")
+    return work
 
 
 def reconcile_edits(work):
@@ -170,6 +174,7 @@ def enrich(work, manifest, texts, proposals, actor):
         }, "Proposal fields must match the metadata contract.")
         field = proposal["field"]
         contract.require(field in FIELDS and field != "/extent", "Invalid proposal field.")
+        contract.require(field not in AUTHOR, f"{field} is provided by the user, not proposed by an agent.")
         contract.require(field not in seen, f"Duplicate proposal for {field}.")
         seen.add(field)
         contract.require(proposal["origin"] in ("extracted", "inferred"), "Invalid proposal origin.")
@@ -261,7 +266,7 @@ def update(work_path, operation, *, proposals=None, field=None, value=None, acto
     contract.validate(work_path)
     original = contract.load_json(work_path)
     contract.require(work_path.read_bytes() == before, "Work record changed concurrently; reread and retry.")
-    work = migrate(original)
+    work = copy.deepcopy(original)
     changed = reconcile_edits(work)
     applied, skipped = [], []
     if operation == "set":
@@ -274,7 +279,7 @@ def update(work_path, operation, *, proposals=None, field=None, value=None, acto
         contract.require(isinstance(proposals, list), "Proposals must be a JSON array.")
         applied, skipped = enrich(work, manifest, texts, proposals, actor)
     else:
-        contract.require(operation == "migrate", "Unknown metadata operation.")
+        raise ValueError("Unknown metadata operation.")
     written = save(work_path, before, work)
     return {
         "written": written, "schema_version": work["schema_version"],
@@ -290,7 +295,7 @@ def update(work_path, operation, *, proposals=None, field=None, value=None, acto
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["migrate", "enrich", "set"])
+    parser.add_argument("operation", choices=["enrich", "set"])
     parser.add_argument("work_json", type=Path)
     parser.add_argument("--proposals", type=Path, help="Evidence-bound JSON array written by the preparation agent")
     parser.add_argument("--field", choices=FIELDS)

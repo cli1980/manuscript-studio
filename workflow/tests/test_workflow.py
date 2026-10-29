@@ -1,6 +1,7 @@
 """Run: python -m unittest workflow.tests.test_workflow -v."""
 
 import json
+import re
 import contextlib
 import io
 import importlib.util
@@ -23,7 +24,7 @@ from . import monitor_performance
 
 TRANSLATION = "literary-translation-v1"
 FORMATTING = "manuscript-formatting-v1"
-RESULT_SCHEMA = result_schema(["passage_map", "translation_issue", "chapter_sanity", "continuation", "question"])
+RESULT_SCHEMA = result_schema(["map_exceptions", "translation_issue", "chapter_sanity", "continuation", "question"])
 
 
 def result(outcome="completed", **fields):
@@ -87,14 +88,16 @@ class WorkflowTests(unittest.TestCase):
         source = self.engine.root / "input" / self.source.name
         content = source.read_bytes()
         parts = getattr(self, "parts", [content.decode()])
+        # Every prepared revision starts with exactly one front-matter unit (here the title heading).
+        units = [("front-matter", "front_matter", "# 故事\n")] + [
+            ("story" if len(parts) == 1 else f"chapter-{index}", "standalone" if len(parts) == 1 else "chapter", part)
+            for index, part in enumerate(parts, 1)]
         chapters = [{
-            "chapter_id": "story" if len(parts) == 1 else f"chapter-{index}", "order": index, "source_number": None,
-            "title": "故事", "role": "standalone", "file": "chapters/0001.md",
-            "sha256": digest(part.encode()), "source_spans": [{"source_id": "original", "locator": f"Source unit {index}"}],
-            "status": "verified",
-        } for index, part in enumerate(parts, 1)]
-        for index, chapter in enumerate(chapters, 1):
-            chapter["file"] = f"chapters/{index:04d}.md"
+            "chapter_id": chapter_id, "order": order, "source_number": None, "title": "故事", "role": role,
+            "file": f"chapters/{order:04d}.md", "sha256": digest(text.encode()),
+            "source_spans": [{"source_id": "original", "locator": f"Source unit {order}"}], "status": "verified",
+        } for order, (chapter_id, role, text) in enumerate(units, 1)]
+        parts = [text for _, _, text in units]
         manifest = {
             "schema_version": 1, "work_id": self.work_id, "revision": "r0001", "status": "verified",
             "created_at": now(), "sources": [{
@@ -108,9 +111,9 @@ class WorkflowTests(unittest.TestCase):
                              "coverage_complete": True, "issues": []},
         }
         work = {
-            "schema_version": 1, "work_id": self.work_id, "record_revision": 1, "updated_at": now(),
-            "metadata": {"title": "Story", "authors": [], "source_language": getattr(self, "language", "zh"),
-                         "work_type": "fiction", "genre": None, "edition": None},
+            "schema_version": 2, "work_id": self.work_id, "record_revision": 1, "updated_at": now(),
+            "metadata": {"title": "Story", "subtitle": None, "contributors": [], "original_language": None, "manuscript_language": getattr(self, "language", "zh"), "work_type": "fiction", "form": None, "genres": [], "audience": None, "keywords": [], "description": None, "edition": {"label": None, "status": None}, "series": {"name": None, "position": None, "relationship": None}, "extent": None},
+            "metadata_provenance": {},
             "discovery": {"location_kind": "file", "location": str(source), "recursive": False,
                           "selection_status": "confirmed", "notes": []},
             "preparation": {"status": "ready", "current_revision": "r0001", "blockers": []},
@@ -125,21 +128,22 @@ class WorkflowTests(unittest.TestCase):
         return result(work_record=self.write(f"prepared/{self.work_id}/work.json", work))
 
     def prepare(self):
+        """Prepare, confirm metadata on the front matter, and translate the front matter."""
         self.engine.advance(ScriptedRuntime(self.preparation))
         self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+        if self.engine.state()["workflow"] == "literary-translation":
+            self.translate_chapter()
 
     def gate_receipts(self):
-        return [r for r in self.engine.state()["receipts"] if r["gate"]["kind"] != "metadata_review"]
+        # Receipts for the story chapter (metadata review and the front matter are covered by prepare()).
+        return [r for r in self.engine.state()["receipts"]
+                if r["gate"]["kind"] != "metadata_review" and r["gate"].get("chapter_id") != "front-matter"]
 
     def prepare_v2(self, request):
         response = self.preparation(request)
         path = self.workspace / response["work_record"]
         work = json.loads(path.read_text(encoding="utf-8"))
-        template = self.engine.root / "skills/prepare-manuscript/references/work.example.json"
-        work["schema_version"] = 2
-        work["metadata"] = json.loads(template.read_text(encoding="utf-8"))["metadata"]
-        work["metadata"].update(title="Story", manuscript_language="zh", genres=["Historical fiction"])
-        work["metadata_provenance"] = {}
+        work["metadata"]["genres"] = ["Historical fiction"]
         self.write(response["work_record"], work)
         return response
 
@@ -148,6 +152,7 @@ class WorkflowTests(unittest.TestCase):
         state = self.engine.state()
         gate = state["gate"]
         self.assertEqual((state["stage"], state["status"], gate["kind"]), ("metadata", "WAITING_FOR_HUMAN", "metadata_review"))
+        self.assertEqual(gate["chapter_id"], "front-matter")  # Metadata review belongs to the front-matter unit.
         self.assertEqual(gate["record_revision"], 1)
         self.assertIn('/title: "Story"', gate["message"])
         self.assertIsNone(state["metadata_approval"])
@@ -310,11 +315,23 @@ class WorkflowTests(unittest.TestCase):
                            "closure_command": "confirm final closure", "closure_label": "Confirm"},
         }
 
+    def write_map(self, exceptions=True):
+        """The agent's internal passage map: one passage covering the chapter, optionally with one exception."""
+        state = self.engine.state()
+        chapter_id = self.engine.current_iteration(state)["chapter_id"]
+        chapter = next(c for c in state["chapters"] if c["chapter_id"] == chapter_id)
+        text = self.engine.store.content(state["prepared"]["files"][chapter["path"]]).decode("utf-8")
+        count = len([block for block in re.split(r"\n\s*\n", text.strip()) if block.strip()])
+        data = {"chapter_id": chapter_id, "passages": [{"id": "P1", "first_paragraph": 1, "last_paragraph": count}],
+                "exceptions": [{"id": "PM001", "kind": "special", "first_paragraph": 1, "last_paragraph": 1,
+                                "reason": "Keep the heading in its original form."}] if exceptions else []}
+        return self.write(f"translation/maps/{chapter_id}.json", data)
+
     def map_gate(self, revision="1", resolved=False):
         return result(
-            "needs_human_input", message="Review the complete story passage boundary.",
-            gate="passage_map", state_path=self.write("translation/state.md", "Passage map pending.\n"),
-            binding_path=self.write("translation/map-proposal.md", "PM001: entire source story.\n"),
+            "needs_human_input", message="Review the passage-map exception.",
+            gate="map_exceptions", state_path=self.write("translation/state.md", "Passage map pending.\n"),
+            binding_path=self.write_map(),
             review_path=self.write("translation/map-review.json", self.sheet(revision, resolved)),
         )
 
@@ -336,7 +353,7 @@ class WorkflowTests(unittest.TestCase):
         chapter_id = self.engine.current_iteration(self.engine.state())["chapter_id"]
         self.write("translation/glossary.md", f"# Glossary\nThrough {chapter_id}.\n")
         self.write("translation/voice.md", "# Voice\n")
-        english = getattr(self, "english", {}).get(chapter_id, "He came back.\n")
+        english = getattr(self, "english", {}).get(chapter_id, "Story\n" if chapter_id == "front-matter" else "He came back.\n")
         return result(state_path=self.write("translation/state.md", "Chapter finalized.\n"),
                       output_path=self.write(f"translation/translated_english/{chapter_id}.md", english))
 
@@ -347,6 +364,7 @@ class WorkflowTests(unittest.TestCase):
         return self.engine.advance(ScriptedRuntime(self.translation))
 
     def complete_translation(self):
+        """Prepare (including the front matter), then translate the story chapter."""
         self.prepare()
         self.translate_chapter()
 
@@ -379,7 +397,7 @@ class WorkflowTests(unittest.TestCase):
             self.engine.accept("incorrect-acceptance", confirm_final=True)
         acceptance = next(a for a in self.service.get_run(self.run_id)["available_actions"] if a["action"] == "accept")
         self.assertTrue(acceptance["enabled"] and acceptance["irreversible"])
-        self.assertIn("read-only", acceptance["confirmation"])
+        self.assertIn("can never change", acceptance["confirmation"])
         with self.assertRaises(WorkflowError) as refused:
             self.engine.accept(self.engine.state()["acceptance_id"])
         self.assertEqual(refused.exception.code, "confirmation_required")
@@ -387,16 +405,76 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(self.engine.state()["acceptance"]["finalization"]["confirmed"])
         state = self.engine.advance(None)
         self.assertEqual(state["status"], "COMPLETED")
-        self.assertEqual((Path(state["export_path"]) / "0001.md").read_text(), "He came back.\n")
+        self.assertEqual((Path(state["export_path"]) / "0002.md").read_text(), "He came back.\n")
         self.assertEqual(self.source.read_bytes(), original)
         self.assertTrue(any(event["kind"] == "review.received" for event in self.engine.store.events()))
 
+    def test_passage_map_is_internal_unless_it_has_exceptions(self):
+        self.prepare()
+        story = lambda passages, exceptions=(): self.write("translation/maps/story.json", {  # noqa: E731
+            "chapter_id": "story", "passages": passages, "exceptions": list(exceptions)})
+        cases = [
+            (lambda: None, "Save the chapter's passage map"),
+            (lambda: story([{"id": "P1", "first_paragraph": 2, "last_paragraph": 2}]), "once, in order"),
+            (lambda: story([{"id": "P1", "first_paragraph": 1, "last_paragraph": 1},
+                            {"id": "P2", "first_paragraph": 1, "last_paragraph": 2}]), "once, in order"),
+            (lambda: story([{"id": "P1", "first_paragraph": 1, "last_paragraph": 1}]), "but the chapter has"),
+            (lambda: story([{"id": "P1", "first_paragraph": 1, "last_paragraph": 2}],
+                           [{"id": "X1", "kind": "exclude", "first_paragraph": 1, "last_paragraph": 1,
+                             "reason": "Epigraph"}]), "raise a map_exceptions sheet"),
+        ]
+        for write_map, message in cases:
+            with self.subTest(message=message):
+                def action(request, write_map=write_map):
+                    write_map()
+                    return self.sanity_gate(request)
+                with self.assertRaisesRegex(ValueError, message):
+                    self.engine.advance(ScriptedRuntime(action))
+                self.engine.retry()
+
+        def covered(request):
+            story([{"id": "P1", "first_paragraph": 1, "last_paragraph": 2}])
+            return self.sanity_gate(request)
+        self.engine.advance(ScriptedRuntime(covered))  # No exceptions: no map gate at all.
+        self.assertEqual(self.engine.state()["gate"]["kind"], "chapter_sanity")
+
+    def test_complete_resolving_submission_closes_advice_but_not_chapter_edits(self):
+        self.prepare()
+        self.engine.advance(ScriptedRuntime(lambda request: self.map_gate()))
+        self.engine.reply(self.engine.state()["gate"]["id"], "PM001 approve")
+        state = self.engine.state()
+        self.assertIn("map_exceptions", state["approvals"])  # Implied closure: no separate confirmation.
+        self.assertTrue(state["receipts"][-1]["parsed"]["implied_closure"])
+        rules = state["definition"]["gates"]
+        self.assertEqual((rules["translation_issue"]["closure"], rules["chapter_sanity"]["closure"]),
+                         ("implied", "required"))
+
+    def test_empty_diff_approval_needs_an_explicit_recorded_statement(self):
+        self.prepare()
+
+        def sanity(message, saved):
+            def action(request):
+                self.write("translation/maps/story.json", {
+                    "chapter_id": "story", "passages": [{"id": "P1", "first_paragraph": 1, "last_paragraph": 2}],
+                    "exceptions": []})
+                return result("needs_human_input", gate="chapter_sanity", message=message,
+                              state_path=self.write("translation/sanity.md", saved),
+                              binding_path=self.write("translation/assembled.md", "He came back.\n"))
+            return action
+
+        with self.assertRaisesRegex(ValueError, "explicit statement"):
+            self.engine.advance(ScriptedRuntime(sanity("He came back.", "Phase: chapter-sanity-await\n")))
+        self.engine.retry()
+        # The statement in the persisted gate message suffices when the saved state omits it.
+        self.engine.advance(ScriptedRuntime(sanity("**No textual changes proposed**.", "Phase: chapter-sanity-await\n")))
+        self.assertEqual(self.engine.state()["gate"]["kind"], "chapter_sanity")
+
     def test_cannot_complete_translation_without_domain_gates(self):
         self.prepare()
-        with self.assertRaisesRegex(ValueError, "map closure"):
+        with self.assertRaisesRegex(ValueError, "chapter approval"):
             self.engine.advance(ScriptedRuntime(self.translation))
         self.assertEqual(self.engine.state()["status"], "FAILED")
-        self.assertEqual(self.engine.state()["outputs"], [])
+        self.assertEqual([o["chapter_id"] for o in self.engine.state()["outputs"]], ["front-matter"])
         self.engine.retry()
         self.assertEqual(self.engine.state()["stage"], "translate")
         self.assertIsNone(self.engine.state()["thread_id"])
@@ -412,13 +490,13 @@ class WorkflowTests(unittest.TestCase):
         self.complete_translation()
         state = self.engine.state()
         self.assertEqual(state["status"], "READY")
-        self.assertEqual([i["status"] for i in state["iterations"]], ["completed", "pending"])
+        self.assertEqual([i["status"] for i in state["iterations"]], ["completed", "completed", "pending"])
         self.assertEqual(self.engine.current_iteration(state)["chapter_id"], "chapter-2")
         self.assertIsNone(state["thread_id"])
         self.assertEqual(state["approvals"], {})
-        self.assertEqual(len(state["outputs"]), 1)
+        self.assertEqual(len(state["outputs"]), 2)
         self.assertEqual(set(state["continuity"]), {"glossary", "voice"})
-        with self.assertRaisesRegex(ValueError, "map closure"):
+        with self.assertRaisesRegex(ValueError, "chapter approval"):
             self.engine.advance(ScriptedRuntime(self.translation))
 
     def test_malformed_result_is_persisted_as_failure(self):
@@ -440,13 +518,13 @@ class WorkflowTests(unittest.TestCase):
         self.prepare()
         with self.assertRaisesRegex(ValueError, "no matching human"):
             self.engine.advance(ScriptedRuntime(lambda request: self.map_gate("1", True)))
-        self.assertNotIn("passage_map", self.engine.state()["approvals"])
+        self.assertNotIn("map_exceptions", self.engine.state()["approvals"])
 
     def test_changed_review_and_changed_source_block_responses(self):
         self.prepare()
         self.engine.advance(ScriptedRuntime(lambda request: self.map_gate()))
         gate_id = self.engine.state()["gate"]["id"]
-        self.write("translation/map-proposal.md", "Changed boundary\n")
+        self.write("translation/maps/story.json", {"chapter_id": "story", "passages": [], "exceptions": []})
         with self.assertRaisesRegex(ValueError, "Review changed"):
             self.engine.reply(gate_id, "PM001 approve")
         self.write(f"prepared/{self.work_id}/revisions/r0001/chapters/0001.md", "Tampered original\n")
@@ -507,7 +585,7 @@ class WorkflowTests(unittest.TestCase):
             self.engine.advance(ScriptedRuntime(fail))
         self.engine.retry()
         self.assertEqual(self.engine.state()["next_input"]["id"], receipt)
-        self.assertEqual(len(self.engine.state()["receipts"]), 2)
+        self.assertEqual(len(self.gate_receipts()), 1)
 
     def test_export_conflict_is_not_overwritten(self):
         self.complete_translation()
@@ -588,8 +666,8 @@ class WorkflowTests(unittest.TestCase):
     def test_e2e_launcher_interactive_loop_and_honest_report(self):
         case = self.e2e_case()
         actions = iter([
-            self.preparation, lambda r: self.map_gate(),
-            lambda r: self.map_gate("2", True), self.sanity_gate, self.translation,
+            self.preparation,
+            *[lambda r: self.map_gate(), lambda r: self.map_gate("2", True), self.sanity_gate, self.translation] * 2,
         ])
         prompts = []
 
@@ -597,8 +675,8 @@ class WorkflowTests(unittest.TestCase):
             prompts.append(request.prompt)
             return next(actions)(request)
 
-        replies = iter(["confirm metadata", ".", "PM001 approve", ".", "confirm final closure", ".",
-                        "approve chapter", ".", "accept", "skip", "skip", "skip", "skip"])
+        chapter = ["PM001 approve", ".", "confirm final closure", ".", "approve chapter", "."]
+        replies = iter(["confirm metadata", ".", *chapter * 2, "accept", "skip", "skip", "skip", "skip"])
         runtime = run_e2e.CaseRuntime(ScriptedRuntime(action), case["task"])
         with contextlib.redirect_stdout(io.StringIO()):
             code = run_e2e.drive(self.engine, case, runtime, input_fn=lambda _: next(replies))
@@ -612,8 +690,8 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(checks[name]["status"], "passed")
         self.assertEqual(checks["domain-gates"]["status"], "not-checked")
         self.assertEqual(report["literary_quality"]["status"], "not-checked")
-        self.assertEqual((self.engine.root / "candidate.en.txt").read_text(), "He came back.\n")
-        self.assertEqual(len(self.engine.state()["receipts"]), 4)
+        self.assertEqual((self.engine.root / "candidate.en.txt").read_text(), "Story\n\nHe came back.\n")
+        self.assertEqual(len(self.engine.state()["receipts"]), 7)  # Metadata, then three per unit.
         self.assertEqual(report["automated_checks"]["stage-order"]["evidence"],
                          ["prepare", "metadata", "translate", "accept", "export"])
         # A completed run can finish its human evidence review without another model call.
@@ -668,10 +746,10 @@ class WorkflowTests(unittest.TestCase):
         case = self.e2e_case()
         actions = iter([
             (self.preparation, "accept", "confirm metadata"),
-            (lambda r: self.map_gate(), "accept", "PM001 approve"),
-            (lambda r: self.map_gate("2", True), "accept", "confirm final closure"),
-            (self.sanity_gate, "accept", "approve chapter"),
-            (self.translation, "accept", "accept"),
+            *[(lambda r: self.map_gate(), "accept", "PM001 approve"),
+              (lambda r: self.map_gate("2", True), "accept", "confirm final closure"),
+              (self.sanity_gate, "accept", "approve chapter"),
+              (self.translation, "accept", "accept")] * 2,
         ])
 
         def action(request):
@@ -692,7 +770,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["acceptance"]["decision_source"], "delegated-automation")
         report = json.loads((self.engine.root / "e2e-report.json").read_text(encoding="utf-8"))
         self.assertEqual(report["e2e_status"], "needs-review")
-        self.assertEqual(report["delegated_decisions"], 4)
+        self.assertEqual(report["delegated_decisions"], 7)
         self.assertEqual(state["metadata_approval"]["decision_source"], "delegated-automation")
         self.assertEqual(report["literary_quality"]["status"], "not-checked")
 
@@ -794,6 +872,7 @@ class WorkflowTests(unittest.TestCase):
         folder = job.workspace / "manuscript-formatting/outputs/docx"
         folder.mkdir(parents=True, exist_ok=True)
         document = folder / "manuscript.docx"
+        paragraphs = ["Story", text]  # The translated front matter (title), then the chapter.
         with ZipFile(document, "w") as archive:
             archive.writestr("[Content_Types].xml",
                              '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
@@ -805,7 +884,8 @@ class WorkflowTests(unittest.TestCase):
                              '</Relationships>')
             archive.writestr("word/document.xml", (
                 '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-                f'<w:body><w:p><w:r><w:t>{escape(text)}</w:t></w:r></w:p></w:body></w:document>'
+                '<w:body>' + "".join(f'<w:p><w:r><w:t>{escape(p)}</w:t></w:r></w:p>' for p in paragraphs)
+                + '</w:body></w:document>'
             ))
             archive.writestr("word/styles.xml",
                              '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
@@ -823,7 +903,7 @@ class WorkflowTests(unittest.TestCase):
             "approved_spec_sha256": (job.state().get("format_approval") or {}).get("sha256", "0" * 64),
             "docx_sha256": digest(document.read_bytes()), "adapter_skill_sha256": job.state()["adapter_sha256"],
             "visual_review_passed": True, "specification_matches": True, "page_count": 1,
-            "content_paragraph_indexes": [0],
+            "content_paragraph_indexes": list(range(len(paragraphs))),
             "pages": [{"page": 1, "image": "manuscript-formatting/outputs/docx/render/page-1.png",
                        "sha256": digest(png), "reviewed": True, "findings": []}] if pages else [],
         }
@@ -842,6 +922,7 @@ class WorkflowTests(unittest.TestCase):
         state = job.state()
         self.assertEqual(state["status"], "COMPLETED")
         self.assertTrue(Path(state["document_path"]).is_file())
+        self.assertEqual(Path(state["document_path"]).name, "manuscript-v001.docx")  # Source version in the name.
         self.assertTrue((job.root / "export/manifest.json").is_file())
         self.assertEqual(self.engine.state()["status"], "COMPLETED")
         self.assertEqual(self.engine.state()["acceptance"], accepted)
@@ -856,7 +937,7 @@ class WorkflowTests(unittest.TestCase):
                                                    options={"documents_skill": adapter})
         self.assertNotEqual(separate, state["id"])
         # Formatting publishes nothing into the work, so further editions stay possible.
-        self.assertEqual(self.service.get_work(self.work_id)["workflows"]["literary-translation"]["status"], "read_only")
+        self.assertEqual(self.service.get_work(self.work_id)["workflows"]["literary-translation"]["status"], "completed")
         self.assertNotIn("format-manuscript", self.service.get_work(self.work_id)["workflows"])
 
     def test_formatter_does_not_publish_before_approval(self):
@@ -925,7 +1006,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNotNone(job.state()["approved_settings"])
 
         def render(markdown, settings, directory, renderer):
-            self.assertEqual(markdown, "He came back.\n")
+            self.assertEqual(markdown, "Story\n\nHe came back.\n")
             self.assertEqual(renderer, "word")
             directory.mkdir(parents=True)
             self.format_result(job)
@@ -1005,10 +1086,8 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["status"], "COMPLETED")
         self.assertEqual((echo.root / "export/0001.md").read_bytes(), self.source.read_bytes())
         work = echo.state()["work_id"]
-        self.assertEqual(self.service.get_work(work)["workflows"]["test-echo"]["status"], "read_only")
-        with self.assertRaises(WorkflowError) as refused:
-            self.service.create_run(template_id, work_id=work)
-        self.assertEqual(refused.exception.code, "workflow_read_only")
+        self.assertEqual(self.service.get_work(work)["workflows"]["test-echo"]["status"], "completed")
+        self.assertTrue(self.service.create_run(template_id, work_id=work))  # A completed run never blocks a new one.
 
     def chapter_two_with_provisional_glossary(self):
         def map_with_scratch(request):
@@ -1027,7 +1106,7 @@ class WorkflowTests(unittest.TestCase):
             self.engine.restart_chapter("chapter-1", reason="Too early")
         receipts = len(self.engine.state()["receipts"])
         state = self.engine.restart_chapter("chapter-2", reason="Inconsistent records after an exception")
-        item = state["iterations"][1]
+        item = state["iterations"][2]
         self.assertEqual((item["status"], item["attempt"], state["status"], state["gate"]), ("pending", 2, "READY", None))
         self.assertEqual(len(state["receipts"]), receipts)
         archive = self.engine.root / state["restarts"][-1]["archive"]
@@ -1045,31 +1124,36 @@ class WorkflowTests(unittest.TestCase):
         # A completed chapter can be restarted before final acceptance; it keeps its place in source order.
         state = self.engine.restart_chapter("chapter-1", reason="Apply later terminology")
         self.assertEqual((state["stage"], state["status"]), ("translate", "READY"))
-        self.assertEqual([o["chapter_id"] for o in state["outputs"]], ["chapter-2"])
-        self.assertEqual(state["iterations"][0]["restarts"][0]["output"]["chapter_id"], "chapter-1")
+        self.assertEqual([o["chapter_id"] for o in state["outputs"]], ["front-matter", "chapter-2"])
+        self.assertEqual(state["iterations"][1]["restarts"][0]["output"]["chapter_id"], "chapter-1")
         self.assertFalse((self.workspace / "translation/translated_english/chapter-1.md").exists())
         self.english["chapter-1"] = "He returned.\n"
         self.translate_chapter()
         state = self.engine.state()
-        self.assertEqual([o["chapter_id"] for o in state["outputs"]], ["chapter-1", "chapter-2"])
+        self.assertEqual([o["chapter_id"] for o in state["outputs"]], ["front-matter", "chapter-1", "chapter-2"])
         self.assertNotEqual(state["acceptance_id"], first_acceptance)
         self.engine.accept(state["acceptance_id"], confirm_final=True)
         state = self.engine.advance(None)
-        self.assertEqual((self.engine.root / "export/0001.md").read_text(encoding="utf-8"), "He returned.\n")
+        self.assertEqual((self.engine.root / "export/0002.md").read_text(encoding="utf-8"), "He returned.\n")
         for operation in (lambda: self.engine.restart_chapter("chapter-1", reason="x"),
                           lambda: self.engine.restart_stage("translate", reason="x"),
                           lambda: self.service.restart_workflow(self.run_id, reason="x")):
             with self.assertRaises(WorkflowError) as refused:
                 operation()
             self.assertEqual(refused.exception.code, "run_finalized")
-        with self.assertRaises(WorkflowError) as refused:
-            self.service.create_run(TRANSLATION, work_id=self.work_id)
-        self.assertEqual(refused.exception.code, "workflow_read_only")
         actions = {a["action"]: a for a in self.service.get_run(self.run_id)["available_actions"]}
         self.assertFalse(actions["restart_workflow"]["enabled"])
         self.assertIn("run_finalized", actions["restart_chapter"]["reason"])
         library = self.service.library(self.work_id)
-        self.assertEqual(library.read(library.head("translation/en-US/translated_english/0001.md")), b"He returned.\n")
+        self.assertEqual(library.read(library.head("literary-translation/v001/chapters/0002.md")), b"He returned.\n")
+        run_info = json.loads(library.read(library.head("literary-translation/v001/run.json")))
+        self.assertEqual((run_info["version"], run_info["run_id"], run_info["template_id"]),
+                         ("v001", self.run_id, TRANSLATION))
+        self.assertEqual(run_info["acceptance"]["decision_source"], "human")
+        self.assertIn("chapter_sanity", run_info["decisions"])
+        manifest = library.head("literary-translation/v001/manifest.json")
+        self.assertEqual(manifest["contract"], "accepted-markdown-chapters/1")
+        self.assertEqual(json.loads(library.read(manifest))["version"], "v001")
 
     def test_restart_stage_archives_owned_paths_and_keeps_receipts(self):
         self.prepare()
@@ -1083,12 +1167,13 @@ class WorkflowTests(unittest.TestCase):
                          ("translate", "READY", {}, None))
         self.assertEqual(state["receipts"], receipts)
         record = state["restarts"][-1]
-        self.assertEqual(record["superseded_receipt_ids"], [receipts[-1]["id"]])
+        self.assertEqual(record["superseded_receipt_ids"],
+                         [r["id"] for r in receipts if r["gate"]["kind"] != "metadata_review"])
         self.assertTrue((self.engine.root / record["archive"] / "translation/map-review.json").is_file())
-        self.assertFalse((self.workspace / "translation").exists())
+        self.assertFalse((self.workspace / "translation/map-review.json").exists())
         self.assertEqual(state["iterations"][0]["attempt"], 2)
         self.approve_map()  # Old receipts cannot satisfy the new attempt, but its own can.
-        self.assertIn("passage_map", self.engine.state()["approvals"])
+        self.assertIn("map_exceptions", self.engine.state()["approvals"])
         state = self.engine.restart_stage("metadata", reason="Review metadata again")
         self.assertEqual((state["stage"], state["status"], state["gate"]["kind"], state["metadata_approval"]),
                          ("metadata", "WAITING_FOR_HUMAN", "metadata_review", None))
@@ -1105,6 +1190,7 @@ class WorkflowTests(unittest.TestCase):
         gate = self.engine.state()["gate"]["id"]
         self.engine.edit_metadata("/genres", ["Literary fiction"], gate_id=gate, reason="Author correction")
         self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+        self.translate_chapter()  # front matter
         self.translate_chapter()
         with self.assertRaises(WorkflowError) as busy:
             self.service.create_run(TRANSLATION, work_id=self.work_id)
@@ -1121,10 +1207,31 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["carried_from"], {"run_id": old_id, "chapter_id": "chapter-1"})
         self.assertEqual(self.engine.file("translation/glossary.md").read_text(encoding="utf-8"),
                          "# Glossary\nThrough chapter-1.\n")
-        self.engine.advance(ScriptedRuntime(self.preparation))  # A fresh v1 record from the new preparation.
+        prior = self.engine.state()["prior_work_record"]
+        self.assertIn('"prior_work_record": ' + json.dumps(prior["path"]),
+                      self.engine.stage_prompt(self.engine.state(), self.engine.stage_def(self.engine.state())))
+        # A preparation that re-infers metadata instead of consolidating on the work's record is refused.
+        try:
+            self.engine.advance(ScriptedRuntime(self.preparation))
+            error = self.engine.state()["error"] or ""
+        except (ValueError, WorkflowError) as exc:
+            error = str(exc)
+        self.assertIn("changed metadata the work already had", error)
+        if self.engine.state()["status"] == "FAILED":
+            self.engine.retry()
+
+        def consolidating(request):
+            result = self.preparation(request)
+            path = Path(request.cwd) / result["work_record"]
+            work, record = json.loads(path.read_text(encoding="utf-8")), json.loads(Path(prior["path"]).read_text(encoding="utf-8"))
+            record.update(discovery=work["discovery"], preparation=work["preparation"], workflows=work["workflows"])
+            path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+            return result
+
+        self.engine.advance(ScriptedRuntime(consolidating))
         view = self.service.get_metadata(new_id)
-        self.assertEqual(view["metadata"]["genres"], ["Literary fiction"])  # From the work library.
-        self.assertEqual(self.engine.state()["metadata_versions"][-1]["actor"], "library")
+        self.assertEqual(view["metadata"]["genres"], ["Literary fiction"])  # Kept from the work's record.
+        self.assertEqual(view["provenance"]["/genres"]["review_status"], "confirmed")
         with self.assertRaises(WorkflowError) as refused:
             self.service.restart_workflow(old_id, reason="again")
         self.assertEqual(refused.exception.code, "run_cancelled")
@@ -1154,8 +1261,8 @@ class WorkflowTests(unittest.TestCase):
 
     def test_work_level_metadata_edits_are_published_and_versioned(self):
         self.engine.advance(ScriptedRuntime(self.prepare_v2))
-        with self.assertRaisesRegex(ValueError, "no confirmed metadata"):
-            self.service.get_work_metadata(self.work_id)
+        blank = self.service.get_work_metadata(self.work_id)  # Created empty with the work.
+        self.assertEqual((blank["metadata"]["title"], blank["metadata"]["manuscript_language"]), (None, "zh"))
         self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
         with self.assertRaises(WorkflowError) as busy:
             self.service.edit_work_metadata(self.work_id, "/genres", ["Satire"])
@@ -1166,7 +1273,7 @@ class WorkflowTests(unittest.TestCase):
         edited = self.service.edit_work_metadata(self.work_id, "/genres", ["Satire"], "Author note")
         self.assertEqual(self.service.get_work_metadata(self.work_id)["metadata"]["genres"], ["Satire"])
         history = self.service.work_metadata_history(self.work_id)
-        self.assertEqual([h["stage"] for h in history], ["metadata", "work_metadata_edit"])
+        self.assertEqual([h["stage"] for h in history], ["create", "metadata", "work_metadata_edit"])
         self.assertEqual(history[-1]["record_revision"], edited["record_revision"])
         first = self.service.work_metadata_version(self.work_id, history[0]["record_revision"])
         self.assertEqual(first["metadata"]["genres"], ["Historical fiction"])
@@ -1195,42 +1302,6 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(WorkflowError) as conflict:
             self.engine.edit_metadata("/genres", ["Satire"])
         self.assertEqual(conflict.exception.code, "metadata_conflict")
-
-    def test_import_registers_runs_and_publishes_completed_translations(self):
-        legacy_source = self.source
-        external = TranslationEngine.create(self.base / "external run", registry.get(TRANSLATION),
-                                            source=legacy_source, manuscript_language="zh", work_id="story")
-        self.engine.close()
-        self.engine, self.workspace, self.work_id = external, external.workspace, "story"
-        self.finalize_translation()
-        run_id = self.service.import_run(external.root)
-        work_id = self.service._run_row(run_id)["work_id"]
-        self.assertNotEqual(work_id, "story")
-        self.assertEqual(self.service.get_work(work_id)["workflows"]["literary-translation"]["status"], "read_only")
-        [publication] = self.service.accepted_publications(work_id)
-        (self.base / "documents").mkdir()
-        (self.base / "documents/SKILL.md").write_text("# Synthetic adapter\n", encoding="utf-8")
-        formatting = self.service.create_derived_run(work_id, FORMATTING,
-                                                     options={"documents_skill": self.base / "documents"})
-        self.assertEqual(self.open_run(formatting).state()["publication_id"], publication["id"])
-        with self.assertRaisesRegex(ValueError, "already registered"):
-            self.service.import_run(external.root)
-        # A pre-M1 unfinished run: no engine identity and the old language key.
-        old = TranslationEngine.create(self.base / "pre-m1 run", registry.get(TRANSLATION), source=legacy_source,
-                                       manuscript_language="zh", work_id="story")
-        with old.store.locked():
-            revision, state = old.store.load()
-            state.pop("engine")
-            state["source_language"] = state.pop("manuscript_language")
-            old.store.db.execute("UPDATE run SET state=? WHERE id=1", (json.dumps(state),))
-            old.store.db.commit()
-        self.assertEqual(old.state()["manuscript_language"], "zh")  # Load shim.
-        old.close()
-        imported = self.service.import_run(self.base / "pre-m1 run")
-        enabled = [a["action"] for a in self.service.get_run(imported)["available_actions"] if a["enabled"]]
-        self.assertEqual(enabled, ["restart_workflow"])
-        restarted = self.service.restart_workflow(imported, reason="Continue with the M1 engine")
-        self.assertTrue(self.service.get_run(restarted)["engine_current"])
 
     def test_cli_is_a_thin_client_of_the_service_and_index_can_be_rebuilt(self):
         from ..src import cli
@@ -1320,7 +1391,8 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual((state["stage"], state["status"]), ("line", "READY"))
         chapter_1 = state["manuscript"]["chapter-1"]
         self.assertEqual(self.engine.file(chapter_1).read_text(encoding="utf-8"), self.parts[0])  # Verbatim intake.
-        self.assertEqual([i["chapter_id"] for i in state["iterations"]], ["chapter-1", "chapter-2", "_whole"])
+        self.assertEqual([i["chapter_id"] for i in state["iterations"]], ["front-matter", "chapter-1", "chapter-2", "_whole"])
+        self.approve_empty_job("line")  # The front matter has nothing to edit.
 
         # Chapter 1: proposal review, separate closure, explicit apply authorization, then application.
         self.engine.advance(ScriptedRuntime(lambda r: self.editorial_review("line", "chapter-1")))
@@ -1352,7 +1424,7 @@ class WorkflowTests(unittest.TestCase):
             return self.finish_job("line", "chapter-1", chapter_1)
 
         state = self.engine.advance(ScriptedRuntime(apply))
-        self.assertEqual(state["iterations"][0]["changed"], [chapter_1])
+        self.assertEqual(state["iterations"][1]["changed"], [chapter_1])
         self.assertEqual(state["outputs"], [])  # Text keeps changing until the last editing stage.
 
         # A pending chapter cannot change outside its job; an unauthorized change cannot complete.
@@ -1377,22 +1449,22 @@ class WorkflowTests(unittest.TestCase):
             self.engine.restart_chapter("chapter-1", reason="x")
         state = self.approve_empty_job("line")  # Whole-book consistency pass.
         self.assertEqual((state["stage"], state["status"]), ("copy", "READY"))
-        self.assertEqual([i["status"] for i in state["stage_iterations"]["line"]], ["completed"] * 3)
+        self.assertEqual([i["status"] for i in state["stage_iterations"]["line"]], ["completed"] * 4)
         self.assertEqual(self.engine.current_iteration(state)["stage"], "copy")
-        for _ in range(3):
+        for _ in range(4):
             state = self.approve_empty_job("copy")
         self.assertEqual(state["status"], "WAITING_FOR_ACCEPTANCE")
-        self.assertEqual([o["chapter_id"] for o in state["outputs"]], ["chapter-1", "chapter-2"])
+        self.assertEqual([o["chapter_id"] for o in state["outputs"]], ["front-matter", "chapter-1", "chapter-2"])
         self.engine.accept(state["acceptance_id"], confirm_final=True)
         state = self.engine.advance(None)
         self.assertEqual(state["status"], "COMPLETED")
         export = Path(state["export_path"])
-        self.assertEqual((export / "0001.md").read_text(encoding="utf-8"), "## 1\n\nHe returned.\n")
+        self.assertEqual((export / "0002.md").read_text(encoding="utf-8"), "## 1\n\nHe returned.\n")
         self.assertTrue((export / "style-sheet.md").is_file())
         library = self.service.library(self.work_id)
-        self.assertEqual(library.read(library.head("literary-editing/chapters/0001.md")), b"## 1\n\nHe returned.\n")
+        self.assertEqual(library.read(library.head("literary-editing/v001/chapters/0002.md")), b"## 1\n\nHe returned.\n")
         work = self.service.get_work(self.work_id)
-        self.assertEqual(work["workflows"]["literary-editing"]["status"], "read_only")
+        self.assertEqual(work["workflows"]["literary-editing"]["status"], "completed")
         summary = json.loads(library.read(library.head("work.json")))["workflows"]["literary-editing"]
         self.assertEqual((summary["status"], summary["operation"]), ("completed", "literary-edit"))
         # The edited manuscript feeds the unchanged formatting template.
@@ -1468,11 +1540,11 @@ class PerformanceTests(unittest.TestCase):
         base = datetime(2026, 1, 1, tzinfo=timezone.utc)
         data = [
             (0, "execution.started", {"stage": "translate"}),
-            (10, "execution.result", {"outcome": "needs_human_input", "gate": "passage_map"}),
+            (10, "execution.result", {"outcome": "needs_human_input", "gate": "map_exceptions"}),
             (10.2, "e2e.delegated_approval", {"gate_id": "g1"}),
             (10.5, "review.received", {"receipt_id": "r1", "gate_id": "g1"}),
             (11, "execution.started", {"stage": "translate"}),
-            (31, "execution.result", {"outcome": "needs_human_input", "gate": "passage_map"}),
+            (31, "execution.result", {"outcome": "needs_human_input", "gate": "map_exceptions"}),
             (31.2, "e2e.delegated_approval", {"gate_id": "g2"}),
             (31.4, "review.received", {"receipt_id": "r2", "gate_id": "g2"}),
             (32, "execution.started", {"stage": "translate"}),
@@ -1485,10 +1557,10 @@ class PerformanceTests(unittest.TestCase):
             "outputs": [], "chapters": [{}],
             "receipts": [
                 {"id": "r1", "decision_source": "delegated-automation",
-                 "gate": {"kind": "passage_map"},
+                 "gate": {"kind": "map_exceptions"},
                  "parsed": {"type": "dispositions", "dispositions": [{}, {}]}},
                 {"id": "r2", "decision_source": "delegated-automation",
-                 "gate": {"kind": "passage_map"}, "parsed": {"type": "final-closure"}},
+                 "gate": {"kind": "map_exceptions"}, "parsed": {"type": "final-closure"}},
             ],
         }
         report = monitor_performance.analyze(events, state, base + timedelta(seconds=93))

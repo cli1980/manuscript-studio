@@ -8,10 +8,10 @@ from pathlib import Path
 
 if __package__:
     from .run_judge import ROOT, guarded, read_bytes, object_json, reference, sha
-    from .translation_cases import candidates, discover_cases, migrate_case, new_candidate_id, OPAQUE_CANDIDATE
+    from .translation_cases import candidates, discover_cases, new_candidate_id, OPAQUE_CANDIDATE
 else:
     from run_judge import ROOT, guarded, read_bytes, object_json, reference, sha
-    from translation_cases import candidates, discover_cases, migrate_case, new_candidate_id, OPAQUE_CANDIDATE
+    from translation_cases import candidates, discover_cases, new_candidate_id, OPAQUE_CANDIDATE
 
 
 def encoded(value):
@@ -43,7 +43,6 @@ def anonymize(root, *, write=False):
         history_path = guarded(path.parent / "judgments.jsonl", root)
         history_raw = read_bytes(history_path, root) if history_path.exists() else b""
         history = [object_json(line) for line in history_raw.splitlines() if line.strip()]
-        case, history = migrate_case(case, history)
         ids, used = {}, {c["candidate_id"] for c in case["candidates"]}
         for item in case["candidates"]:
             old_id = item["candidate_id"]

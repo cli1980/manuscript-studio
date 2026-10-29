@@ -20,7 +20,7 @@ Each case has:
 - `judgments.jsonl`: initially empty, awaiting candidate-specific human reviews.
 
 Shared Chinese originals are under
-`evals/fixtures/manuscripts/contemporary-<source-work-id>/passage-<record-number>/`.
+`fixtures/manuscripts/contemporary-<source-work-id>/passage-<record-number>/`.
 All passages from a work share one `group_id`, so keep that entire group in one
 training, validation, or test split.
 
@@ -34,7 +34,7 @@ The judge interface should display these cases as **Not reviewed** until a judge
 saves an assessment. Human scores are required before training export or comparison
 against human ground truth.
 
-See the [text license notice](../../fixtures/manuscripts/CONTEMPORARY_CORPUS.md)
+See the [text license notice](../../../fixtures/manuscripts/CONTEMPORARY_CORPUS.md)
 and [import manifest](../../imports/contemporary-corpus/manifest.json). The
 modern-literature `zh-en-modern-001` calibration case is separate and is not replaced by this import.
 

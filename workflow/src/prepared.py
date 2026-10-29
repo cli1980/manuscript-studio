@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import sys
 import uuid
 from pathlib import Path
 
 from .engine import SKILLS, Engine, WorkflowError, module_at
-from .storage import digest, json_bytes, now, read_bytes
+from .storage import digest, json_bytes, now, plain, read_bytes
 
 METADATA_CONFIRMATION = "confirm metadata"
 WHOLE = "_whole"  # Not a valid chapter ID, so it cannot collide with a prepared unit.
@@ -31,7 +32,7 @@ def load_metadata_helper(skill_root, contract):
 
 
 def language_key(work):
-    return "source_language" if work["schema_version"] == 1 else "manuscript_language"
+    return "manuscript_language"
 
 
 def metadata_digest(work):
@@ -61,8 +62,6 @@ class PreparedManuscriptEngine(Engine):
 
     def iterating_stage(self, state):
         """The chapter stage in progress, else the latest one before the current stage, else the first."""
-        if not all(isinstance(stage, dict) for stage in state["definition"]["stages"]):
-            return None  # Pre-M1 runs are readable only.
         ids = self.stage_ids(state)
         iterating = [stage for stage in ids if self.stage_def(state, stage).get("iterate")]
         if not iterating:
@@ -118,6 +117,39 @@ class PreparedManuscriptEngine(Engine):
         stage = self.iterating_stage(state)
         if stage:
             state["continuity_seed"] = self.carry_snapshot(state, stage)
+        head = self.library.head("work.json") if self.library is not None else None
+        if head is not None:
+            # The work's latest shared record is the preparation agent's metadata input (consolidate only).
+            path = plain(self.root / "input" / "prior-work.json")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(self.library.read(head))
+            state["prior_work_record"] = {"path": str(path), "publication_id": head["id"], "sha256": head["sha256"]}
+            state["library_heads"]["work.json"] = head["id"]
+
+    def _verify_consolidation(self, state):
+        """Preparation may only fill empty fields or mark existing ones stale; existing values must survive."""
+        prior = state.get("prior_work_record")
+        if not prior:
+            return
+        helper = self.metadata_helper()
+        before = json.loads(read_bytes(Path(prior["path"])))
+        after = json.loads(read_bytes(self._work_path(state)))
+        changed = []
+        for field in helper.FIELDS:
+            old = helper.field_value(before["metadata"], field)
+            if field in ("/extent", "/manuscript_language") or helper.missing(old):
+                continue
+            was, now = before["metadata_provenance"].get(field), after["metadata_provenance"].get(field)
+            stale_only = bool(was and now and now.get("review_status") == "stale"
+                              and {k: v for k, v in now.items() if k not in ("review_status", "updated_at", "rationale")}
+                              == {k: v for k, v in was.items() if k not in ("review_status", "updated_at", "rationale")})
+            if helper.field_value(after["metadata"], field) != old or (now != was and not stale_only):
+                changed.append(field)
+        if changed:
+            raise ValueError("Preparation changed metadata the work already had (" + ", ".join(changed) + "). Start "
+                             "from prior_work_record and only fill empty fields, per the prepare-manuscript "
+                             "prior work record contract.")
+        self.store.event("metadata.consolidated", {"prior_publication_id": prior["publication_id"]})
 
     def before_turn(self, state):
         stage = self.stage_def(state)
@@ -141,6 +173,7 @@ class PreparedManuscriptEngine(Engine):
     def on_completed(self, state, stage, result):
         if stage.get("preparation"):
             self._prepared(state, result["work_record"])
+            self._verify_consolidation(state)
             self._advance_stage(state)
         elif stage.get("iterate"):
             self._finish_chapter(state, stage, self.complete_chapter(state, result))
@@ -262,8 +295,39 @@ class PreparedManuscriptEngine(Engine):
     def output_language(self, state):
         return state["manuscript_language"]
 
-    def library_prefix(self, state):
-        return state["workflow"]
+    def accepted_version(self, state):
+        """The version folder for this run's accepted output: one more than the workflow's latest version."""
+        if state.get("accepted_version"):
+            return state["accepted_version"]
+        pattern = re.compile(rf"^{re.escape(state['workflow'])}/v(\d{{3,}})/")
+        numbers = [int(m.group(1)) for path in (self.library.heads() if self.library else {})
+                   if (m := pattern.match(path))]
+        return f"v{max(numbers, default=0) + 1:03d}"
+
+    def run_record(self, state, version):
+        """Important run information stored with the accepted Markdown."""
+        receipts = {}
+        for receipt in state["receipts"]:
+            key = receipt["gate"]["kind"]
+            entry = receipts.setdefault(key, {"replies": 0, "decided_by": {}})
+            entry["replies"] += 1
+            source = receipt.get("decision_source", "human")
+            entry["decided_by"][source] = entry["decided_by"].get(source, 0) + 1
+        attempts = {item["chapter_id"]: item["attempt"] for item in state.get("iterations") or []}
+        return {
+            "version": version, "workflow": state["workflow"], "template_id": state["template_id"],
+            "run_id": state["id"], "work_id": state["work_id"], "owner": state.get("owner"),
+            "engine": state.get("engine"), "created_at": state["created_at"],
+            "accepted_at": state["acceptance"]["created_at"], "acceptance": state["acceptance"],
+            "restart_of": state.get("restart_of"), "skipped_stages": state.get("skipped_stages") or [],
+            "source": {"name": state["source_name"], "sha256": state["source"]["sha256"]},
+            "manuscript_language": state["manuscript_language"], "output_language": self.output_language(state),
+            "prepared_revision": state["prepared"]["base"]["preparation"]["current_revision"],
+            "metadata_confirmed": state.get("metadata_approval"),
+            "chapters": [{"chapter_id": a["chapter_id"], "sha256": a["sha256"], "bytes": a["bytes"],
+                          "attempts": attempts.get(a["chapter_id"])} for a in state["outputs"]],
+            "decisions": receipts, "restarts": len(state.get("restarts") or []),
+        }
 
     def export_files(self, state):
         files = {f"{index:04d}.md": self.store.content(artifact) for index, artifact in enumerate(state["outputs"], 1)}
@@ -278,10 +342,11 @@ class PreparedManuscriptEngine(Engine):
         """The accepted-markdown-chapters/1 contract consumed by derived templates such as formatting."""
         if not state.get("acceptance"):
             return None
-        prefix = self.library_prefix(state)
+        version = self.accepted_version(state)
+        prefix = f"{state['workflow']}/{version}"
         chapters = {c["chapter_id"]: c for c in state["chapters"]}
         return {
-            "contract": state["definition"]["produces"], "workflow": state["workflow"],
+            "contract": state["definition"]["produces"], "workflow": state["workflow"], "version": version,
             "template_id": state["template_id"], "run_id": state["id"], "work_id": state["work_id"],
             "manuscript_language": self.output_language(state),
             "source_manuscript_language": state["manuscript_language"],
@@ -290,7 +355,7 @@ class PreparedManuscriptEngine(Engine):
             "chapters": [{"chapter_id": a["chapter_id"], "order": chapters[a["chapter_id"]]["order"],
                           "title": chapters[a["chapter_id"]].get("title"), "sha256": a["sha256"],
                           "bytes": a["bytes"],
-                          "artifact": f"{prefix}/{self.chapter_folder}/{chapters[a['chapter_id']]['order']:04d}.md"}
+                          "artifact": f"{prefix}/chapters/{chapters[a['chapter_id']]['order']:04d}.md"}
                          for a in state["outputs"]],
             "continuity": {name: {"sha256": a["sha256"], "artifact": f"{prefix}/{name}.md"}
                            for name, a in state["continuity"].items()},
@@ -300,6 +365,8 @@ class PreparedManuscriptEngine(Engine):
         if self.library is None:
             return
         accepted = self.accepted_output(state)
+        state["accepted_version"] = accepted["version"]
+        prefix = f"{state['workflow']}/{accepted['version']}"
         expected = {item["artifact"]: item["publication_id"] for item in state["inputs"]}
         basis = {"prepared_revision": accepted["prepared_revision"]}
         entries = []
@@ -309,18 +376,17 @@ class PreparedManuscriptEngine(Engine):
         for name, item in accepted["continuity"].items():
             entries.append({"artifact": item["artifact"], "data": self.store.content(state["continuity"][name]),
                             "expected_head": expected.get(item["artifact"]), "basis": basis})
-        accepted_artifact = f"accepted/{state['workflow']}.json"
-        entries.append({"artifact": accepted_artifact, "data": json_bytes(accepted),
-                        "expected_head": expected.get(accepted_artifact), "basis": basis,
-                        "contract": accepted["contract"]})
+        entries.append({"artifact": f"{prefix}/run.json", "data": json_bytes(self.run_record(state, accepted["version"])),
+                        "expected_head": None, "basis": basis})
+        entries.append({"artifact": f"{prefix}/manifest.json", "data": json_bytes(accepted),
+                        "expected_head": None, "basis": basis, "contract": accepted["contract"]})
         summary = {"status": "completed", "basis_revision": accepted["prepared_revision"],
                    "scope": {"kind": "whole_work", "chapter_ids": [c["chapter_id"] for c in accepted["chapters"]]},
                    "operation": self.operation, "state_locator": f"run:{state['id']}", "updated_at": now()}
         entries.append(self.work_record_entry(state, "accept", summary))
-        areas = [self.format_path(state, area) for area in state["definition"]["library"]["areas"]]
         publications = self.library.publish_many(
             entries, run_id=state["id"], workflow=state["workflow"], stage="accept",
-            receipts=[state["acceptance"]["id"]], finalize=areas,
+            receipts=[state["acceptance"]["id"]], finalize=[f"{prefix}/"],  # This version folder is immutable.
         )
         state["publications"] = {p["artifact"]: p["id"] for p in publications}
         state["library_heads"]["work.json"] = state["publications"]["work.json"]
@@ -408,8 +474,10 @@ class PreparedManuscriptEngine(Engine):
         work = json.loads(self.file(relative).read_text(encoding="utf-8"))
         self._record_metadata_version(state, "presented")
         instance = self.instance(state)
+        # The shared metadata review is presented with the front-matter unit every prepared revision starts with.
+        front_matter = next(c["chapter_id"] for c in state["chapters"] if c["role"] == "front_matter")
         gate = {"id": str(uuid.uuid4()), "kind": "metadata_review", "message": self._metadata_message(state, work),
-                "stage": stage["id"], "chapter_id": None, "attempt": 0, "instance": instance["key"],
+                "stage": stage["id"], "chapter_id": front_matter, "attempt": 0, "instance": instance["key"],
                 "binding": self.checkpoint(relative, "metadata_record"), "sheet": None,
                 "record_revision": work["record_revision"]}
         state.update(status="WAITING_FOR_HUMAN", gate=gate)
@@ -422,14 +490,13 @@ class PreparedManuscriptEngine(Engine):
                 "metadata": work["metadata"], "provenance": work.get("metadata_provenance", {}),
                 "locked": self.locked_metadata(state), "unknown": [], "stale": [],
                 "confirmed": state.get("metadata_approval")}
-        if work["schema_version"] == 2:
-            helper = self.metadata_helper()
-            for field in helper.FIELDS:
-                entry = view["provenance"].get(field)
-                if entry is None and helper.missing(helper.field_value(work["metadata"], field)):
-                    view["unknown"].append(field)
-                elif entry and entry["review_status"] == "stale":
-                    view["stale"].append(field)
+        helper = self.metadata_helper()
+        for field in helper.FIELDS:
+            entry = view["provenance"].get(field)
+            if entry is None and helper.missing(helper.field_value(work["metadata"], field)):
+                view["unknown"].append(field)
+            elif entry and entry["review_status"] == "stale":
+                view["stale"].append(field)
         return view
 
     def _metadata_message(self, state, work):
@@ -440,10 +507,6 @@ class PreparedManuscriptEngine(Engine):
             f"'{METADATA_CONFIRMATION}' to continue with these values.",
             "Locked for this run: " + ", ".join(self.locked_metadata(state)) + ".", "",
         ]
-        if work["schema_version"] == 1:
-            lines.insert(3, "This is a version-1 record; the first edit migrates it to version 2.")
-            lines.extend(f"/{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in work["metadata"].items())
-            return "\n".join(lines)
         helper = self.metadata_helper()
         provenance = work.get("metadata_provenance", {})
         unknown, stale = [], []
@@ -474,8 +537,8 @@ class PreparedManuscriptEngine(Engine):
         helper = self.metadata_helper()
         path = self._work_path(state)
         before = read_bytes(path)
-        library = helper.migrate(json.loads(self.library.read(head)))
-        merged = helper.migrate(json.loads(before))
+        library = json.loads(self.library.read(head))
+        merged = json.loads(before)
         if library["metadata"]["manuscript_language"] != merged["metadata"]["manuscript_language"]:
             raise ValueError("The work library's manuscript language differs from this run.")
         extent = merged["metadata"]["extent"], merged["metadata_provenance"].get("/extent")

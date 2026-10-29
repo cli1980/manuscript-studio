@@ -64,7 +64,7 @@ class Repository:
             raise DataError("The evaluation data directory must already exist.")
         self.root = root.resolve()
         self.cases = self.root / "cases"
-        self.passages = self.root / "fixtures/manuscripts"
+        self.passages = self.root.parent / "fixtures/manuscripts"
         self.rubrics = self.root / "rubrics"
         for directory in (self.cases, self.passages, self.rubrics):
             plain_path(directory)
@@ -194,7 +194,9 @@ class Repository:
         return self.guarded(parent / name, area)
 
     def metadata_files(self, directory, filename, depth=0, budget=None):
-        directory = self.guarded(directory, self.root)
+        # Shared fixtures live beside the evals root; every other area is inside it.
+        area = self.passages if directory.resolve().is_relative_to(self.passages.resolve()) else self.root
+        directory = self.guarded(directory, area)
         if not directory.is_dir():
             return
         if depth > 5:

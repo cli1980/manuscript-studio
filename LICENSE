@@ -1,6 +1,19 @@
+Copyright (c) 2026 Crossborder Art & Media LLC
+
+This repository contains parts under different licenses:
+
+- workflow/ and studio/ (the workflow engine and the Manuscript Studio
+  application): PolyForm Noncommercial License 1.0.0; see workflow/LICENSE and
+  studio/LICENSE. Any commercial use requires a separate written license
+  negotiated with Crossborder Art & Media LLC.
+- fixtures/: each fixture keeps the terms recorded with it (for example, the
+  contemporary corpus texts are CC BY-SA 3.0 with attribution).
+- Everything else, including plugins/manuscript-studio/ (the skills) and
+  evals/: the MIT License below.
+
 MIT License
 
-Copyright (c) 2026 C.L Lee
+Copyright (c) 2026 Crossborder Art & Media LLC
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -16,7 +16,9 @@ def snapshot(repository):
     def include(path, area):
         nonlocal total
         content = repository.read(path, area)
-        relative = path.relative_to(repository.root).as_posix()
+        # Names are relative to the evals root, except shared fixtures (repository-root relative).
+        base = repository.root.parent if area == repository.passages else repository.root
+        relative = path.relative_to(base).as_posix()
         if relative not in files:
             total += len(content)
         if total > MAX_WORKSPACE or len(files) >= 5000:
@@ -68,11 +70,13 @@ class Workspace:
         }
         self.temporary = tempfile.TemporaryDirectory(prefix="manuscript-evals-")
         try:
-            temporary_root = Path(self.temporary.name).resolve()
-            for directory in ("fixtures/manuscripts", "rubrics", *(f"cases/{skill}" for skill in SKILLS)):
+            base = Path(self.temporary.name).resolve()
+            temporary_root = base / "evals"
+            (base / "fixtures/manuscripts").mkdir(parents=True)
+            for directory in ("rubrics", *(f"cases/{skill}" for skill in SKILLS)):
                 (temporary_root / directory).mkdir(parents=True, exist_ok=True)
             for name, content in self.baseline.items():
-                path = temporary_root / name
+                path = (base if name.startswith("fixtures/") else temporary_root) / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(content)
             self.repository = Repository(temporary_root)

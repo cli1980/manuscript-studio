@@ -84,9 +84,9 @@ def load_records(corpus):
 
 def build_plan(records, corpus_hash):
     if __package__:
-        from .translation_cases import migrate_case, new_candidate_id
+        from .translation_cases import new_candidate_id
     else:
-        from translation_cases import migrate_case, new_candidate_id
+        from translation_cases import new_candidate_id
     plan, mapping = {}, []
     for record in records:
         group = identifier("contemporary-" + record["source_work_id"])
@@ -95,7 +95,8 @@ def build_plan(records, corpus_hash):
         number = rid.rsplit("-", 1)[1]
         passage_id = identifier(f"{group}-passage-{number}")
         passage_directory = Path("fixtures/manuscripts") / group / f"passage-{number}"
-        case_directory = Path("cases/literary-translation") / case_id
+        # Plan paths are relative to the repository root: shared fixtures live outside evals/.
+        case_directory = Path("evals/cases/literary-translation") / case_id
         sources, rights, review = record["sources"], record["rights"], record["review"]
         common = {
             "usage_rights": "permitted",
@@ -122,14 +123,15 @@ def build_plan(records, corpus_hash):
             },
         }
         case = {
-            "schema_version": 1, "case_id": case_id, "revision": 1, "status": "ready",
+            "schema_version": 2, "case_id": case_id, "revision": 1, "status": "ready",
             "task": "literary-translation-quality", "source_language": "zh", "target_language": "en",
             "source_file": Path(os.path.relpath(passage_directory / "source.zh.txt", case_directory)).as_posix(),
             "source_metadata_file": Path(os.path.relpath(passage_directory / "passage.json", case_directory)).as_posix(),
-            "source_revision": 1, "translation_file": "translation.en.txt",
+            "source_revision": 1,
             "group_id": group, "passage_id": passage_id,
             "rubric_id": "literary-translation-quality-v1", "context": {"brief": None},
-            "provenance": {
+            "translation_instructions": None,
+            "candidates": [{"candidate_id": new_candidate_id(), "revision": 1, "status": "ready", "provenance": {
                 **common, "translation_origin": "published English translation",
                 "translator": record["translator"], "title_en": record["title_en"],
                 "source_url": sources["english"], "english_history_url": sources.get("english_history"),
@@ -138,11 +140,9 @@ def build_plan(records, corpus_hash):
                 "extracted_block_range_exclusive": sources["extracted_block_ranges_exclusive"]["english"],
                 "english_word_count": record["english_word_count"],
                 "selection_type": record["selection_type"], "corpus_review": review,
-            },
+            }}],
         }
-        case, _ = migrate_case(case, [])
         candidate = case["candidates"][0]
-        candidate["candidate_id"] = new_candidate_id()
         candidate["translation_file"] = f"candidates/{candidate['candidate_id']}.en.txt"
         source_bytes, translation_bytes = record["chinese"].encode("utf-8"), record["english"].encode("utf-8")
         plan[passage_directory] = {"passage.json": encoded(passage), "source.zh.txt": source_bytes}
@@ -152,7 +152,7 @@ def build_plan(records, corpus_hash):
         mapping.append({
             "corpus_record_id": rid, "case_id": case_id, "source_work_id": record["source_work_id"],
             "group_id": group, "passage_id": passage_id,
-            "case_file": (case_directory / "case.json").as_posix(),
+            "case_file": (case_directory.relative_to("evals") / "case.json").as_posix(),
             "passage_file": (passage_directory / "passage.json").as_posix(),
             "source_text_sha256": sha(source_bytes), "translation_text_sha256": sha(translation_bytes),
         })
@@ -168,7 +168,7 @@ def build_plan(records, corpus_hash):
         "split_policy": "Keep all passages and translation variants sharing group_id in one dataset split.",
         "records": mapping,
     }
-    plan[Path("imports/contemporary-corpus")] = {"manifest.json": encoded(manifest)}
+    plan[Path("evals/imports/contemporary-corpus")] = {"manifest.json": encoded(manifest)}
     return plan, manifest
 
 
@@ -178,21 +178,18 @@ def import_corpus(corpus, data_root, *, dry_run=False):
         raise EvaluationError("The evaluation data directory must already exist.")
     records, corpus_hash = load_records(corpus)
     plan, manifest = build_plan(records, corpus_hash)
+    base = data_root.parent  # Repository root holding evals/ and the shared fixtures/.
     missing, unchanged = [], 0
     for relative, files in plan.items():
-        directory = guarded(data_root / relative, data_root)
+        directory = guarded(base / relative, base)
         if directory.exists():
             if not directory.is_dir():
                 raise EvaluationError(f"Import destination is not a directory: {relative}")
             if "case.json" in files:
-                if __package__:
-                    from .translation_cases import migrate_case
-                else:
-                    from translation_cases import migrate_case
-                case_path = guarded(directory / "case.json", data_root)
+                case_path = guarded(directory / "case.json", base)
                 if not case_path.is_file() or not (directory / "judgments.jsonl").is_file():
                     raise EvaluationError(f"Existing import is incomplete: {relative}")
-                stored, _ = migrate_case(object_json(read_bytes(case_path, data_root)), [])
+                stored = object_json(read_bytes(case_path, base))
                 expected_case = object_json(files["case.json"])
                 expected_candidate = expected_case["candidates"][0]
                 matches = [c for c in stored["candidates"]
@@ -213,10 +210,10 @@ def import_corpus(corpus, data_root, *, dry_run=False):
                 unchanged += 1
                 continue
             for filename, expected in files.items():
-                path = guarded(directory / filename, data_root)
+                path = guarded(directory / filename, base)
                 if not path.is_file():
                     raise EvaluationError(f"Existing import is incomplete: {relative / filename}")
-                actual = read_bytes(path, data_root)
+                actual = read_bytes(path, base)
                 if filename != "judgments.jsonl" and actual != expected:
                     raise EvaluationError(f"Refusing to overwrite changed data: {relative / filename}")
             unchanged += 1
@@ -233,7 +230,7 @@ def import_corpus(corpus, data_root, *, dry_run=False):
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(content)
             for relative, _ in sorted(missing, key=lambda item: (not str(item[0]).startswith("fixtures"), str(item[0]))):
-                destination = guarded(data_root / relative, data_root)
+                destination = guarded(base / relative, base)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 if destination.exists():
                     raise EvaluationError(f"Destination appeared during import: {relative}")

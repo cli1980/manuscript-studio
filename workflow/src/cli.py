@@ -151,7 +151,6 @@ def parser():
                 child.add_argument("--stage", required=True)
             elif command == "restart-chapter":
                 child.add_argument("--chapter", required=True)
-    sub.add_parser("import", help="Register an existing run directory.").add_argument("run_dir", type=Path)
     return result
 
 
@@ -215,9 +214,6 @@ def run(service, args):
         print(f'\nNext: python -m workflow --server-root "{service.root}" step {run_id}')
     elif command == "runs":
         emit(service.list_runs(work_id=args.work))
-    elif command == "import":
-        run_id = service.import_run(args.run_dir)
-        emit(service.get_run(run_id))
     elif command == "events":
         for event in service.events(args.run, args.after):
             print(json.dumps(event, ensure_ascii=False))
