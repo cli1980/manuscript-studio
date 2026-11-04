@@ -120,6 +120,15 @@ Translate the complete passage directly from the source and chapter context with
 
 Use Path B as the base text. Audit it against Path A and the source. Revise Path B wherever the audit reveals lost or altered information, implication, ambiguity, imagery, logic, viewpoint, emphasis, tone, cultural position, social relation, oral effect, or applicable voice movement.
 
+Audit sentence by sentence, not by topic or summary. For every source sentence, or every clause when one sentence carries several, locate its rendering in Path B and in Path A and check:
+
+- **Point of view and deixis:** words that fix the speaker's or narrator's position in place and time: motion toward or away, near or far reference, and present or past vantage point. The English must keep the speaker where the source places them.
+- **Connectives and logic:** concession, cause, consequence, sequence, and contrast, whether stated by a word or carried by sentence structure. Each link must survive in the English, including across split or merged sentences, and join the same clauses it joins in the source.
+- **Dropped words:** words that carry meaning, such as qualifiers, intensifiers, hedges, demonstratives, time markers, words of degree, and repetitions.
+- **Added interpretation:** motive, irony, explanation, emphasis, or certainty that Path B supplies and the source leaves open.
+
+Natural restructuring that keeps all four is not a defect. Record the audit per source paragraph in `drafts/audit.md` (see [references/workflow-state.md](references/workflow-state.md)): for each paragraph, every finding with the source wording, Path B's wording, the kind of shift, and the correction made, or an explicit statement that its sentences were checked and nothing shifted. Fix every confirmed shift in refined Path B before completing Step 3.1, unless it is a genuine interpretive choice; carry such choices into Step 3.2.
+
 Do not average the drafts, stitch them together, or replace natural Path B phrasing merely because Path A follows the source surface more closely. Recast each necessary correction within Path B's unified English prose.
 
 > Path B supplies the prose. Path A supplies the fidelity benchmark. The source decides every disagreement.
@@ -132,7 +141,7 @@ Treat Step 3.1 as an indivisible prerequisite for Step 3.2. For the complete cur
 
 1. Path A: complete fidelity-first translation tryout;
 2. Path B: independent direct literary translation;
-3. source-grounded audit of Path B against Path A;
+3. source-grounded, sentence-by-sentence audit of Path B against Path A, recorded per paragraph;
 4. one refined Path B covering the entire passage.
 
 Do not begin editorial review, present alternatives, label anything a decision, or ask the user to choose wording until all four operations are complete. Sentence-level alternatives do not substitute for the two-path process; both paths must address the complete passage.

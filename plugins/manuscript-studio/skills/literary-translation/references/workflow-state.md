@@ -20,6 +20,10 @@ Store chapter workflow state under:
 ├── source-passages/
 │   ├── passage-01.md
 │   └── passage-02.md
+├── drafts/
+│   ├── path-a.md
+│   ├── path-b.md
+│   └── audit.md
 ├── provisional/
 │   ├── passage-01.md
 │   └── passage-02.md
@@ -52,6 +56,10 @@ Save each extracted source passage under `source-passages/`. Each file must cont
 3. optional boundary or context metadata only when it aids navigation.
 
 Do not translate, normalize, silently correct, or paraphrase the source text. Extract source-passage files only from an approved map. Before Step 3, verify that the ordered source-text bodies, excluding headings and metadata, reproduce the complete chapter exactly once, with no missing, duplicated, or reordered text. Confirm that filenames, map entries, passage order, and the approved map correspond.
+
+## Step 3.1 Drafts and Audit
+
+Keep the current passage's Path A, Path B, and audit under `drafts/`. Structure `audit.md` by passage and then by source paragraph number (the prepared chapter's numbering). Under each paragraph, list every sentence-level finding as source wording → Path B wording, the kind of shift (point of view, connective, dropped word, added interpretation, or other), and the correction in refined Path B; or state that its sentences were checked and nothing shifted. Every paragraph of the passage needs an entry. Step 3.1 is not complete until the audit covers the whole passage.
 
 ## Passage Checkpoints
 
