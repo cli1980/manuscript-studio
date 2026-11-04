@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "react": "19.2.9",
-    "react-dom": "19.2.9"
+    "react-dom": "19.2.9",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
   },
   "devDependencies": {
     "@types/react": "19.2.18",
@@ -19,5 +21,13 @@
     "@vitejs/plugin-react": "6.1.2",
     "typescript": "6.0.3",
     "vite": "8.3.4"
+  },
+  "overrides": {
+    "@types/estree": "1.0.9",
+    "hast-util-to-jsx-runtime": "2.3.6",
+    "markdown-table": "3.0.4",
+    "mdast-util-gfm-table": "2.0.0",
+    "mdast-util-mdx-jsx": "3.2.0",
+    "mdast-util-to-markdown": "2.2.1"
   }
 }

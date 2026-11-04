@@ -208,6 +208,12 @@ class CaseRunner:
             page.get_by_role("button", name="Approve chapter").click()
         elif gate["kind"] == "metadata_review":
             page.get_by_role("button", name=re.compile(r"^Confirm metadata")).click()
+        elif sheet and page.locator(".sample-poll").count():
+            # The sample poll: pick the first variant of every open sample, then submit.
+            for index, item in enumerate(sheet["items"]):
+                if item["status"] != "resolved":
+                    page.locator(".sample-poll .sample").nth(index).locator(".variant input").first.check()
+            page.get_by_role("button", name=re.compile(r"^Submit choices")).click()
         elif sheet and page.locator(".review").count():
             open_items = [item for item in sheet["items"] if item["status"] != "resolved"]
             if not open_items:

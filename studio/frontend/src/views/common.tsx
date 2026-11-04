@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Markdown } from "./Markdown";
 
 export function useLoad<T>(load: () => Promise<T>, deps: unknown[], intervalMs?: number) {
   const [data, setData] = useState<T | null>(null);
@@ -44,16 +45,29 @@ export function reviewName(kind: string) {
   return kind.replace(/_review$/, "").replaceAll("_", " ");
 }
 
-// Workspace documents presented for review, such as a translation brief's glossary and voice notes.
-export function Documents({ documents, open = true }: { documents: { path: string; text: string }[]; open?: boolean }) {
+const DOCUMENT_TITLES: Record<string, string> = { "glossary.md": "Glossary", "voice.md": "Voice notes",
+  "brief-samples.md": "Sample translations" };
+
+export function documentTitle(path: string) {
+  const name = path.split("/").pop() ?? path;
+  return DOCUMENT_TITLES[name] ?? name;
+}
+
+// Workspace documents presented for review, such as a translation brief's glossary, voice notes, and samples:
+// one tab per document, rendered as formatted text.
+export function Documents({ documents }: { documents: { path: string; text: string }[] }) {
+  const [active, setActive] = useState(0);
+  const doc = documents[Math.min(active, documents.length - 1)];
+  if (!doc) return null;
   return (
-    <>
-      {documents.map((doc) => (
-        <details key={doc.path} className="panel document" open={open}>
-          <summary className="mono">{doc.path.split("/").pop()}</summary>
-          <TextBlock text={doc.text} />
-        </details>
-      ))}
-    </>
+    <div className="documents">
+      <div className="doc-tabs" role="tablist">
+        {documents.map((d, i) => (
+          <button key={d.path} type="button" role="tab" aria-selected={d === doc} className={d === doc ? "active" : ""}
+            onClick={() => setActive(i)} title={d.path}>{documentTitle(d.path)}</button>
+        ))}
+      </div>
+      <div className="doc-body" role="tabpanel"><Markdown text={doc.text} /></div>
+    </div>
   );
 }

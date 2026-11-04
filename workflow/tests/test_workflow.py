@@ -135,12 +135,45 @@ class WorkflowTests(unittest.TestCase):
             self.approve_brief()
             self.translate_chapter()
 
-    def brief_gate(self, request):
+    def samples_sheet(self, revision="1", original=True):
+        rows = ([{"label": "Location", "value": "story, paragraph 1"}]
+                + ([{"label": "Original", "value": "他回来了。"}] if original else [])
+                + [{"label": "A", "value": "He came back."}, {"label": "About A", "value": "Close to the source."},
+                   {"label": "B", "value": "He was back."}, {"label": "About B", "value": "Freer rhythm."}])
+        return {
+            "schema_version": "1.0", "sheet_id": "brief-samples", "revision": revision, "title": "Translation samples",
+            "bindings": [{"label": "Samples", "value": "translation/brief-samples.md"}],
+            "decisions": [
+                {"id": "choose-a", "command": "choose A", "label": "A", "requires_note": False, "effect": "resolve"},
+                {"id": "choose-b", "command": "choose B", "label": "B", "requires_note": False, "effect": "resolve"},
+                {"id": "none", "command": "none of these", "label": "None of these", "requires_note": True,
+                 "effect": "reopen"},
+            ],
+            "items": [{"id": "S1", "summary": "story, paragraph 1", "details": rows, "status": "pending",
+                       "status_label": "Pending", "allowed_decisions": ["choose-a", "choose-b", "none"],
+                       "dependencies": [], "response": None}],
+            "gate": {"status": "awaiting-choices", "closure_required": False, "final_closure": "not-required",
+                     "ready_state": "not-ready"},
+            "presentation": {"mode": "all", "note_label": "Reasons", "note_placeholder": "Optional",
+                             "submit_label": "Submit"},
+            "submission": {"instruction": "Choose one variant per sample.", "rules": ["Decide every sample."],
+                           "closure_command": "confirm final closure", "closure_label": "Confirm"},
+        }
+
+    def samples_gate(self, request, original=True):
         self.write("translation/glossary.md", "| 故事 | Story | title | provisional |\n")
         self.write("translation/voice.md", "## Narrator · story · home\nPlain, restrained. Status: provisional\n")
-        return result("needs_human_input", gate="translation_brief", message="Proposed glossary and voice.")
+        return result("needs_human_input", gate="brief_samples", message="Choose the sample variants.",
+                      binding_path=self.write("translation/brief-samples.md", "S1: 他回来了。 A / B\n"),
+                      review_path=self.write("translation/brief-samples.json", self.samples_sheet(original=original)))
+
+    def brief_gate(self, request):
+        self.write("translation/brief-samples.md", "S1: 他回来了。 A accepted (keeps the restraint); B rejected\n")
+        return result("needs_human_input", gate="translation_brief", message="Proposed glossary, voice, and samples.")
 
     def approve_brief(self):
+        self.engine.advance(ScriptedRuntime(self.samples_gate))
+        self.engine.reply(self.engine.state()["gate"]["id"], "S1 choose A: keeps the restraint")
         self.engine.advance(ScriptedRuntime(self.brief_gate))
         self.engine.reply(self.engine.state()["gate"]["id"], "approve brief")
 
@@ -194,14 +227,24 @@ class WorkflowTests(unittest.TestCase):
         self.engine.advance(ScriptedRuntime(self.preparation))
         self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
         for action, error in ((lambda r: result(), "completes when the user approves"),
-                              (lambda r: result("needs_human_input", gate="translation_brief"), "save translation/glossary.md")):
+                              (lambda r: result("needs_human_input", gate="translation_brief"), "sample choices"),
+                              (lambda r: self.samples_gate(r, original=False), "needs an 'Original' row")):
             with self.assertRaisesRegex(ValueError, error):
                 self.engine.advance(ScriptedRuntime(action))
             self.engine.retry()
+        # The sample poll: one variant per sample, with reasons; a complete resolving submission closes it.
+        state = self.engine.advance(ScriptedRuntime(self.samples_gate))
+        self.assertEqual((state["gate"]["kind"], state["gate"]["chapter_id"]), ("brief_samples", "front-matter"))
+        state = self.engine.reply(state["gate"]["id"], "S1 choose A: keeps the restraint")
+        self.assertEqual((state["stage"], state["status"]), ("brief", "READY"))
+        self.assertTrue(state["next_input"]["parsed"]["implied_closure"])
+        self.assertIn("brief_samples", state["approvals"])
+        self.assertEqual(state["next_input"]["parsed"]["dispositions"][0]["note"], "keeps the restraint")
         state = self.engine.advance(ScriptedRuntime(self.brief_gate))
         gate = state["gate"]
         self.assertEqual((state["stage"], gate["kind"], gate["chapter_id"]), ("brief", "translation_brief", "front-matter"))
-        self.assertEqual([d["path"] for d in gate["documents"]], ["translation/glossary.md", "translation/voice.md"])
+        self.assertEqual([d["path"] for d in gate["documents"]],
+                         ["translation/glossary.md", "translation/voice.md", "translation/brief-samples.md"])
         self.assertEqual(self.engine.gate_commands(state, gate), ["approve brief"])
         self.assertTrue(self.engine.summary(state)["gate_review"])
         # Corrections are feedback for the agent; they do not approve the brief.
@@ -220,6 +263,7 @@ class WorkflowTests(unittest.TestCase):
         approval = state["front_matter_approvals"]["translation_brief"]
         self.assertEqual((approval["documents"], approval["receipt_id"]), (gate["documents"], state["receipts"][-1]["id"]))
         self.assertEqual(state["continuity_seed"]["translation/glossary.md"]["sha256"], gate["documents"][0]["sha256"])
+        self.assertEqual(state["continuity_seed"]["translation/brief-samples.md"]["sha256"], gate["documents"][2]["sha256"])
         self.assertIn('"translation_brief_approval"', self.prompt(state))
         state = self.engine.restart_stage("brief", reason="Revisit the brief")
         self.assertEqual((state["stage"], state["status"], state["front_matter_approvals"]), ("brief", "READY", {}))
@@ -292,7 +336,7 @@ class WorkflowTests(unittest.TestCase):
             work["metadata"]["title"] = "Agent-found title"
             work["record_revision"] += 1
             path.write_text(json.dumps(work, ensure_ascii=False), encoding="utf-8")
-            return self.brief_gate(request)
+            return self.samples_gate(request)
 
         state = self.engine.advance(ScriptedRuntime(agent_edit))
         self.assertEqual(state["metadata_versions"][-1]["actor"], "agent")
@@ -558,7 +602,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNone(state["thread_id"])
         self.assertEqual(state["approvals"], {})
         self.assertEqual(len(state["outputs"]), 2)
-        self.assertEqual(set(state["continuity"]), {"glossary", "voice"})
+        self.assertEqual(set(state["continuity"]), {"glossary", "voice", "brief-samples"})
         with self.assertRaisesRegex(ValueError, "chapter approval"):
             self.engine.advance(ScriptedRuntime(self.translation))
 
@@ -737,7 +781,7 @@ class WorkflowTests(unittest.TestCase):
     def test_e2e_launcher_interactive_loop_and_honest_report(self):
         case = self.e2e_case()
         actions = iter([
-            self.preparation, self.brief_gate,
+            self.preparation, self.samples_gate, self.brief_gate,
             *[lambda r: self.map_gate(), lambda r: self.map_gate("2", True), self.sanity_gate, self.translation] * 2,
         ])
         prompts = []
@@ -747,7 +791,7 @@ class WorkflowTests(unittest.TestCase):
             return next(actions)(request)
 
         chapter = ["PM001 approve", ".", "confirm final closure", ".", "approve chapter", "."]
-        replies = iter(["confirm metadata", ".", "approve brief", ".", *chapter * 2, "accept", "skip", "skip", "skip", "skip"])
+        replies = iter(["confirm metadata", ".", "S1 choose A", ".", "approve brief", ".", *chapter * 2, "accept", "skip", "skip", "skip", "skip"])
         runtime = run_e2e.CaseRuntime(ScriptedRuntime(action), case["task"])
         with contextlib.redirect_stdout(io.StringIO()):
             code = run_e2e.drive(self.engine, case, runtime, input_fn=lambda _: next(replies))
@@ -762,7 +806,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(checks["domain-gates"]["status"], "not-checked")
         self.assertEqual(report["literary_quality"]["status"], "not-checked")
         self.assertEqual((self.engine.root / "candidate.en.txt").read_text(), "Story\n\nHe came back.\n")
-        self.assertEqual(len(self.engine.state()["receipts"]), 8)  # Metadata, the brief, then three per unit.
+        self.assertEqual(len(self.engine.state()["receipts"]), 9)  # Metadata, samples, brief, then three per unit.
         self.assertEqual(report["automated_checks"]["closure-receipts"]["status"], "passed")
         self.assertEqual(report["automated_checks"]["stage-order"]["evidence"],
                          ["prepare", "metadata", "brief", "translate", "accept", "export"])
@@ -818,6 +862,7 @@ class WorkflowTests(unittest.TestCase):
         case = self.e2e_case()
         actions = iter([
             (self.preparation, "accept", "confirm metadata"),
+            (self.samples_gate, "accept", "S1 choose A"),
             (self.brief_gate, "accept", "approve brief"),
             *[(lambda r: self.map_gate(), "accept", "PM001 approve"),
               (lambda r: self.map_gate("2", True), "accept", "confirm final closure"),
@@ -843,7 +888,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["acceptance"]["decision_source"], "delegated-automation")
         report = json.loads((self.engine.root / "e2e-report.json").read_text(encoding="utf-8"))
         self.assertEqual(report["e2e_status"], "needs-review")
-        self.assertEqual(report["delegated_decisions"], 8)
+        self.assertEqual(report["delegated_decisions"], 9)
         self.assertEqual(state["metadata_approval"]["decision_source"], "delegated-automation")
         self.assertEqual(report["literary_quality"]["status"], "not-checked")
 

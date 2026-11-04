@@ -92,6 +92,28 @@ def sheet(revision, resolved):
     }
 
 
+def samples_sheet():
+    return {
+        "schema_version": "1.0", "sheet_id": "brief-samples", "revision": "1", "title": "Translation samples",
+        "bindings": [{"label": "Samples", "value": "translation/brief-samples.md"}],
+        "decisions": [{"id": "choose-a", "command": "choose A", "label": "A", "requires_note": False, "effect": "resolve"},
+                      {"id": "choose-b", "command": "choose B", "label": "B", "requires_note": False, "effect": "resolve"},
+                      {"id": "none", "command": "none of these", "label": "None of these", "requires_note": True,
+                       "effect": "reopen"}],
+        "items": [{"id": "S1", "summary": "story, paragraph 1",
+                   "details": [{"label": "Original", "value": "他回来了。"}, {"label": "A", "value": "He came back."},
+                               {"label": "About A", "value": "Close."}, {"label": "B", "value": "He was back."},
+                               {"label": "About B", "value": "Freer."}],
+                   "status": "pending", "status_label": "Pending", "allowed_decisions": ["choose-a", "choose-b", "none"],
+                   "dependencies": [], "response": None}],
+        "gate": {"status": "awaiting-choices", "closure_required": False, "final_closure": "not-required",
+                 "ready_state": "not-ready"},
+        "presentation": {"mode": "all", "note_label": "Reasons", "note_placeholder": "Optional", "submit_label": "Submit"},
+        "submission": {"instruction": "Choose one variant per sample.", "rules": ["Decide every sample."],
+                       "closure_command": "confirm final closure", "closure_label": "Confirm"},
+    }
+
+
 def translate(request):
     """A scripted translation agent driven only by the saved receipts it is given."""
     ctx, cwd = context(request), request.cwd
@@ -100,11 +122,19 @@ def translate(request):
     receipt = ctx["user_receipt"] or {}
     command = receipt.get("parsed", {}).get("command") or ""
     if ctx["stage"] == "brief":
-        # The translation brief: glossary and voice drafted from the whole manuscript, revised on feedback.
-        english = "Tale" if receipt.get("parsed", {}).get("type") == "feedback" else "Story"
-        write(cwd, "translation/glossary.md", f"| 故事 | {english} | title | provisional |\n")
-        write(cwd, "translation/voice.md", "## Narrator · story · home\nPlain. Status: provisional\n")
-        return result("needs_human_input", gate="translation_brief", message="Proposed glossary and voice.")
+        # The translation brief: tryout samples polled first, then glossary, voice, and samples approved together.
+        if not ctx["brief_samples_approval"]:
+            write(cwd, "translation/glossary.md", "| 故事 | Story | title | provisional |\n")
+            write(cwd, "translation/voice.md", "## Narrator · story · home\nPlain. Status: provisional\n")
+            return result("needs_human_input", gate="brief_samples", message="Choose the sample variants.",
+                          binding_path=write(cwd, "translation/brief-samples.md", "S1: A / B\n"),
+                          review_path=write(cwd, "translation/brief-samples.json", samples_sheet()))
+        if receipt.get("parsed", {}).get("type") == "dispositions":
+            note = receipt["parsed"]["dispositions"][0]["note"]
+            write(cwd, "translation/brief-samples.md", f"S1: A accepted ({note}); B rejected\n")
+        if receipt.get("parsed", {}).get("type") == "feedback":
+            write(cwd, "translation/glossary.md", "| 故事 | Tale | title | provisional |\n")
+        return result("needs_human_input", gate="translation_brief", message="Proposed glossary, voice, and samples.")
     if ctx["chapter"]["chapter_id"] == "front-matter":
         # The front matter: an internal map without exceptions, then chapter approval.
         write(cwd, "translation/maps/front-matter.json", {
@@ -198,11 +228,18 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(run["gate"]["chapter_id"], "front-matter")  # Metadata review is on the front matter.
         self.post(f"/api/runs/{run_id}/metadata/confirm", {"gate_id": run["gate"]["id"], "record_revision": 1})
         run = self.settle(run_id)
+        # The sample poll: each original beside its variants; one choice per sample, reasons optional.
+        self.assertEqual((run["gate"]["kind"], run["gate"]["chapter_id"]), ("brief_samples", "front-matter"))
+        self.assertEqual([row["label"] for row in run["gate"]["sheet"]["items"][0]["details"][:2]], ["Original", "A"])
+        self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"], "text": "S1 choose A: keeps the restraint"})
+        run = self.settle(run_id)
         # The translation brief is the workflow's own front-matter review: read the files, correct, approve.
         self.assertEqual((run["gate"]["kind"], run["gate"]["chapter_id"], run["gate"]["commands"]),
                          ("translation_brief", "front-matter", ["approve brief"]))
         self.assertTrue(run["gate_review"])
-        self.assertEqual([d["path"] for d in run["gate"]["documents"]], ["translation/glossary.md", "translation/voice.md"])
+        self.assertEqual([d["path"] for d in run["gate"]["documents"]],
+                         ["translation/glossary.md", "translation/voice.md", "translation/brief-samples.md"])
+        self.assertIn("keeps the restraint", run["gate"]["documents"][2]["text"])
         self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"], "text": "Render 故事 as Tale."})
         run = self.settle(run_id)
         self.assertIn("Tale", run["gate"]["documents"][0]["text"])

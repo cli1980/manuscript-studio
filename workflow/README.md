@@ -225,9 +225,17 @@ stage without another agent turn. The approval is kept in
 `literary-translation-v1` uses this for its translation brief (stage `brief`):
 the agent drafts `translation/glossary.md` and `translation/voice.md` from the
 whole prepared manuscript, starting from any files carried from an earlier run,
-and the `translation_brief` gate presents both. Reply `approve brief` to approve
-them, or send corrections. The approved files become the chapter stage's
-starting point, also after a chapter-stage restart.
+and translates three randomly picked sample passages three ways each into
+`translation/brief-samples.md`. The `brief_samples` gate is an approval sheet
+with one item per sample: an `Original` row, one row per variant labelled like
+the decision that chooses it (`choose A`, …), and `none of these` (a reason is
+required) to ask for new variants. A reply such as `S1 choose A: keeps the
+restraint` picks a variant with reasons; deciding every sample closes the poll.
+The agent then records accepted and rejected variants with the reasons, and the
+`translation_brief` gate presents all three files. Reply `approve brief` to
+approve them, or send corrections. The approved files become the chapter stage's
+starting point, also after a chapter-stage restart; the samples guide tone and
+voice and do not bind later passages.
 
 ### Final acceptance
 

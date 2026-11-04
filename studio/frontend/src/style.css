@@ -96,3 +96,33 @@ h2 .tag.status { font-size: 0.8rem; vertical-align: middle; }
 .version-preview { margin-top: 0.7rem; background: #f7f8fa; border: 1px solid #dde2e7; border-radius: 8px; padding: 0.7rem 1rem; }
 .conversation { margin: 0.4rem 0 0.8rem; }
 .conversation .text { max-height: 40vh; }
+.sample-poll .sample { margin-bottom: 1rem; }
+.sample-poll .variant { display: block; border: 1px solid #dde2e7; border-radius: 8px; padding: 0.6rem; cursor: pointer; }
+.sample-poll .variant.chosen { border-color: #2f6fdb; background: #eef4ff; }
+.sample-poll textarea { width: 100%; }
+
+/* Formatted agent documents and the document review (translation brief). */
+.markdown { line-height: 1.55; }
+.markdown h3, .markdown h4, .markdown h5, .markdown h6 { margin: 1.1rem 0 0.4rem; }
+.markdown h3 { font-size: 1.15rem; border-bottom: 1px solid #e3e6ea; padding-bottom: 0.2rem; }
+.markdown p, .markdown ul, .markdown ol { margin: 0.4rem 0; }
+.markdown code { background: #f1f3f5; padding: 0 0.25rem; border-radius: 3px; }
+.markdown blockquote { margin: 0.5rem 0; padding: 0.2rem 0.8rem; border-left: 3px solid #c9d2db; color: #444; }
+.markdown .md-link { border-bottom: 1px dotted #888; }
+.md-table { overflow-x: auto; margin: 0.6rem 0; }
+.md-table table { border-collapse: collapse; width: 100%; font-size: 0.95em; }
+.md-table th, .md-table td { border: 1px solid #dde2e7; padding: 0.35rem 0.55rem; text-align: left; vertical-align: top; }
+.md-table th { background: #f3f5f7; }
+.md-table tr:nth-child(even) td { background: #fafbfc; }
+.tag.md-accepted { background: #dff3e4; color: #1d5e2f; }
+.tag.md-rejected { background: #f6e3e3; color: #7a2626; }
+.documents { border: 1px solid #dde2e7; border-radius: 10px; margin: 0.8rem 0; background: #fff; }
+.doc-tabs { display: flex; gap: 0.2rem; border-bottom: 1px solid #dde2e7; padding: 0.4rem 0.6rem 0; }
+.doc-tabs button { border: 1px solid transparent; border-bottom: none; background: none; padding: 0.45rem 0.9rem;
+  border-radius: 8px 8px 0 0; cursor: pointer; color: #444; }
+.doc-tabs button.active { border-color: #dde2e7; background: #fff; color: #111; font-weight: 600; margin-bottom: -1px; }
+.doc-body { padding: 0.6rem 1.1rem 1rem; max-height: 70vh; overflow-y: auto; }
+.summary-card { background: #f7f8fa; border: 1px solid #dde2e7; border-radius: 10px; padding: 0.7rem 1.1rem; }
+.decision-bar { display: grid; grid-template-columns: auto 1fr auto; gap: 0.6rem; align-items: start;
+  border-top: 1px solid #e3e6ea; padding-top: 0.8rem; }
+.decision-bar textarea { width: 100%; }

@@ -3,6 +3,7 @@ import { api, type Gate, type RunDetail } from "../api";
 import { Documents, ErrorBox, reviewName, TextBlock, useLoad, when } from "./common";
 import { SheetReview } from "./SheetReview";
 import { GatePanel } from "./GatePanel";
+import { Markdown } from "./Markdown";
 
 // Chapter browser inside a workflow run: prepared chapters and each stage's completed outputs.
 export function Chapters({ runId, chapterId }: { runId: string; chapterId?: string }) {
@@ -97,20 +98,20 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
                           <span className="muted">{review.decision_source !== "human" ? review.decision_source : ""} {when(review.created_at)}</span></summary>
                         {review.kind === "metadata_review"
                           ? <p className="muted">The metadata is kept on the <a href={`#/works/${encodeURIComponent(run.data?.work_id ?? "")}`}>work page</a>.</p>
-                          : <Documents documents={review.documents} open={false} />}
+                          : <Documents documents={review.documents} />}
                       </details>
                     ))}
                   </div>
                 )}
                 <div className="columns">
-                  <div><h3>Prepared</h3><TextBlock text={detail.data.prepared_text} /></div>
+                  <div><h3>Prepared</h3><Markdown text={detail.data.prepared_text} /></div>
                   {detail.data.outputs.map((output) => (
                     <div key={output.stage}><h3>{output.stage} <span className="muted mono">attempt {output.attempt} · {output.sha256.slice(0, 10)}</span></h3>
-                      <TextBlock text={output.text} /></div>
+                      <Markdown text={output.text} /></div>
                   ))}
                   {draft != null && (
                     <div className="awaiting"><h3>Translation <span className="tag busy">awaiting your approval</span></h3>
-                      <TextBlock text={draft} /></div>
+                      <Markdown text={draft} /></div>
                   )}
                   {detail.data.outputs.length === 0 && draft == null &&
                     <div className="muted">No stage output is ready for this chapter yet.</div>}
@@ -174,7 +175,7 @@ function ChapterApproval({ run, onDone }: { run: RunDetail; onDone: (closed: boo
               <div className="label">Your feedback</div>
               <TextBlock text={gate.answer_to.text} />
               <div className="label">Translator's answer</div>
-              <TextBlock text={gate.message} />
+              <Markdown text={gate.message} />
             </div>
           ) : (
             <p className="muted">The final check proposes no changes. Read the translation beside the source, then approve it or

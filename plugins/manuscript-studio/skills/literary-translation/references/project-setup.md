@@ -38,6 +38,7 @@ Ensure the project contains:
 project/
 ├── glossary.md
 ├── voice.md
+├── brief-samples.md      # created by the translation brief (section 5)
 └── translated_english/
 ```
 
@@ -126,7 +127,8 @@ When the source materially depends on cultural voice or dialect, read [cultural-
 ## 5. Translation Brief Review
 
 Before the first chapter of a whole-work translation, draft the translation
-brief: `glossary.md` and `voice.md` as they should stand when translation starts.
+brief: `glossary.md` and `voice.md` as they should stand when translation starts,
+and `brief-samples.md`, which tries them on sample passages.
 
 1. Read the complete prepared manuscript in manifest order. Start from the
    existing files when present (carried from earlier work or edited by the user)
@@ -137,14 +139,33 @@ brief: `glossary.md` and `voice.md` as they should stand when translation starts
 3. Record in `voice.md` the narrator and the main characters, each entry pinned
    to character or narrator, chapter, and place, with source evidence and target
    strategy. Mark new entries `provisional` or `observed`.
-4. Do not translate any chapter while drafting the brief.
-5. Present both complete files with a short summary of the proposals and the
-   open questions, and wait for the user's explicit approval. Treat any other
-   reply as corrections: apply them to the files and present the revised brief
+4. Pick three sample passages at random, spread across the work (from different
+   chapters when there are several; never front matter), each one or two
+   consecutive paragraphs, and record their locations.
+   Translate each sample three ways following the drafted glossary and voice.
+   Every variant must be faithful to the source; the variants differ only in
+   target-language strategy, such as closeness to source structure, register,
+   or rhythm. Save them in `brief-samples.md`: for each, the source, the
+   variants labelled A–C, and one line on what distinguishes each variant.
+5. Do not translate any chapter while drafting the brief; the samples are
+   tryouts, not chapter output.
+6. Present the three files with a short summary of the proposals and the open
+   questions, and ask the user to choose the preferred variant for each sample,
+   optionally with reasons for accepting it and for rejecting the others.
+7. Record in `brief-samples.md`, for each sample, every variant marked
+   accepted or rejected and the user's reasons in their own words. Add the
+   target strategy the choices and reasons imply to the voice entries.
+8. Present the updated brief and wait for the user's explicit approval. Treat
+   any other reply as corrections: apply them and present the revised brief
    again.
 
 The approved brief is the user-approved starting point for every chapter. Keep
 approved entries unless the user changes them through a later decision, and keep
-extending both files as chapters reveal new terms and voices. When an
+extending both files as chapters reveal new terms and voices. Keep
+`brief-samples.md` as approved unless the user changes it. It sets the tone and
+voice to start from, not a rule for later passages: the accepted variants show the
+preferred direction, the rejected variants and reasons what to avoid, and each
+passage's source and context still decide. No sample variant is a finalized
+translation of its passage. When an
 orchestrator runs the brief as its own review, it records the approval and
 presents the files; follow its gate contract instead of asking in chat.

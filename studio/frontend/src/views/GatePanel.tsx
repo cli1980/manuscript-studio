@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, type Gate, type RunDetail, type Sheet } from "../api";
-import { Documents, reviewName, TextBlock } from "./common";
+import { Documents, documentTitle, reviewName, TextBlock } from "./common";
+import { Markdown } from "./Markdown";
 import { MetadataTable } from "./Metadata";
 import { SheetReview } from "./SheetReview";
+import { SamplePoll } from "./SamplePoll";
 
 // Gate kinds reviewed with the item-by-item SheetReview; add editorial gates here when editing adopts it.
 const REVIEW_GATES = new Set(["translation_issue"]);
@@ -31,9 +33,11 @@ export function GatePanel({ run, perform, inViewer = false }: { run: RunDetail; 
         : <>
             {/* Approval sheets carry everything the reviewer needs; the agent's raw message and bound
                 checkpoint stay internal. Questions without a sheet still show the agent's message. */}
-            {!gate.sheet && <TextBlock text={gate.message} />}
-            {gate.documents?.length > 0 && <Documents documents={gate.documents} />}
-            {gate.sheet && REVIEW_GATES.has(gate.kind)
+            {gate.documents?.length > 0 ? <DocumentReview run={run} gate={gate} perform={perform} />
+              : !gate.sheet && <Markdown text={gate.message} />}
+            {gate.documents?.length > 0 ? null : gate.sheet && gate.kind === "brief_samples"
+              ? <SamplePoll key={gate.id} sheet={gate.sheet} onSubmit={(text) => perform(() => api.reply(run.id, gate.id, text))} />
+              : gate.sheet && REVIEW_GATES.has(gate.kind)
               ? <SheetReview key={`${gate.id}`} sheet={gate.sheet} onSubmit={(text) => perform(() => api.reply(run.id, gate.id, text))} />
               : gate.sheet ? <SheetForm run={run} gate={gate} sheet={gate.sheet} perform={perform} />
               : <FreeReply run={run} gate={gate} perform={perform} />}
@@ -96,6 +100,34 @@ function SheetForm({ run, gate, sheet, perform }: { run: RunDetail; gate: Gate; 
         </>
       )}
     </>
+  );
+}
+
+// A review of presented documents (e.g. the translation brief): the agent's summary, the documents as tabs,
+// then approve or request changes. Changes are feedback for the agent, which presents a revised version.
+function DocumentReview({ run, gate, perform }: { run: RunDetail; gate: Gate; perform: Perform }) {
+  const [text, setText] = useState("");
+  useEffect(() => setText(""), [gate.id]);
+  const approve = gate.commands[0];
+  return (
+    <div className="document-review">
+      {gate.answer_to && (
+        <div className="conversation"><div className="label">Your request</div><TextBlock text={gate.answer_to.text} /></div>
+      )}
+      <div className="summary-card">
+        <div className="label">{gate.answer_to ? "Revised" : "Summary"}</div>
+        <Markdown text={gate.message} />
+        <p className="muted">Please review: {gate.documents.map((d) => documentTitle(d.path)).join(", ")}.</p>
+      </div>
+      <Documents documents={gate.documents} />
+      <div className="decision-bar">
+        {approve && <button className="primary" onClick={() => perform(() => api.reply(run.id, gate.id, approve))}>
+          {approve.charAt(0).toUpperCase() + approve.slice(1)}</button>}
+        <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)}
+          placeholder="Or describe the changes you want; the translator revises and presents the brief again." />
+        <button disabled={!text.trim()} onClick={() => perform(() => api.reply(run.id, gate.id, text))}>Request changes</button>
+      </div>
+    </div>
   );
 }
 

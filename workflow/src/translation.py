@@ -33,18 +33,29 @@ PROMPT = (
     "orchestrator presents the shared metadata at its own metadata_review gate for user "
     "inspection and edits; do not request metadata confirmation yourself.\n\n"
     "TRANSLATION BRIEF (stage brief, before any chapter): follow the skill's translation brief review. Read the "
-    "complete prepared manuscript in manifest order. Starting from any existing translation/glossary.md and "
-    "translation/voice.md (carried from an earlier run; preserve their entries), save both files: the glossary's "
-    "recurring names, places, titles, forms of address, relational and cultural terms, and voice entries for the "
-    "narrator and main characters, each pinned to character or narrator, chapter, and place. Do not translate "
-    "any chapter. Return needs_human_input with gate translation_brief (review_path and binding_path null) and "
-    "a message summarizing the proposals and the open questions; the orchestrator presents both files with the "
-    "front-matter unit. A feedback user_receipt asks you to revise the files and return a new translation_brief "
-    "gate. The orchestrator records 'approve brief' and starts translation; never return completed for this "
-    "stage.\n\n"
-    "TRANSLATION: process only the supplied complete chapter. translation_brief_approval records the glossary "
-    "and voice versions the user approved before translation: keep those entries unless the user changes them "
-    "through a decision, and extend both files as chapters reveal new terms or voices. Use translation/ as project "
+    "complete prepared manuscript in manifest order. Starting from any existing translation/glossary.md, "
+    "translation/voice.md, and translation/brief-samples.md (carried from an earlier run; preserve their "
+    "entries), save the glossary and voice entries, then the three tryout samples in translation/brief-samples.md. "
+    "Do not translate any chapter. First return needs_human_input with gate brief_samples: binding_path="
+    "translation/brief-samples.md, review_path=an approval JSON with one item per sample (id S1, S2, S3; "
+    "summary=its location), whose details are a 'Location' row, an 'Original' row with the exact source text, "
+    "and for each variant a row labelled with the variant letter (A, B, C) holding its full English text plus "
+    "an 'About A' (B, C) row on what distinguishes it; decisions: choose-a, choose-b, choose-c (commands "
+    "'choose A' etc., labels 'A', 'B', 'C', effect resolve, no required note) and none (command 'none of "
+    "these', label 'None of these', effect reopen, note required); closure_required false. The user picks one "
+    "variant per sample and may give reasons in the note; a submission resolving every item is the closure. "
+    "For 'none of these', revise those samples and return a new sheet revision. brief_samples_approval marks "
+    "the closed choices: then record every variant as accepted or rejected with the user's reasons in "
+    "brief-samples.md, add the implied strategy to voice.md, and return needs_human_input with gate "
+    "translation_brief (review_path and binding_path null) and a message summarizing the brief and the open "
+    "questions; the orchestrator presents glossary.md, voice.md, and brief-samples.md with the front-matter "
+    "unit. A feedback user_receipt asks you to revise the files and return a new translation_brief gate. The "
+    "orchestrator records 'approve brief' and starts translation; never return completed for this stage.\n\n"
+    "TRANSLATION: process only the supplied complete chapter. translation_brief_approval records the glossary, "
+    "voice, and sample versions the user approved before translation: keep those entries unless the user changes "
+    "them through a decision, extend the glossary and voice as chapters reveal new terms or voices, and keep "
+    "brief-samples.md as approved; it shows the tone to start from, not a rule for each passage. Use translation/ "
+    "as project "
     "root, with glossary.md, voice.md, translated_english/, and the skill's internal "
     ".literary-translation-work/ layout; keep this chapter's internal records in exactly "
     "chapter_workdir so the orchestrator can archive them if the chapter is restarted. "
@@ -146,6 +157,7 @@ class TranslationEngine(PreparedManuscriptEngine):
             "map_exceptions_approval": state["approvals"].get("map_exceptions"),
             "sanity_approval": state["approvals"].get("chapter_sanity"),
             "metadata_approval": state.get("metadata_approval"),
+            "brief_samples_approval": state["approvals"].get("brief_samples") if stage.get("front_matter") else None,
             "translation_brief_approval": (state.get("front_matter_approvals") or {}).get("translation_brief"),
             "previous_outputs": state["outputs"], "continuity": state["continuity"],
             "user_receipt": state["next_input"],
@@ -212,12 +224,25 @@ class TranslationEngine(PreparedManuscriptEngine):
             raise ValueError("The approved passage map changed.")
 
     def on_waiting(self, state, stage, result):
+        if result["gate"] == "translation_brief" and "brief_samples" not in state["approvals"]:
+            raise ValueError("Collect the user's sample choices through a brief_samples sheet before presenting "
+                             "the translation brief.")
         if result["gate"] == "map_exceptions":
             self.chapter_map(state)
         if result["gate"] in ("translation_issue", "chapter_sanity", "continuation"):
             self.require_map(state)
 
     def on_gate(self, state, gate, result):
+        if gate["kind"] == "brief_samples":
+            # The studio's sample poll shows each original beside its variants, so the sheet must name them.
+            sheet = json.loads(self.store.content(gate["sheet"]))
+            decisions = {d["id"]: d for d in sheet["decisions"]}
+            for item in sheet["items"]:
+                labels = {row["label"] for row in item["details"]}
+                choices = [decisions[d] for d in item["allowed_decisions"] if decisions[d]["effect"] == "resolve"]
+                if "Original" not in labels or len(choices) < 2 or any(c["label"] not in labels for c in choices):
+                    raise ValueError(f"Sample {item['id']} needs an 'Original' row and one row per variant, "
+                                     "labelled like the decision that chooses it.")
         if gate["kind"] == "map_exceptions":
             state["approvals"].pop("chapter_sanity", None)
         if gate["kind"] == "chapter_sanity" and not gate["sheet"]:

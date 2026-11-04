@@ -373,6 +373,14 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     the agent applies. The approved files are the starting point for every
     chapter. Direct editing of the files in the studio is not included
     (owner choice: feedback only).
+  - Tryout samples (owner decision, 2026-11-04; committed locally): the brief
+    also translates three randomly picked passages three ways each into
+    `brief-samples.md`. A `brief_samples` poll on the front-matter page shows
+    each original beside its variants; the user picks one per sample, with
+    optional reasons, before approving the brief. The samples carry forward
+    like the glossary and voice and guide tone and voice, without binding later
+    passages. The brief approval page renders its documents as formatted
+    Markdown (`react-markdown`, used across the studio).
   - Changes the template, engine, translation skill contract, studio, and
     tests; unfinished translation runs need a workflow restart.
 - **Per-run maximum passage size** (owner decision, 2026-11-03; implemented

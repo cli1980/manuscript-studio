@@ -38,11 +38,11 @@ For an existing active chapter, verify the required internal artifacts, then res
 
 Before starting the full chapter workflow, confirm access to the complete original-language chapter. If it cannot be located, ask the user to provide it. Do not perform whole-chapter analysis, passage division, two-path drafting, or finalization from a translation, summary, or incomplete excerpt in place of the original. An isolated passage may be translated only provisionally, as described under **Establish Chapter Context**.
 
-Treat `glossary.md` and `voice.md` as living project state. Record user-approved or corrected terminology in `glossary.md` and durable voice or cultural-transfer decisions in `voice.md` promptly rather than leaving binding decisions only in chat history. Pin every voice entry to a character or narrator, chapter, and place; preserve earlier entries when the voice later changes.
+Treat `glossary.md` and `voice.md` as living project state. Record user-approved or corrected terminology in `glossary.md` and durable voice or cultural-transfer decisions in `voice.md` promptly rather than leaving binding decisions only in chat history. Pin every voice entry to a character or narrator, chapter, and place; preserve earlier entries when the voice later changes. Treat `brief-samples.md`, the sample translations from the translation brief, the same way: it is user-approved project state that shows the tone and voice to start from, not a rule for each later passage.
 
-Before the first chapter of a whole-work translation, draft both files from the complete prepared manuscript and get the user's approval of this translation brief, per [project setup](references/project-setup.md#5-translation-brief-review).
+Before the first chapter of a whole-work translation, draft both files from the complete prepared manuscript, test them in `brief-samples.md` on three sample passages translated three ways each, and get the user's sample choices, with any reasons, and approval of this translation brief, per [project setup](references/project-setup.md#5-translation-brief-review).
 
-Initialize both files as ordinary UTF-8 Markdown artifacts during project setup and keep them directly editable by the user. Reread their current on-disk contents when starting or resuming work and before each chapter. Treat direct user edits as binding; preserve user-added content and merge updates locally rather than regenerating or silently overwriting either file.
+Initialize both files as ordinary UTF-8 Markdown artifacts during project setup and keep them directly editable by the user. Reread their current on-disk contents, and `brief-samples.md` when present, when starting or resuming work and before each chapter. Treat direct user edits as binding; preserve user-added content and merge updates locally rather than regenerating or silently overwriting any of these files.
 
 ## Establish Chapter Context
 
@@ -53,6 +53,7 @@ Obtain:
 - `glossary.md` and its established names and terminology;
 - glossary-defined relational terms and any approved context-dependent or asymmetric renderings;
 - `voice.md` and the profiles pinned to the current character or narrator, chapter, and place;
+- `brief-samples.md`, when present: the accepted and rejected sample translations and the user's reasons;
 - any benchmark translation defining the target English style.
 
 If the user supplies only one isolated passage and no chapter context, translate it provisionally or request the complete chapter before fixing context-sensitive choices.

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, readBase64, type Publication } from "../api";
 import { ErrorBox, Status, TextBlock, useLoad, when } from "./common";
+import { Markdown } from "./Markdown";
 import { AuthorForm, MetadataTable } from "./Metadata";
 
 // Works: manuscript intake and workflow outcomes. Every work and its library is viewable without a run.
@@ -167,7 +168,8 @@ export function WorkView({ workId }: { workId: string }) {
         </ul>
         <div>
           <ErrorBox error={viewError} />
-          {viewing && <><h3 className="mono">{viewing.path}</h3><TextBlock text={viewing.text} /></>}
+          {viewing && <><h3 className="mono">{viewing.path}</h3>
+            {viewing.path.endsWith(".md") ? <Markdown text={viewing.text} /> : <TextBlock text={viewing.text} />}</>}
         </div>
       </div>
       <h2>Publication log</h2>
