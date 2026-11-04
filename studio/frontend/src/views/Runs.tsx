@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
-import { ErrorBox, Status, useLoad, when } from "./common";
+import { ErrorBox, reviewName, Status, useLoad, when } from "./common";
 
 const PENDING: Record<string, string> = {
   WAITING_FOR_HUMAN: "Your review", WAITING_FOR_ACCEPTANCE: "Final acceptance", BLOCKED: "Resolve blocker",
@@ -30,7 +30,7 @@ export function Runs({ initialWork }: { initialWork?: string }) {
                 <td>{run.stage}{run.chapter_id ? ` · ${run.chapter_id}` : ""}</td>
                 <td>{run.progress ? `${run.progress.completed}/${run.progress.total}` : ""}</td>
                 <td>{run.status === "WAITING_FOR_HUMAN" && run.gate_chapter_id && run.gate_kind && run.engine_current
-                  ? <a href={`#/runs/${run.id}/chapters/${encodeURIComponent(run.gate_chapter_id)}`}>{run.gate_kind === "chapter_sanity" ? "Approve" : run.gate_kind === "metadata_review" ? "Review metadata on"
+                  ? <a href={`#/runs/${run.id}/chapters/${encodeURIComponent(run.gate_chapter_id)}`}>{run.gate_kind === "chapter_sanity" ? "Approve" : run.gate_review ? `Review ${reviewName(run.gate_kind)} on`
                     : `Decide (${run.gate_kind.replaceAll("_", " ")})`} {run.gate_chapter_id}</a>
                   : <>{run.engine_current ? (PENDING[run.status] ?? "") : (run.status === "COMPLETED" || run.status === "CANCELLED" ? "" : "Restart (engine updated)")}
                   {run.gate_kind ? ` (${run.gate_kind.replaceAll("_", " ")})` : ""}</>}</td>

@@ -149,6 +149,11 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
 
     # ----- runs ----------------------------------------------------------------------------
 
+    def documents(engine, snapshots):
+        """Presented workspace documents (e.g. a translation brief's glossary and voice) as text."""
+        return [{"path": item["path"], "sha256": item["sha256"], "text": engine.store.content(item).decode("utf-8")}
+                for item in snapshots or []]
+
     def run_detail(svc, run_id):
         detail = svc.get_run(run_id)
         detail["worker"] = workers.status(run_id)
@@ -173,6 +178,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                         view["binding_text"] = engine.store.content(gate["binding"]).decode("utf-8")
                     except UnicodeDecodeError:
                         pass
+                view["documents"] = documents(engine, gate.get("documents"))
                 if gate["kind"] == "metadata_review":
                     detail["metadata"] = engine.metadata_view(state)
                     detail["metadata_fields"] = svc.metadata_fields()
@@ -206,7 +212,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                                             options=payload.get("options") or {}, model=payload.get("model"))
         else:
             run_id = svc.create_run(template_id, work_id=payload.get("work_id"), model=payload.get("model"),
-                                    skip_stages=payload.get("skip_stages") or ())
+                                    skip_stages=payload.get("skip_stages") or (), settings=payload.get("settings"))
         if payload.get("start", True):
             workers.start(run_id)
         return run_detail(svc, run_id)
@@ -340,8 +346,18 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                                     "text": engine.store.content(item["output"]).decode("utf-8")})
             map_path = engine.workspace / "translation" / "maps" / f"{chapter_id}.json"
             passage_map = json.loads(map_path.read_text(encoding="utf-8")) if map_path.is_file() else None
+            # Completed front-matter reviews: the shared metadata and each workflow's own (e.g. translation brief).
+            reviews = []
+            if record["role"] == "front_matter":
+                if state.get("metadata_approval"):
+                    reviews.append({"kind": "metadata_review", "record_revision": state["metadata_approval"]["record_revision"],
+                                    "decision_source": state["metadata_approval"]["decision_source"], "documents": []})
+                for kind, approval in (state.get("front_matter_approvals") or {}).items():
+                    reviews.append({"kind": kind, "created_at": approval["created_at"],
+                                    "decision_source": approval["decision_source"],
+                                    "documents": documents(engine, approval["documents"])})
             return {"chapter": {k: record.get(k) for k in ("chapter_id", "order", "title", "role", "sha256")},
-                    "prepared_text": prepared, "outputs": outputs, "passage_map": passage_map}
+                    "prepared_text": prepared, "outputs": outputs, "passage_map": passage_map, "reviews": reviews}
 
     # ----- frontend ------------------------------------------------------------------------
 

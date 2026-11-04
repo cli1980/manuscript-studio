@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Gate, type RunDetail, type Sheet } from "../api";
-import { TextBlock } from "./common";
+import { Documents, reviewName, TextBlock } from "./common";
 import { MetadataTable } from "./Metadata";
 import { SheetReview } from "./SheetReview";
 
@@ -17,7 +17,7 @@ export function GatePanel({ run, perform, inViewer = false }: { run: RunDetail; 
   if (!inViewer && gate.chapter_id) {
     return (
       <div className="panel gate">
-        <h2>Your review: {gate.kind === "chapter_sanity" ? "approve" : gate.kind.replaceAll("_", " ") + " ·"} {gate.chapter_id}</h2>
+        <h2>Your review: {gate.kind === "chapter_sanity" ? "approve" : reviewName(gate.kind) + " ·"} {gate.chapter_id}</h2>
         <p>Chapter decisions happen in the chapter viewer, beside the source text.</p>
         <a className="button" href={`#/runs/${run.id}/chapters/${encodeURIComponent(gate.chapter_id ?? "")}`}>Review {gate.chapter_id} in the chapter viewer</a>
       </div>
@@ -25,13 +25,14 @@ export function GatePanel({ run, perform, inViewer = false }: { run: RunDetail; 
   }
   return (
     <div className="panel gate">
-      <h2>Your review: {gate.kind.replaceAll("_", " ")}{gate.chapter_id ? ` · ${gate.chapter_id}` : ""}</h2>
+      <h2>Your review: {reviewName(gate.kind)}{gate.chapter_id ? ` · ${gate.chapter_id}` : ""}</h2>
       {gate.kind === "metadata_review" && run.metadata
         ? <MetadataGate run={run} gate={gate} perform={perform} />
         : <>
             {/* Approval sheets carry everything the reviewer needs; the agent's raw message and bound
                 checkpoint stay internal. Questions without a sheet still show the agent's message. */}
             {!gate.sheet && <TextBlock text={gate.message} />}
+            {gate.documents?.length > 0 && <Documents documents={gate.documents} />}
             {gate.sheet && REVIEW_GATES.has(gate.kind)
               ? <SheetReview key={`${gate.id}`} sheet={gate.sheet} onSubmit={(text) => perform(() => api.reply(run.id, gate.id, text))} />
               : gate.sheet ? <SheetForm run={run} gate={gate} sheet={gate.sheet} perform={perform} />

@@ -99,6 +99,12 @@ def translate(request):
         return prepare(request)
     receipt = ctx["user_receipt"] or {}
     command = receipt.get("parsed", {}).get("command") or ""
+    if ctx["stage"] == "brief":
+        # The translation brief: glossary and voice drafted from the whole manuscript, revised on feedback.
+        english = "Tale" if receipt.get("parsed", {}).get("type") == "feedback" else "Story"
+        write(cwd, "translation/glossary.md", f"| 故事 | {english} | title | provisional |\n")
+        write(cwd, "translation/voice.md", "## Narrator · story · home\nPlain. Status: provisional\n")
+        return result("needs_human_input", gate="translation_brief", message="Proposed glossary and voice.")
     if ctx["chapter"]["chapter_id"] == "front-matter":
         # The front matter: an internal map without exceptions, then chapter approval.
         write(cwd, "translation/maps/front-matter.json", {
@@ -178,8 +184,10 @@ class WebApiTests(unittest.TestCase):
         added = self.post("/api/works", {"upload": upload, "manuscript_language": "zh"})
         self.assertEqual(added.status_code, 200, added.text)
         self.assertEqual((added.json()["runs"], added.json()["unfinished_run"]), ([], None))
-        created = self.post("/api/runs", {"template_id": "literary-translation-v1", "work_id": added.json()["id"]})
+        created = self.post("/api/runs", {"template_id": "literary-translation-v1", "work_id": added.json()["id"],
+                                          "settings": {"passage_size": 1200}})
         self.assertEqual(created.status_code, 200, created.text)
+        self.assertEqual(created.json()["settings"], {"passage_size": 1200})  # The run's own passage size.
         run_id = created.json()["id"]
         run = self.settle(run_id)
         self.assertEqual((run["stage"], run["status"], run["gate"]["kind"]), ("metadata", "WAITING_FOR_HUMAN",
@@ -190,6 +198,19 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(run["gate"]["chapter_id"], "front-matter")  # Metadata review is on the front matter.
         self.post(f"/api/runs/{run_id}/metadata/confirm", {"gate_id": run["gate"]["id"], "record_revision": 1})
         run = self.settle(run_id)
+        # The translation brief is the workflow's own front-matter review: read the files, correct, approve.
+        self.assertEqual((run["gate"]["kind"], run["gate"]["chapter_id"], run["gate"]["commands"]),
+                         ("translation_brief", "front-matter", ["approve brief"]))
+        self.assertTrue(run["gate_review"])
+        self.assertEqual([d["path"] for d in run["gate"]["documents"]], ["translation/glossary.md", "translation/voice.md"])
+        self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"], "text": "Render 故事 as Tale."})
+        run = self.settle(run_id)
+        self.assertIn("Tale", run["gate"]["documents"][0]["text"])
+        self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"], "text": "approve brief"})
+        run = self.settle(run_id)
+        front = self.client.get(f"/api/runs/{run_id}/chapters/front-matter").json()
+        self.assertEqual([r["kind"] for r in front["reviews"]], ["metadata_review", "translation_brief"])
+        self.assertIn("Tale", front["reviews"][1]["documents"][0]["text"])
         self.assertEqual((run["gate"]["kind"], run["gate"]["chapter_id"]), ("chapter_sanity", "front-matter"))
         self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"], "text": "approve chapter"})
         run = self.settle(run_id)

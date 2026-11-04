@@ -114,7 +114,7 @@ export function WorkView({ workId }: { workId: string }) {
           onSave={async (field, value, rationale) => { await api.editWorkMetadata(workId, { field, value, rationale }); }}
           onDone={() => void reload()} />
       )}
-      <StartWorkflow workId={workId} unfinishedRun={data.unfinished_run} workflows={data.workflows} onStarted={() => void reload()} />
+      <StartWorkflow workId={workId} language={data.manuscript_language} unfinishedRun={data.unfinished_run} workflows={data.workflows} onStarted={() => void reload()} />
       <h2>Workflows</h2>
       {Object.keys(data.workflows).length === 0 && <p className="muted">No workflow has been finalized on this work.</p>}
       {Object.entries(data.workflows).map(([name, flow]) => (
@@ -184,8 +184,9 @@ export function WorkView({ workId }: { workId: string }) {
 }
 
 // Start a workflow on this work without leaving the page; the new run appears in the Runs table below.
-function StartWorkflow({ workId, unfinishedRun, workflows, onStarted }: {
+function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }: {
   workId: string;
+  language: string;
   unfinishedRun: string | null;
   workflows: Record<string, { status: string }>;
   onStarted: () => void;
@@ -193,18 +194,24 @@ function StartWorkflow({ workId, unfinishedRun, workflows, onStarted }: {
   const templates = useLoad(api.templates, []);
   const [templateId, setTemplateId] = useState("");
   const [skip, setSkip] = useState<string[]>([]);
+  const [passageSize, setPassageSize] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const available = (templates.data ?? []).filter((t) => !t.consumes);
   const template = available.find((t) => t.id === templateId);
+  // Passage size is counted in characters for Chinese, Japanese, and Korean, otherwise in words.
+  const unit = ["zh", "ja", "ko"].includes(language.split("-")[0].toLowerCase()) ? "cjk_chars" : "words";
+  const defaultSize = template?.passage_size?.[unit];
 
   async function start() {
     setBusy(true);
     setError(null);
     try {
-      await api.create({ template_id: templateId, work_id: workId, skip_stages: skip });
+      const settings = defaultSize && passageSize.trim() ? { passage_size: Number(passageSize) } : undefined;
+      await api.create({ template_id: templateId, work_id: workId, skip_stages: skip, settings });
       setTemplateId("");
       setSkip([]);
+      setPassageSize("");
       onStarted();
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc));
@@ -219,7 +226,7 @@ function StartWorkflow({ workId, unfinishedRun, workflows, onStarted }: {
     <div className="panel">
       <h2>Start a workflow</h2>
       <div className="row">
-        <select value={templateId} onChange={(e) => { setTemplateId(e.target.value); setSkip([]); }}>
+        <select value={templateId} onChange={(e) => { setTemplateId(e.target.value); setSkip([]); setPassageSize(""); }}>
           <option value="">Choose a workflow…</option>
           {available.map((t) => (
             <option key={t.id} value={t.id}>
@@ -235,6 +242,16 @@ function StartWorkflow({ workId, unfinishedRun, workflows, onStarted }: {
         ))}
         <button className="primary" disabled={!templateId || busy} onClick={() => void start()}>{busy ? "Starting…" : "Start"}</button>
       </div>
+      {defaultSize && (
+        <details>
+          <summary>Advanced</summary>
+          <label>Maximum passage size{" "}
+            <input type="number" min={100} step={100} value={passageSize} placeholder={String(defaultSize)}
+              onChange={(e) => setPassageSize(e.target.value)} />{" "}{unit === "cjk_chars" ? "characters" : "words"}</label>
+          <p className="muted">The agent translates and reviews each chapter passage by passage. Smaller passages get closer
+            review; a longer passage needs your approval as an exception. Fixed for the run.</p>
+        </details>
+      )}
       {template && <p className="muted">Stages: {template.stages.filter((s) => !skip.includes(s)).join(" → ")}. Preparation runs first;
         the agent then works until it needs you. Open the run below to follow it.</p>}
       <ErrorBox error={error ?? templates.error} />

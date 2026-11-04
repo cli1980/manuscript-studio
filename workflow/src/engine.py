@@ -163,6 +163,13 @@ class Engine:
         """Check dependencies before creating a run."""
 
     @classmethod
+    def resolve_settings(cls, template, settings, manuscript_language):
+        """Per-run settings chosen at creation, with template defaults applied; fixed for the run."""
+        if settings:
+            raise ValueError("This template has no run settings.")
+        return {}
+
+    @classmethod
     def skill_directories(cls, template):
         names = sorted({name for agent in template["agents"].values() for name in agent["skills"]})
         return {name: SKILLS / name for name in names}
@@ -181,7 +188,7 @@ class Engine:
 
     @classmethod
     def create(cls, root, template, *, source, manuscript_language, work_id, owner=None, source_name=None,
-               model=None, agent_models=None, library=None, run_id=None, skip_stages=()):
+               model=None, agent_models=None, library=None, run_id=None, skip_stages=(), settings=None):
         root, source = plain(Path(root)), plain(Path(source))
         if not source.is_file() or source.stat().st_nlink != 1:
             raise ValueError("Designate one regular, non-linked source file.")
@@ -203,12 +210,14 @@ class Engine:
             if not stages[stage_id].get("optional"):
                 raise ValueError(f"Stage {stage_id} is required and cannot be skipped.")
         source_data = read_bytes(source)
+        settings = cls.resolve_settings(template, dict(settings or {}), manuscript_language)
         cls.preflight(template)
         inventory = pin_directories(cls.skill_directories(template))
         state = cls.initial_state(
             template, work_id=work_id, owner=owner, manuscript_language=manuscript_language,
             source_name=name, source_origin=str(source), source_hash=digest(source_data),
             skills={relative: sha for relative, (_, sha) in inventory.items()}, skipped_stages=skip_stages,
+            settings=settings,
             **({"id": run_id} if run_id else {}),
         )
         Store.create(root, state).close()
@@ -351,8 +360,8 @@ class Engine:
         if state["status"] == "CANCELLED":
             raise WorkflowError("run_cancelled", "This run was stopped.")
         if self.finalized(state) or state["status"] == "COMPLETED":
-            raise WorkflowError("run_finalized", "This run is finalized; changes require adding the "
-                                                 "manuscript again as a new work.")
+            raise WorkflowError("run_finalized", "This run is finalized; start a new run on the work to "
+                                                 "publish a new version.")
         if state["status"] == "RUNNING":
             raise ValueError("An agent turn is running; interrupt it, or retry with --confirm-stopped after a crash.")
 
@@ -566,6 +575,12 @@ class Engine:
             gate["binding"] = self.checkpoint(result["binding_path"], kind)
         if rules.get("binding") == "required" and not gate["binding"]:
             raise ValueError("This review requires an exact bound checkpoint.")
+        if rules.get("documents"):
+            paths = [self.format_path(state, path) for path in rules["documents"]]
+            missing = [path for path in paths if not (self.workspace / path).is_file()]
+            if missing:
+                raise ValueError(f"The {kind} review presents {', '.join(paths)}; save {', '.join(missing)} first.")
+            gate["documents"] = [self.checkpoint(path, "document") for path in paths]
         if result["review_path"]:
             gate["sheet"] = self.checkpoint(result["review_path"], "review_sheet")
             sheet = json.loads(self.store.content(gate["sheet"]))
@@ -629,8 +644,9 @@ class Engine:
                 raise ValueError("A response is required.")
             self.verify(state)
             gate = state["gate"]
-            for key in ("binding", "sheet", "settings"):
-                if gate.get(key) and digest(read_bytes(self.file(gate[key]["path"]))) != gate[key]["sha256"]:
+            presented = [gate[key] for key in ("binding", "sheet", "settings") if gate.get(key)] + gate.get("documents", [])
+            for item in presented:
+                if digest(read_bytes(self.file(item["path"]))) != item["sha256"]:
                     raise ValueError("Review changed after presentation; retry and request a new revision.")
             if gate["kind"] == "metadata_review":
                 return self._confirm_metadata(revision, state, gate, text, decision_source)
@@ -653,14 +669,20 @@ class Engine:
             receipt = {"id": str(uuid.uuid4()), "created_at": now(), "gate": gate, "text": text,
                        "parsed": parsed, "decision_source": decision_source}
             state["receipts"].append(receipt)
-            if parsed["type"] == "final-closure" or parsed.get("implied_closure"):
+            closed = parsed["type"] == "final-closure" or parsed.get("implied_closure")
+            if closed:
                 self._record_closure(state, gate)
             state.update(next_input=receipt, status="READY", gate=None)
+            if closed:
+                self.on_closure(state, gate, receipt)
             self.store.save(revision, state, "review.received", {"receipt_id": receipt["id"], "gate_id": gate_id})
             return state
 
     def _record_closure(self, state, gate):
-        state["approvals"][gate["kind"]] = gate["binding"]
+        state["approvals"][gate["kind"]] = gate["binding"] or {"documents": gate.get("documents")}
+
+    def on_closure(self, state, gate, receipt):
+        """Hook after a gate closes; the run is READY with the receipt as the next input."""
 
     # ----- acceptance and export ------------------------------------------------------------
 
@@ -817,7 +839,7 @@ class Engine:
         iteration = self.current_iteration(state) if self._stage_or_empty(state).get("iterate") else None
         result = {key: state.get(key) for key in (
             "id", "template_id", "workflow", "work_id", "owner", "status", "stage", "attempts", "error",
-            "export_path", "document_path", "manuscript_language", "restart_of", "superseded_by")}
+            "export_path", "document_path", "manuscript_language", "restart_of", "superseded_by", "settings")}
         result["chapter_id"] = iteration["chapter_id"] if iteration else None
         iterations = state.get("iterations") or []
         result["progress"] = {"completed": sum(item["status"] == "completed" for item in iterations),
@@ -828,6 +850,8 @@ class Engine:
             result["gate_id"] = state["gate"]["id"]
             result["gate_kind"] = state["gate"]["kind"]
             result["gate_chapter_id"] = state["gate"].get("chapter_id")
+            # Reviews present something to read and approve (metadata, documents); other gates ask for decisions.
+            result["gate_review"] = state["gate"]["kind"] == "metadata_review" or bool(state["gate"].get("documents"))
             if state["gate"]["kind"] == "metadata_review":
                 result["metadata_record_revision"] = state["gate"]["record_revision"]
         if state.get("acceptance_id") and state["status"] == "WAITING_FOR_ACCEPTANCE":

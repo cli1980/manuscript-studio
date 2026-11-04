@@ -49,8 +49,43 @@ class PreparedManuscriptEngine(Engine):
     def initial_state(cls, template, **fields):
         state = super().initial_state(template, **fields)
         state.update(prepared=None, chapters=[], iterations=[], continuity={}, continuity_seed={},
-                     metadata_approval=None, metadata_versions=[])
+                     metadata_approval=None, metadata_versions=[], front_matter_approvals={})
         return state
+
+    # ----- front matter ---------------------------------------------------------------------
+    # Every prepared revision starts with one front-matter unit. The engine-owned metadata review and each
+    # workflow's own front-matter stages (template "front_matter": true, e.g. a translation brief) are
+    # presented with it, so the studio shows them all on the front-matter page.
+
+    @staticmethod
+    def front_matter_id(state):
+        return next(c["chapter_id"] for c in state["chapters"] if c["role"] == "front_matter")
+
+    def instance(self, state):
+        result = super().instance(state)
+        if self.stage_def(state).get("front_matter") and state.get("chapters"):
+            chapter_id = self.front_matter_id(state)
+            result.update(chapter_id=chapter_id, key=f"{result['stage']}/{result['epoch']}/{chapter_id}/0")
+        return result
+
+    def document_gates(self, state, stage):
+        rules = state["definition"]["gates"]
+        return [kind for kind in stage.get("gates", []) if rules[kind].get("documents")]
+
+    def on_closure(self, state, gate, receipt):
+        stage = self.stage_def(state, gate["stage"])
+        if not stage.get("front_matter") or gate["kind"] not in self.document_gates(state, stage):
+            return
+        approvals = state.setdefault("front_matter_approvals", {})
+        approvals[gate["kind"]] = {"stage": stage["id"], "documents": gate["documents"], "receipt_id": receipt["id"],
+                                   "decision_source": receipt["decision_source"], "created_at": receipt["created_at"]}
+        if all(kind in approvals for kind in self.document_gates(state, stage)):
+            # The approved documents are the chapter stage's starting point, also after a chapter-stage restart.
+            iterating = self.iterating_stage(state)
+            if iterating:
+                state["continuity_seed"] = self.carry_snapshot(state, iterating)
+            state["next_input"] = None
+            self._advance_stage(state)
 
     def metadata_helper(self):
         """Load the pinned metadata helper bound to this run's pinned validator."""
@@ -175,6 +210,8 @@ class PreparedManuscriptEngine(Engine):
             self._prepared(state, result["work_record"])
             self._verify_consolidation(state)
             self._advance_stage(state)
+        elif stage.get("front_matter"):
+            raise ValueError("A front-matter review completes when the user approves it; request its gate instead.")
         elif stage.get("iterate"):
             self._finish_chapter(state, stage, self.complete_chapter(state, result))
         else:
@@ -210,9 +247,12 @@ class PreparedManuscriptEngine(Engine):
     def reset_stage(self, state, stage):
         if stage.get("preparation"):
             state.update(prepared=None, chapters=[], iterations=[], outputs=[], continuity={},
-                         metadata_approval=None, stage_iterations={})
+                         metadata_approval=None, stage_iterations={}, front_matter_approvals={})
         elif stage["kind"] == "metadata_review":
             state["metadata_approval"] = None
+        elif stage.get("front_matter"):
+            for kind in self.document_gates(state, stage):
+                state.get("front_matter_approvals", {}).pop(kind, None)
         elif stage.get("iterate"):
             state.get("stage_iterations", {}).pop(stage["id"], None)
             state["iterations"] = self.build_iterations(state, stage)
@@ -324,6 +364,9 @@ class PreparedManuscriptEngine(Engine):
             "manuscript_language": state["manuscript_language"], "output_language": self.output_language(state),
             "prepared_revision": state["prepared"]["base"]["preparation"]["current_revision"],
             "metadata_confirmed": state.get("metadata_approval"),
+            "front_matter_reviews": {kind: {"receipt_id": a["receipt_id"], "decision_source": a["decision_source"],
+                                            "documents": {d["path"]: d["sha256"] for d in a["documents"]}}
+                                     for kind, a in (state.get("front_matter_approvals") or {}).items()},
             "chapters": [{"chapter_id": a["chapter_id"], "sha256": a["sha256"], "bytes": a["bytes"],
                           "attempts": attempts.get(a["chapter_id"])} for a in state["outputs"]],
             "decisions": receipts, "restarts": len(state.get("restarts") or []),
@@ -475,9 +518,9 @@ class PreparedManuscriptEngine(Engine):
         self._record_metadata_version(state, "presented")
         instance = self.instance(state)
         # The shared metadata review is presented with the front-matter unit every prepared revision starts with.
-        front_matter = next(c["chapter_id"] for c in state["chapters"] if c["role"] == "front_matter")
         gate = {"id": str(uuid.uuid4()), "kind": "metadata_review", "message": self._metadata_message(state, work),
-                "stage": stage["id"], "chapter_id": front_matter, "attempt": 0, "instance": instance["key"],
+                "stage": stage["id"], "chapter_id": self.front_matter_id(state), "attempt": 0,
+                "instance": instance["key"],
                 "binding": self.checkpoint(relative, "metadata_record"), "sheet": None,
                 "record_revision": work["record_revision"]}
         state.update(status="WAITING_FOR_HUMAN", gate=gate)

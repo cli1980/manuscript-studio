@@ -5,6 +5,7 @@
   "engine": "workflow.src.translation:TranslationEngine",
   "target_language": "en-US",
   "locked_metadata": ["/manuscript_language"],
+  "passage_size": {"cjk_chars": 1500, "words": 800},
   "agents": {
     "prepare": {
       "skill": "prepare-manuscript",
@@ -25,6 +26,7 @@
     "map_exceptions": {"sheet": "required", "binding": "required", "closure": "implied"},
     "translation_issue": {"sheet": "required", "binding": "required", "closure": "implied"},
     "chapter_sanity": {"sheet": "optional", "binding": "required", "closure": "required", "item_binding": true},
+    "translation_brief": {"documents": ["translation/glossary.md", "translation/voice.md"], "command": "approve brief"},
     "continuation": {},
     "question": {}
   },
@@ -32,6 +34,7 @@
     {"id": "prepare", "kind": "agent", "agent": "prepare", "preparation": true, "gates": ["question"],
      "owns": ["prepared/"]},
     {"id": "metadata", "kind": "metadata_review"},
+    {"id": "brief", "kind": "agent", "agent": "translate", "front_matter": true, "gates": ["translation_brief", "question"]},
     {"id": "translate", "kind": "agent", "agent": "translate", "iterate": "chapters",
      "gates": ["map_exceptions", "translation_issue", "chapter_sanity", "continuation", "question"],
      "owns": ["translation/"],

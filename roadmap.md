@@ -235,8 +235,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     closed, and every applied consistency fix is recorded against the chapter
     it changed.
 - **Implied closure for advice-type sheets** (owner decision, 2026-10-28;
-  scheduled with the front-matter change, after the current 黑松石 run
-  completes): the separate closure is redundant where a later step shows the
+  implemented with the front-matter change in `d9896c5`): the separate closure is redundant where a later step shows the
   full result. For translation advice and map exceptions, a submission that
   decides every item with resolving decisions counts as final closure; a
   discuss or revise decision still produces a new revision of the same sheet.
@@ -345,8 +344,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
      highlighting of sheet item locations) do not touch decision logic, and so
      several editing stages and the whole-book pass fit in one view.
 - **Metadata review on the front-matter chapter** (owner decision, 2026-10-28;
-  scheduled after the current 黑松石 translation run, `a5ba4ee7`, completes so
-  no translated chapters are discarded):
+  implemented after the 黑松石 run completed, in `d9896c5`):
   - Every prepared work starts with exactly one front-matter unit, split
     verbatim from the source: the material before the first chapter, and at
     least the title heading. The prepare-manuscript skill contract and its
@@ -359,8 +357,33 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     special case.
   - Applies to the translation and editing templates; unfinished runs need a
     workflow restart when it lands.
-  - Open: what preparation does when the source has no title or opening
-    material (stop and ask the user, or allow an empty front-matter unit).
+  - Decided: when the source has no title or opening material, preparation
+    stops and asks the user.
+- **Extensible front-matter reviews; translation brief** (owner decision,
+  2026-11-03; implemented and committed locally on 2026-11-03; a live
+  end-to-end run on 《房客》 exercised the brief with delegated approval only):
+  - The front-matter page is extensible per workflow: besides the shared
+    metadata review, a template can declare its own front-matter stages
+    (`"front_matter": true`) whose gates present workspace `documents` for
+    approval with a declared command. Every such review uses the same
+    front-matter page in the chapter viewer.
+  - `literary-translation-v1` adds a `brief` stage after metadata review: the
+    agent drafts `glossary.md` and `voice.md` from the whole prepared
+    manuscript; the user approves them (`approve brief`) or sends corrections
+    the agent applies. The approved files are the starting point for every
+    chapter. Direct editing of the files in the studio is not included
+    (owner choice: feedback only).
+  - Changes the template, engine, translation skill contract, studio, and
+    tests; unfinished translation runs need a workflow restart.
+- **Per-run maximum passage size** (owner decision, 2026-11-03; implemented
+  and committed locally): `literary-translation-v1` declares a default
+  (1,500 characters for Chinese, Japanese, or Korean; 800 words otherwise).
+  A run may choose another value when it starts (the start panel's Advanced
+  section, the service, or `--passage-size`); the value is fixed for the run
+  and kept on a workflow restart. The engine refuses a passage map with a
+  longer passage unless an `oversize` exception for its exact range is
+  approved through the existing map-exceptions review. One live run on
+  《房客》 divided the story into three passages within the default.
 - **Suggested order:** 1 (unified decision panel), 2 (run inspector), 3 (works
   explorer by version), 4 (paragraph-aligned page viewer; the largest piece,
   needed before the editing workflow reaches the GUI). All four are frontend

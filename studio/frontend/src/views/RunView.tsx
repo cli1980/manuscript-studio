@@ -49,6 +49,8 @@ export function RunView({ runId }: { runId: string }) {
         <div><span>Stages</span>{run.stages.map((s) => <span key={s} className={`tag ${s === run.stage ? "busy" : ""}`}>{s}</span>)}
           {run.skipped_stages.map((s) => <span key={s} className="tag skipped">{s} (skipped)</span>)}</div>
         <div><span>Turns</span>{run.attempts}</div>
+        {run.settings?.passage_size && <div><span>Passage size</span>at most {run.settings.passage_size}
+          {["zh", "ja", "ko"].includes(run.manuscript_language.split("-")[0].toLowerCase()) ? " characters" : " words"}</div>}
         <div><span>Chapters</span><a href={`#/runs/${run.id}/chapters`}>Open chapter browser</a></div>
       </div>
       {run.error && <div className="error"><strong>Last error:</strong> {run.error}</div>}

@@ -92,7 +92,7 @@ Keep the lexical decision in `glossary.md`. A pinned `voice.md` entry may cite t
 
 Distinguish provisional mappings from user-approved mappings. Do not fabricate a confident mapping when context is insufficient.
 
-Before sustained translation begins, show or summarize the proposed glossary and remind the user to review and update it. This reminder is advisory, not a mandatory pause, unless unresolved entries materially affect the chapter about to be translated.
+Before sustained translation begins, present the proposed glossary and voice record for review as described in **Translation Brief Review** below.
 
 Whenever the user corrects, approves, or replaces a mapping:
 
@@ -122,3 +122,29 @@ Treat `(character or narrator, chapter, place)` as the primary key. Use addresse
 Append a new pinned entry when the voice changes. Do not overwrite an earlier entry or retroactively harmonize finalized text merely because the character later travels, enters another community, code-switches, changes relationships or status, undergoes pressure or trauma, or develops across the story.
 
 When the source materially depends on cultural voice or dialect, read [cultural-voice-and-dialect.md](cultural-voice-and-dialect.md) before drafting the chapter.
+
+## 5. Translation Brief Review
+
+Before the first chapter of a whole-work translation, draft the translation
+brief: `glossary.md` and `voice.md` as they should stand when translation starts.
+
+1. Read the complete prepared manuscript in manifest order. Start from the
+   existing files when present (carried from earlier work or edited by the user)
+   and preserve their entries.
+2. Record in `glossary.md` the recurring names and aliases, places, titles and
+   forms of address, relational terms, and cultural or worldbuilding terms the
+   chapters depend on. Mark new mappings `provisional`.
+3. Record in `voice.md` the narrator and the main characters, each entry pinned
+   to character or narrator, chapter, and place, with source evidence and target
+   strategy. Mark new entries `provisional` or `observed`.
+4. Do not translate any chapter while drafting the brief.
+5. Present both complete files with a short summary of the proposals and the
+   open questions, and wait for the user's explicit approval. Treat any other
+   reply as corrections: apply them to the files and present the revised brief
+   again.
+
+The approved brief is the user-approved starting point for every chapter. Keep
+approved entries unless the user changes them through a later decision, and keep
+extending both files as chapters reveal new terms and voices. When an
+orchestrator runs the brief as its own review, it records the approval and
+presents the files; follow its gate contract instead of asking in chat.

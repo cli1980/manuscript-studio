@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type RunDetail } from "../api";
-import { ErrorBox, TextBlock, useLoad } from "./common";
+import { api, type Gate, type RunDetail } from "../api";
+import { Documents, ErrorBox, reviewName, TextBlock, useLoad, when } from "./common";
 import { SheetReview } from "./SheetReview";
 import { GatePanel } from "./GatePanel";
 
@@ -54,7 +54,7 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
                 <div>
                   <span className="tag ready">prepared</span>
                   {data.stages.map((stage) => {
-                    const status = chapterStatus(chapter.outputs[stage], stage, pending?.chapter_id === chapter.chapter_id ? pending.kind : null, !!run.data?.finalized);
+                    const status = chapterStatus(chapter.outputs[stage], stage, pending?.chapter_id === chapter.chapter_id ? awaiting(pending) : null, !!run.data?.finalized);
                     return <span key={stage} className={`tag ${status.cls}`}>{data.stages.length > 1 ? `${stage}: ` : ""}{status.label}</span>;
                   })}
                 </div>
@@ -76,7 +76,7 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
                 <h2>{detail.data.chapter.title ?? detail.data.chapter.chapter_id} <span className="muted">({detail.data.chapter.role})</span>{" "}
                   {data.stages.map((stage) => {
                     const entry = data.chapters.find((c) => c.chapter_id === chapterId);
-                    const status = chapterStatus(entry?.outputs[stage], stage, pending && pending.chapter_id === chapterId ? pending.kind : null, !!run.data?.finalized);
+                    const status = chapterStatus(entry?.outputs[stage], stage, pending && pending.chapter_id === chapterId ? awaiting(pending) : null, !!run.data?.finalized);
                     return <span key={stage} className={`tag status ${status.cls}`}>{data.stages.length > 1 ? `${stage}: ` : ""}{status.label}</span>;
                   })}
                 </h2>
@@ -86,6 +86,21 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
                     <ul>{detail.data.passage_map.passages.map((p) => <li key={p.id}>{p.id}: paragraphs {p.first_paragraph}–{p.last_paragraph}</li>)}</ul>
                     {detail.data.passage_map.exceptions.map((x) => <div key={x.id} className="banner warn">{x.id} · {x.kind} · paragraphs {x.first_paragraph}–{x.last_paragraph}: {x.reason}</div>)}
                   </details>
+                )}
+                {detail.data.reviews?.length > 0 && (
+                  <div className="panel reviews">
+                    {detail.data.reviews.map((review) => (
+                      <details key={review.kind}>
+                        <summary><span className="tag ready">{review.kind === "metadata_review"
+                          ? `metadata confirmed (revision ${review.record_revision})`
+                          : `${reviewName(review.kind)} approved`}</span>{" "}
+                          <span className="muted">{review.decision_source !== "human" ? review.decision_source : ""} {when(review.created_at)}</span></summary>
+                        {review.kind === "metadata_review"
+                          ? <p className="muted">The metadata is kept on the <a href={`#/works/${encodeURIComponent(run.data?.work_id ?? "")}`}>work page</a>.</p>
+                          : <Documents documents={review.documents} open={false} />}
+                      </details>
+                    ))}
+                  </div>
                 )}
                 <div className="columns">
                   <div><h3>Prepared</h3><TextBlock text={detail.data.prepared_text} /></div>
@@ -181,11 +196,17 @@ function ChapterApproval({ run, onDone }: { run: RunDetail; onDone: (closed: boo
 const STAGE_VERBS: Record<string, string> = { translate: "translating", line: "line editing", copy: "copyediting",
   developmental: "developmental review" };
 
+// Front-matter reviews (metadata, or a workflow's documents such as a translation brief) are reviews; the rest decisions.
+function awaiting(gate: Gate) {
+  if (gate.kind === "chapter_sanity") return "chapter_sanity";
+  return gate.kind === "metadata_review" || gate.documents?.length > 0
+    ? `awaiting your review: ${reviewName(gate.kind)}` : `awaiting your decision: ${gate.kind.replaceAll("_", " ")}`;
+}
+
 // One readable status per chapter and stage: not started, working, awaiting approval, approved, or final.
 function chapterStatus(output: { status: string; ready: boolean; saving?: boolean } | undefined, stage: string, awaiting: string | null, finalized: boolean) {
   if (awaiting === "chapter_sanity") return { label: "awaiting your approval", cls: "awaiting-tag" };
-  if (awaiting === "metadata_review") return { label: "awaiting your review: metadata", cls: "awaiting-tag" };
-  if (awaiting) return { label: `awaiting your decision: ${awaiting.replaceAll("_", " ")}`, cls: "awaiting-tag" };
+  if (awaiting) return { label: awaiting, cls: "awaiting-tag" };
   if (output?.ready || output?.status === "completed") return finalized ? { label: "final", cls: "ready" } : { label: "approved", cls: "ready" };
   if (output?.status === "in_progress" && output.saving) return { label: "approved — saving", cls: "ready" };
   if (output?.status === "in_progress") return { label: STAGE_VERBS[stage] ?? "in progress", cls: "busy" };

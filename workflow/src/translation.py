@@ -9,6 +9,10 @@ import sys
 from .prepared import PreparedManuscriptEngine
 from .storage import digest, read_bytes
 
+CJK = ("zh", "ja", "ko")
+UNIT_NAMES = {"cjk_chars": "characters", "words": "words"}
+EXCEPTION_KINDS = ("exclude", "special", "reorder", "oversize")
+
 PROMPT = (
     "Execute only the current manuscript skill operation. Read the primary SKILL.md and "
     "its required references in the complete pinned sibling bundle below. User scope is "
@@ -28,7 +32,19 @@ PROMPT = (
     "Unavailable adapters or incomplete extraction return blocked. After preparation the "
     "orchestrator presents the shared metadata at its own metadata_review gate for user "
     "inspection and edits; do not request metadata confirmation yourself.\n\n"
-    "TRANSLATION: process only the supplied complete chapter. Use translation/ as project "
+    "TRANSLATION BRIEF (stage brief, before any chapter): follow the skill's translation brief review. Read the "
+    "complete prepared manuscript in manifest order. Starting from any existing translation/glossary.md and "
+    "translation/voice.md (carried from an earlier run; preserve their entries), save both files: the glossary's "
+    "recurring names, places, titles, forms of address, relational and cultural terms, and voice entries for the "
+    "narrator and main characters, each pinned to character or narrator, chapter, and place. Do not translate "
+    "any chapter. Return needs_human_input with gate translation_brief (review_path and binding_path null) and "
+    "a message summarizing the proposals and the open questions; the orchestrator presents both files with the "
+    "front-matter unit. A feedback user_receipt asks you to revise the files and return a new translation_brief "
+    "gate. The orchestrator records 'approve brief' and starts translation; never return completed for this "
+    "stage.\n\n"
+    "TRANSLATION: process only the supplied complete chapter. translation_brief_approval records the glossary "
+    "and voice versions the user approved before translation: keep those entries unless the user changes them "
+    "through a decision, and extend both files as chapters reveal new terms or voices. Use translation/ as project "
     "root, with glossary.md, voice.md, translated_english/, and the skill's internal "
     ".literary-translation-work/ layout; keep this chapter's internal records in exactly "
     "chapter_workdir so the orchestrator can archive them if the chapter is restarted. "
@@ -47,9 +63,12 @@ PROMPT = (
     "map_exceptions ONLY when the chapter's passage map lists exceptions (review_path=approval JSON with one "
     "item per exception, binding_path=the map file); the map itself is internal and needs no approval. "
     "Before drafting, ALWAYS save translation/maps/<chapter_id>.json as {chapter_id, passages: [{id, "
-    "first_paragraph, last_paragraph}], exceptions: [{id, kind: exclude|special|reorder, first_paragraph, "
-    "last_paragraph, reason}]}; paragraphs are the prepared chapter's blank-line-separated blocks numbered "
-    "from 1, and passages cover every paragraph exactly once, in order. "
+    "first_paragraph, last_paragraph}], exceptions: [{id, kind: exclude|special|reorder|oversize, "
+    "first_paragraph, last_paragraph, reason}]}; paragraphs are the prepared chapter's blank-line-separated "
+    "blocks numbered from 1, and passages cover every paragraph exactly once, in order. passage_limit is this "
+    "run's maximum passage size (cjk_chars counts non-whitespace characters; words counts whitespace-separated "
+    "words); the engine refuses a longer passage unless an oversize exception names its exact paragraph range "
+    "with the reason it cannot be split. "
     "translation_issue (review_path REQUIRED, even for a single item: ONE approval JSON holding every "
     "translation-advice item of the whole chapter, drafted completely first, per the skill's chapter advice "
     "sheet; the user decides all items in one submission; binding_path=current English checkpoint); "
@@ -89,6 +108,27 @@ class TranslationEngine(PreparedManuscriptEngine):
         state["target_language"] = template["target_language"]
         return state
 
+    @staticmethod
+    def size_unit(manuscript_language):
+        """Passage size is counted in non-whitespace characters for CJK text, otherwise in words."""
+        return "cjk_chars" if manuscript_language.split("-")[0].lower() in CJK else "words"
+
+    @classmethod
+    def resolve_settings(cls, template, settings, manuscript_language):
+        unknown = set(settings) - {"passage_size"}
+        if unknown or ("passage_size" in settings and "passage_size" not in template):
+            raise ValueError(f"Unknown run settings for this template: {', '.join(sorted(unknown or settings))}.")
+        if "passage_size" not in template:
+            return {}
+        value = settings.get("passage_size", template["passage_size"][cls.size_unit(manuscript_language)])
+        if type(value) is not int or not 100 <= value <= 100000:
+            raise ValueError("passage_size must be a whole number from 100 to 100000.")
+        return {"passage_size": value}
+
+    def passage_limit(self, state):
+        value = (state.get("settings") or {}).get("passage_size")
+        return {"max": value, "unit": self.size_unit(state["manuscript_language"])} if value else None
+
     def stage_prompt(self, state, stage):
         agent = state["definition"]["agents"][stage["agent"]]
         item = self.current_iteration(state) if stage.get("iterate") else None
@@ -101,10 +141,12 @@ class TranslationEngine(PreparedManuscriptEngine):
             "work_record": state["prepared"]["work_record"] if state["prepared"] else None,
             "chapter": chapter, "chapter_attempt": item["attempt"] if item else None,
             "chapter_workdir": self.chapter_workdir(state, item)[0] if item else None,
+            "passage_limit": self.passage_limit(state),
             "domain_state": state["domain_state"],
             "map_exceptions_approval": state["approvals"].get("map_exceptions"),
             "sanity_approval": state["approvals"].get("chapter_sanity"),
             "metadata_approval": state.get("metadata_approval"),
+            "translation_brief_approval": (state.get("front_matter_approvals") or {}).get("translation_brief"),
             "previous_outputs": state["outputs"], "continuity": state["continuity"],
             "user_receipt": state["next_input"],
             "skills": [str(self.root / "skills" / name / "SKILL.md") for name in agent["skills"]],
@@ -131,7 +173,8 @@ class TranslationEngine(PreparedManuscriptEngine):
         data = json.loads(path.read_text(encoding="utf-8"))
         chapter = next(c for c in state["chapters"] if c["chapter_id"] == chapter_id)
         text = self.store.content(state["prepared"]["files"][chapter["path"]]).decode("utf-8")
-        count = len([block for block in re.split(r"\n\s*\n", text.strip()) if block.strip()])
+        blocks = [block for block in re.split(r"\n\s*\n", text.strip()) if block.strip()]
+        count = len(blocks)
         expected = 1
         for passage in data.get("passages") or []:
             first, last = passage.get("first_paragraph"), passage.get("last_paragraph")
@@ -143,9 +186,21 @@ class TranslationEngine(PreparedManuscriptEngine):
             raise ValueError(f"The passage map covers paragraphs 1-{expected - 1}, but the chapter has {count}.")
         for exception in data.get("exceptions") or []:
             first, last = exception.get("first_paragraph"), exception.get("last_paragraph")
-            if exception.get("kind") not in ("exclude", "special", "reorder") or not str(exception.get("reason") or "").strip() \
+            if exception.get("kind") not in EXCEPTION_KINDS or not str(exception.get("reason") or "").strip() \
                     or not (isinstance(first, int) and isinstance(last, int) and 1 <= first <= last <= count):
                 raise ValueError(f"Invalid passage-map exception {exception.get('id')}.")
+        limit = self.passage_limit(state)
+        if limit:
+            # A passage over the run's limit needs an oversize exception for exactly its range, which the user approves.
+            oversize = {(x["first_paragraph"], x["last_paragraph"]) for x in data.get("exceptions") or []
+                        if x["kind"] == "oversize"}
+            for passage in data["passages"]:
+                part = "\n".join(blocks[passage["first_paragraph"] - 1:passage["last_paragraph"]])
+                size = len(re.sub(r"\s", "", part)) if limit["unit"] == "cjk_chars" else len(part.split())
+                if size > limit["max"] and (passage["first_paragraph"], passage["last_paragraph"]) not in oversize:
+                    raise ValueError(f"Passage {passage.get('id')} has {size} {UNIT_NAMES[limit['unit']]}, over this "
+                                     f"run's maximum of {limit['max']}. Split it at a coherent turn, or record an "
+                                     "oversize exception for its exact paragraph range with the reason.")
         return relative, data
 
     def require_map(self, state):
@@ -157,6 +212,8 @@ class TranslationEngine(PreparedManuscriptEngine):
             raise ValueError("The approved passage map changed.")
 
     def on_waiting(self, state, stage, result):
+        if result["gate"] == "map_exceptions":
+            self.chapter_map(state)
         if result["gate"] in ("translation_issue", "chapter_sanity", "continuation"):
             self.require_map(state)
 
@@ -174,14 +231,19 @@ class TranslationEngine(PreparedManuscriptEngine):
     def gate_commands(self, state, gate):
         if gate.get("sheet"):
             return []
-        return {"chapter_sanity": ["approve chapter"], "continuation": ["continue"]}.get(gate["kind"], [])
+        if gate["kind"] in ("chapter_sanity", "continuation"):
+            return {"chapter_sanity": ["approve chapter"], "continuation": ["continue"]}[gate["kind"]]
+        return super().gate_commands(state, gate)
 
     def parse_free_reply(self, state, gate, text):
         if gate["kind"] == "chapter_sanity":
             if text.strip() == "approve chapter":
                 return {"type": "final-closure", "command": "approve chapter"}
             # Corrections remain feedback; they do not approve a revised chapter.
-        return {"type": "feedback", "text": text}
+            return {"type": "feedback", "text": text}
+        if gate["kind"] == "continuation":
+            return {"type": "feedback", "text": text}
+        return super().parse_free_reply(state, gate, text)
 
     def complete_chapter(self, state, result):
         approvals = state["approvals"]

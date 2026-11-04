@@ -25,6 +25,10 @@ TEMPLATE_SCHEMA = {
         "workflow": ID,
         "engine": {"type": "string", "pattern": r"^[A-Za-z_][\w.]*:[A-Za-z_]\w*$"},
         "locked_metadata": PATHS,
+        # Default maximum passage size, by unit; a run may choose another value at creation.
+        "passage_size": {"type": "object", "required": ["cjk_chars", "words"], "additionalProperties": False,
+                         "properties": {"cjk_chars": {"type": "integer", "minimum": 100},
+                                        "words": {"type": "integer", "minimum": 100}}},
         "produces": {"type": "string"},
         "consumes": {"type": "string"},
         "agents": {"type": "object", "minProperties": 1, "additionalProperties": {
@@ -52,6 +56,8 @@ TEMPLATE_SCHEMA = {
                 "command": {"type": "string", "minLength": 1},
                 "empty_command": {"type": "string", "minLength": 1},
                 "empty_evidence": {"type": "string", "minLength": 1},
+                # Workspace documents the reviewer reads and approves as presented (e.g. glossary and voice).
+                "documents": {**PATHS, "minItems": 1},
             },
         }},
         "stages": {"type": "array", "minItems": 1, "items": {
@@ -62,6 +68,8 @@ TEMPLATE_SCHEMA = {
                 "agent": {"type": "string"},
                 "preparation": {"type": "boolean"},
                 "optional": {"type": "boolean"},
+                # A workflow-specific review presented with the front-matter unit, after preparation.
+                "front_matter": {"type": "boolean"},
                 "edits_text": {"type": "boolean"},
                 "iterate": {"enum": ["chapters"]},
                 "gates": {"type": "array", "items": {"type": "string"}},
@@ -95,6 +103,16 @@ def validate(template, *, origin="template"):
                 raise ValueError(f"{origin}: stage {stage['id']} names an undeclared gate {gate}.")
         if stage.get("optional") and (stage["kind"] != "agent" or stage.get("preparation")):
             raise ValueError(f"{origin}: only non-preparation agent stages can be optional.")
+        if stage.get("front_matter"):
+            before = template["stages"][:template["stages"].index(stage)]
+            if stage["kind"] != "agent" or stage.get("iterate") or stage.get("preparation") \
+                    or not any(s.get("preparation") for s in before):
+                raise ValueError(f"{origin}: a front-matter stage is a non-iterating agent stage after preparation.")
+            if not any("documents" in template["gates"][gate] for gate in stage.get("gates", [])):
+                raise ValueError(f"{origin}: a front-matter stage needs a gate that presents documents.")
+    for name, rules in template["gates"].items():
+        if "documents" in rules and not rules.get("command"):
+            raise ValueError(f"{origin}: document gate {name} needs an approval command.")
     kinds = [stage["kind"] for stage in template["stages"]]
     if "export" in kinds and kinds.index("export") != len(kinds) - 1:
         raise ValueError(f"{origin}: export must be the final stage.")

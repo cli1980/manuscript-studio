@@ -26,6 +26,10 @@ def display(engine, state, *, review=False):
         print("\n" + gate["message"])
         if gate["binding"] and gate["kind"] in ("translation_issue", "chapter_sanity"):
             print("\nSaved English checkpoint:\n" + engine.store.content(gate["binding"]).decode("utf-8"))
+        for document in gate.get("documents") or []:
+            print(f"\n{document['path']}:\n" + engine.store.content(document).decode("utf-8"))
+        if gate.get("documents"):
+            print("\nReply '" + "' or '".join(engine.gate_commands(state, gate)) + "' to approve, or provide feedback.")
         if gate["sheet"]:
             sheet = json.loads(engine.store.content(gate["sheet"]))
             print(f"\nApproval sheet: {sheet['sheet_id']}\nRevision: {sheet['revision']}")
@@ -58,8 +62,8 @@ def display(engine, state, *, review=False):
         print("\nIMPORTANT: " + finalization_notice(state["workflow"]))
         print("Accept with: python -m workflow accept RUN --acceptance-id ACCEPTANCE-ID --confirm-final")
     if engine.finalized(state):
-        print(f"\nFINAL: this run is finalized and {state['workflow']} is read-only on work {state['work_id']}. "
-              "Changes require adding the manuscript again as a new work.")
+        print(f"\nFINAL: this run is finalized; its {state['workflow']} version on work {state['work_id']} can never "
+              "change. A new run on the work publishes the next version.")
 
 
 def show(service, run_id, *, review=False):
@@ -110,6 +114,9 @@ def parser():
     create.add_argument("--agent-model", action="append", metavar="AGENT=MODEL", help="Model for one agent.")
     create.add_argument("--skip-stage", action="append", metavar="STAGE",
                         help="Skip an optional stage of the template (see `templates`).")
+    create.add_argument("--passage-size", type=int, metavar="N",
+                        help="Maximum passage size for this run (characters for CJK text, else words); "
+                             "default from the template.")
     backend = create.add_mutually_exclusive_group()
     backend.add_argument("--documents-skill", type=Path, help="Formatting: external Documents skill.")
     backend.add_argument("--renderer", choices=("word", "libreoffice"), help="Formatting: built-in renderer.")
@@ -199,6 +206,8 @@ def run(service, args):
         if "consumes" in template:
             if args.source or args.manuscript_language:
                 raise ValueError("Derived templates start from an existing work's publication; use --work.")
+            if args.passage_size:
+                raise ValueError("--passage-size applies to templates that divide chapters into passages.")
             run_id = service.create_derived_run(
                 args.work, args.template, publication_id=args.publication, model=args.model,
                 agent_models=agent_models(args.agent_model), new_edition=args.new_edition,
@@ -209,7 +218,8 @@ def run(service, args):
             run_id = service.create_run(args.template, upload=args.source, work_id=args.work,
                                         manuscript_language=args.manuscript_language, model=args.model,
                                         agent_models=agent_models(args.agent_model),
-                                        skip_stages=args.skip_stage or ())
+                                        skip_stages=args.skip_stage or (),
+                                        settings={"passage_size": args.passage_size} if args.passage_size else None)
         show(service, run_id)
         print(f'\nNext: python -m workflow --server-root "{service.root}" step {run_id}')
     elif command == "runs":

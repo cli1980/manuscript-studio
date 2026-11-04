@@ -58,11 +58,11 @@ class WorkflowTests(unittest.TestCase):
         self.addCleanup(lambda: self.engine and self.engine.close())
         self.new_engine()
 
-    def new_engine(self):
+    def new_engine(self, **options):
         """Each upload creates a new work; the engine is opened with that work's library."""
         if self.engine:
             self.engine.close()
-        self.run_id = self.service.create_run(TRANSLATION, upload=self.source, manuscript_language="zh")
+        self.run_id = self.service.create_run(TRANSLATION, upload=self.source, manuscript_language="zh", **options)
         row = self.service._run_row(self.run_id)
         self.work_id = row["work_id"]
         self.engine = Engine.open(Path(row["path"]), library=self.service.library(self.work_id))
@@ -128,11 +128,21 @@ class WorkflowTests(unittest.TestCase):
         return result(work_record=self.write(f"prepared/{self.work_id}/work.json", work))
 
     def prepare(self):
-        """Prepare, confirm metadata on the front matter, and translate the front matter."""
+        """Prepare, confirm metadata and the translation brief on the front matter, and translate the front matter."""
         self.engine.advance(ScriptedRuntime(self.preparation))
         self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
         if self.engine.state()["workflow"] == "literary-translation":
+            self.approve_brief()
             self.translate_chapter()
+
+    def brief_gate(self, request):
+        self.write("translation/glossary.md", "| 故事 | Story | title | provisional |\n")
+        self.write("translation/voice.md", "## Narrator · story · home\nPlain, restrained. Status: provisional\n")
+        return result("needs_human_input", gate="translation_brief", message="Proposed glossary and voice.")
+
+    def approve_brief(self):
+        self.engine.advance(ScriptedRuntime(self.brief_gate))
+        self.engine.reply(self.engine.state()["gate"]["id"], "approve brief")
 
     def gate_receipts(self):
         # Receipts for the story chapter (metadata review and the front matter are covered by prepare()).
@@ -162,7 +172,7 @@ class WorkflowTests(unittest.TestCase):
             self.engine.reply(gate["id"], "looks fine")
         self.assertEqual(self.engine.state()["receipts"], [])
         state = self.engine.reply(gate["id"], "confirm metadata")
-        self.assertEqual((state["stage"], state["status"]), ("translate", "READY"))
+        self.assertEqual((state["stage"], state["status"]), ("brief", "READY"))  # The translation brief follows.
         self.assertIsNone(state["next_input"])
         approval = state["metadata_approval"]
         self.assertEqual((approval["record_revision"], approval["sha256"], approval["decision_source"]),
@@ -179,6 +189,40 @@ class WorkflowTests(unittest.TestCase):
 
     def prompt(self, state):
         return self.engine.stage_prompt(state, self.engine.stage_def(state))
+
+    def test_translation_brief_is_reviewed_with_the_front_matter(self):
+        self.engine.advance(ScriptedRuntime(self.preparation))
+        self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+        for action, error in ((lambda r: result(), "completes when the user approves"),
+                              (lambda r: result("needs_human_input", gate="translation_brief"), "save translation/glossary.md")):
+            with self.assertRaisesRegex(ValueError, error):
+                self.engine.advance(ScriptedRuntime(action))
+            self.engine.retry()
+        state = self.engine.advance(ScriptedRuntime(self.brief_gate))
+        gate = state["gate"]
+        self.assertEqual((state["stage"], gate["kind"], gate["chapter_id"]), ("brief", "translation_brief", "front-matter"))
+        self.assertEqual([d["path"] for d in gate["documents"]], ["translation/glossary.md", "translation/voice.md"])
+        self.assertEqual(self.engine.gate_commands(state, gate), ["approve brief"])
+        self.assertTrue(self.engine.summary(state)["gate_review"])
+        # Corrections are feedback for the agent; they do not approve the brief.
+        state = self.engine.reply(gate["id"], "Render 故事 as Tale.")
+        self.assertEqual((state["stage"], state["status"], state["next_input"]["parsed"]["type"]), ("brief", "READY", "feedback"))
+        self.assertEqual(state["front_matter_approvals"], {})
+        gate = self.engine.advance(ScriptedRuntime(self.brief_gate))["gate"]
+        original = (self.workspace / "translation/voice.md").read_text(encoding="utf-8")
+        self.write("translation/voice.md", "Changed after presentation.\n")
+        with self.assertRaisesRegex(ValueError, "Review changed"):
+            self.engine.reply(gate["id"], "approve brief")
+        self.write("translation/voice.md", original)
+        state = self.engine.reply(gate["id"], "approve brief")
+        # Approval completes the stage without another agent turn; the approved files seed the chapter stage.
+        self.assertEqual((state["stage"], state["status"], state["next_input"]), ("translate", "READY", None))
+        approval = state["front_matter_approvals"]["translation_brief"]
+        self.assertEqual((approval["documents"], approval["receipt_id"]), (gate["documents"], state["receipts"][-1]["id"]))
+        self.assertEqual(state["continuity_seed"]["translation/glossary.md"]["sha256"], gate["documents"][0]["sha256"])
+        self.assertIn('"translation_brief_approval"', self.prompt(state))
+        state = self.engine.restart_stage("brief", reason="Revisit the brief")
+        self.assertEqual((state["stage"], state["status"], state["front_matter_approvals"]), ("brief", "READY", {}))
 
     def test_metadata_edits_are_versioned_and_rebind_the_gate(self):
         self.engine.advance(ScriptedRuntime(self.prepare_v2))
@@ -234,7 +278,7 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "locked"):
             self.engine.edit_metadata("/manuscript_language", "fr")
         state = self.engine.edit_metadata("/genres", ["Literary fiction"], reason="Late correction")
-        self.assertEqual((state["stage"], state["status"], state["gate"]), ("translate", "READY", None))
+        self.assertEqual((state["stage"], state["status"], state["gate"]), ("brief", "READY", None))
         self.assertEqual(state["metadata_approval"]["record_revision"], 1)  # No re-confirmation.
         self.assertEqual(len(state["receipts"]), receipts)
         self.assertEqual(state["metadata_versions"][-1]["actor"], "user")
@@ -248,7 +292,7 @@ class WorkflowTests(unittest.TestCase):
             work["metadata"]["title"] = "Agent-found title"
             work["record_revision"] += 1
             path.write_text(json.dumps(work, ensure_ascii=False), encoding="utf-8")
-            return self.map_gate()
+            return self.brief_gate(request)
 
         state = self.engine.advance(ScriptedRuntime(agent_edit))
         self.assertEqual(state["metadata_versions"][-1]["actor"], "agent")
@@ -274,7 +318,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotEqual(state["gate"]["id"], gate["id"])
         self.assertIn("Edited outside the gate", state["gate"]["message"])
         self.engine.reply(state["gate"]["id"], "confirm metadata")
-        self.assertEqual(self.engine.state()["stage"], "translate")
+        self.assertEqual(self.engine.state()["stage"], "brief")
 
     def test_editable_v2_metadata_does_not_change_prepared_source_identity(self):
         self.engine.advance(ScriptedRuntime(self.prepare_v2))
@@ -315,7 +359,7 @@ class WorkflowTests(unittest.TestCase):
                            "closure_command": "confirm final closure", "closure_label": "Confirm"},
         }
 
-    def write_map(self, exceptions=True):
+    def write_map(self, exceptions=True, kind="special"):
         """The agent's internal passage map: one passage covering the chapter, optionally with one exception."""
         state = self.engine.state()
         chapter_id = self.engine.current_iteration(state)["chapter_id"]
@@ -323,15 +367,15 @@ class WorkflowTests(unittest.TestCase):
         text = self.engine.store.content(state["prepared"]["files"][chapter["path"]]).decode("utf-8")
         count = len([block for block in re.split(r"\n\s*\n", text.strip()) if block.strip()])
         data = {"chapter_id": chapter_id, "passages": [{"id": "P1", "first_paragraph": 1, "last_paragraph": count}],
-                "exceptions": [{"id": "PM001", "kind": "special", "first_paragraph": 1, "last_paragraph": 1,
+                "exceptions": [{"id": "PM001", "kind": kind, "first_paragraph": 1, "last_paragraph": 1,
                                 "reason": "Keep the heading in its original form."}] if exceptions else []}
         return self.write(f"translation/maps/{chapter_id}.json", data)
 
-    def map_gate(self, revision="1", resolved=False):
+    def map_gate(self, revision="1", resolved=False, kind="special"):
         return result(
             "needs_human_input", message="Review the passage-map exception.",
             gate="map_exceptions", state_path=self.write("translation/state.md", "Passage map pending.\n"),
-            binding_path=self.write_map(),
+            binding_path=self.write_map(kind=kind),
             review_path=self.write("translation/map-review.json", self.sheet(revision, resolved)),
         )
 
@@ -408,6 +452,25 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual((Path(state["export_path"]) / "0002.md").read_text(), "He came back.\n")
         self.assertEqual(self.source.read_bytes(), original)
         self.assertTrue(any(event["kind"] == "review.received" for event in self.engine.store.events()))
+
+    def test_run_passage_size_is_fixed_per_run_and_enforced(self):
+        self.assertEqual(self.engine.state()["settings"], {"passage_size": 1500})  # The template's CJK default.
+        for settings, error in (({"passage_size": 50}, "whole number"), ({"pace": 1}, "Unknown run settings")):
+            with self.assertRaisesRegex(ValueError, error):
+                self.service.create_run(TRANSLATION, upload=self.source, manuscript_language="zh", settings=settings)
+        self.parts = ["他回来了。" * 30 + "\n"]  # One 150-character paragraph.
+        self.new_engine(settings={"passage_size": 100})
+        self.prepare()
+        self.assertIn('"passage_limit": {\n    "max": 100,\n    "unit": "cjk_chars"', self.prompt(self.engine.state()))
+        with self.assertRaisesRegex(ValueError, "150 characters, over this run's maximum of 100"):
+            self.engine.advance(ScriptedRuntime(lambda request: self.map_gate()))
+        self.engine.retry()
+        # An oversize exception for the exact range goes to the user like any other map exception.
+        state = self.engine.advance(ScriptedRuntime(lambda request: self.map_gate(kind="oversize")))
+        self.assertEqual(state["gate"]["kind"], "map_exceptions")
+        new_id = self.service.restart_workflow(self.run_id, reason="Start again")
+        with self.service.open_run(new_id) as engine:
+            self.assertEqual(engine.state()["settings"], {"passage_size": 100})
 
     def test_passage_map_is_internal_unless_it_has_exceptions(self):
         self.prepare()
@@ -618,8 +681,16 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "undeclared gate"):
             registry.validate(template)
         template = registry.get(TRANSLATION)
-        template["stages"].append(template["stages"].pop(3))  # Acceptance after export.
+        template["stages"].append(template["stages"].pop(4))  # Acceptance after export.
         with self.assertRaisesRegex(ValueError, "export must be the final stage"):
+            registry.validate(template)
+        template = registry.get(TRANSLATION)
+        template["stages"].insert(0, template["stages"].pop(2))  # The brief before preparation.
+        with self.assertRaisesRegex(ValueError, "front-matter stage"):
+            registry.validate(template)
+        template = registry.get(TRANSLATION)
+        del template["gates"]["translation_brief"]["command"]
+        with self.assertRaisesRegex(ValueError, "needs an approval command"):
             registry.validate(template)
         with self.assertRaisesRegex(ValueError, "Unknown agent"):
             TranslationEngine.create(self.base / "models", registry.get(TRANSLATION), source=self.source,
@@ -638,7 +709,7 @@ class WorkflowTests(unittest.TestCase):
             },
             "source_inventory": {"title": "Synthetic fixture"},
             "expected_output": {
-                "stage_sequence": ["prepare", "metadata", "translate", "accept", "export"],
+                "stage_sequence": ["prepare", "metadata", "brief", "translate", "accept", "export"],
                 "required_files": ["state.sqlite3", "export/manifest.json", "export/glossary.md", "export/voice.md"],
             },
             "checks": [
@@ -666,7 +737,7 @@ class WorkflowTests(unittest.TestCase):
     def test_e2e_launcher_interactive_loop_and_honest_report(self):
         case = self.e2e_case()
         actions = iter([
-            self.preparation,
+            self.preparation, self.brief_gate,
             *[lambda r: self.map_gate(), lambda r: self.map_gate("2", True), self.sanity_gate, self.translation] * 2,
         ])
         prompts = []
@@ -676,7 +747,7 @@ class WorkflowTests(unittest.TestCase):
             return next(actions)(request)
 
         chapter = ["PM001 approve", ".", "confirm final closure", ".", "approve chapter", "."]
-        replies = iter(["confirm metadata", ".", *chapter * 2, "accept", "skip", "skip", "skip", "skip"])
+        replies = iter(["confirm metadata", ".", "approve brief", ".", *chapter * 2, "accept", "skip", "skip", "skip", "skip"])
         runtime = run_e2e.CaseRuntime(ScriptedRuntime(action), case["task"])
         with contextlib.redirect_stdout(io.StringIO()):
             code = run_e2e.drive(self.engine, case, runtime, input_fn=lambda _: next(replies))
@@ -691,10 +762,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(checks["domain-gates"]["status"], "not-checked")
         self.assertEqual(report["literary_quality"]["status"], "not-checked")
         self.assertEqual((self.engine.root / "candidate.en.txt").read_text(), "Story\n\nHe came back.\n")
-        self.assertEqual(len(self.engine.state()["receipts"]), 7)  # Metadata, then three per unit.
+        self.assertEqual(len(self.engine.state()["receipts"]), 8)  # Metadata, the brief, then three per unit.
         self.assertEqual(report["automated_checks"]["closure-receipts"]["status"], "passed")
         self.assertEqual(report["automated_checks"]["stage-order"]["evidence"],
-                         ["prepare", "metadata", "translate", "accept", "export"])
+                         ["prepare", "metadata", "brief", "translate", "accept", "export"])
         # A completed run can finish its human evidence review without another model call.
         evidence = iter(["pass", "Synthetic test evidence"] * 4)
         with contextlib.redirect_stdout(io.StringIO()):
@@ -747,6 +818,7 @@ class WorkflowTests(unittest.TestCase):
         case = self.e2e_case()
         actions = iter([
             (self.preparation, "accept", "confirm metadata"),
+            (self.brief_gate, "accept", "approve brief"),
             *[(lambda r: self.map_gate(), "accept", "PM001 approve"),
               (lambda r: self.map_gate("2", True), "accept", "confirm final closure"),
               (self.sanity_gate, "accept", "approve chapter"),
@@ -771,7 +843,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["acceptance"]["decision_source"], "delegated-automation")
         report = json.loads((self.engine.root / "e2e-report.json").read_text(encoding="utf-8"))
         self.assertEqual(report["e2e_status"], "needs-review")
-        self.assertEqual(report["delegated_decisions"], 7)
+        self.assertEqual(report["delegated_decisions"], 8)
         self.assertEqual(state["metadata_approval"]["decision_source"], "delegated-automation")
         self.assertEqual(report["literary_quality"]["status"], "not-checked")
 
@@ -1169,7 +1241,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["receipts"], receipts)
         record = state["restarts"][-1]
         self.assertEqual(record["superseded_receipt_ids"],
-                         [r["id"] for r in receipts if r["gate"]["kind"] != "metadata_review"])
+                         [r["id"] for r in receipts if r["gate"]["stage"] == "translate"])
         self.assertTrue((self.engine.root / record["archive"] / "translation/map-review.json").is_file())
         self.assertFalse((self.workspace / "translation/map-review.json").exists())
         self.assertEqual(state["iterations"][0]["attempt"], 2)
@@ -1191,6 +1263,7 @@ class WorkflowTests(unittest.TestCase):
         gate = self.engine.state()["gate"]["id"]
         self.engine.edit_metadata("/genres", ["Literary fiction"], gate_id=gate, reason="Author correction")
         self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+        self.approve_brief()
         self.translate_chapter()  # front matter
         self.translate_chapter()
         with self.assertRaises(WorkflowError) as busy:

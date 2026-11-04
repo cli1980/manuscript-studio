@@ -37,6 +37,7 @@ export interface Gate {
   sheet: Sheet | null;
   commands: string[];
   binding_text: string | null;
+  documents: { path: string; sha256: string; text: string }[];
   answer_to: { text: string; created_at: string } | null;
 }
 
@@ -54,6 +55,8 @@ export interface MetadataField { field: string; group: "author" | "suggested" | 
 
 export interface RunSummary {
   id: string;
+  settings?: { passage_size?: number } | null;
+  manuscript_language: string;
   template_id: string;
   workflow: string;
   work_id: string;
@@ -67,6 +70,7 @@ export interface RunSummary {
   engine_current: boolean;
   gate_kind?: string;
   gate_chapter_id?: string | null;
+  gate_review?: boolean;
   export_path?: string | null;
   document_path?: string | null;
   created_at?: string;
@@ -86,7 +90,8 @@ export interface RunDetail extends RunSummary {
   superseded_by: string | null;
 }
 
-export interface Template { id: string; title: string; workflow: string; consumes: string | null; stages: string[]; optional_stages: string[] }
+export interface Template { id: string; title: string; workflow: string; consumes: string | null; stages: string[]; optional_stages: string[];
+  passage_size: { cjk_chars: number; words: number } | null }
 
 export interface WorkSummary {
   id: string;
@@ -128,6 +133,9 @@ export interface ChapterDetail {
   outputs: { stage: string; attempt: number; sha256: string; text: string }[];
   passage_map: { passages: { id: string; first_paragraph: number; last_paragraph: number }[];
     exceptions: { id: string; kind: string; first_paragraph: number; last_paragraph: number; reason: string }[] } | null;
+  // Completed front-matter reviews: the shared metadata and each workflow's own (e.g. translation brief).
+  reviews: { kind: string; record_revision?: number; created_at?: string; decision_source: string;
+    documents: { path: string; sha256: string; text: string }[] }[];
 }
 
 export interface WorkflowEvent { id: number; created_at: string; kind: string; payload: Record<string, unknown> }

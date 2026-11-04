@@ -79,7 +79,8 @@ class WorkflowService:
     def list_templates(self):
         return [{"id": t["id"], "title": t["title"], "workflow": t["workflow"], "consumes": t.get("consumes"),
                  "produces": t.get("produces"), "stages": [s["id"] for s in t["stages"]],
-                 "optional_stages": [s["id"] for s in t["stages"] if s.get("optional")]}
+                 "optional_stages": [s["id"] for s in t["stages"] if s.get("optional")],
+                 "passage_size": t.get("passage_size")}
                 for t in registry.templates().values()]
 
     def _work_row(self, work_id):
@@ -229,7 +230,7 @@ class WorkflowService:
     # ----- run creation ---------------------------------------------------------------------
 
     def create_run(self, template_id, *, upload=None, manuscript_language=None, work_id=None, owner=None,
-                   model=None, agent_models=None, skip_stages=()):
+                   model=None, agent_models=None, skip_stages=(), settings=None):
         """Exactly one of: upload (+ manuscript_language) creates a new work; work_id uses an existing work."""
         template = registry.get(template_id)
         if "consumes" in template:
@@ -248,10 +249,10 @@ class WorkflowService:
                 manuscript_language = self._work_row(work_id)["manuscript_language"]
                 self._check_can_start(work_id, template["workflow"])
             return self._create(template, work_id, owner, manuscript_language, model, agent_models,
-                                skip_stages=skip_stages)
+                                skip_stages=skip_stages, settings=settings)
 
     def _create(self, template, work_id, owner, manuscript_language, model, agent_models, restart_of=None,
-                skip_stages=()):
+                skip_stages=(), settings=None):
         library = self.library(work_id)
         source, record = library.source()
         run_id = str(uuid.uuid4())
@@ -259,7 +260,7 @@ class WorkflowService:
         engine = registry.engine_class(template["engine"]).create(
             root, template, source=source, manuscript_language=manuscript_language, work_id=work_id, owner=owner,
             source_name=record.get("source_name"), model=model, agent_models=agent_models, library=library,
-            run_id=run_id, skip_stages=skip_stages,
+            run_id=run_id, skip_stages=skip_stages, settings=settings,
         )
         try:
             self._insert_run(engine.state(), root, restart_of)
@@ -367,8 +368,8 @@ class WorkflowService:
         with self.open_run(run_id) as engine:
             state = engine.state()
             if engine.finalized(state) or state["status"] == "COMPLETED":
-                raise WorkflowError("run_finalized", "A finalized run cannot be restarted; changes require "
-                                                     "adding the manuscript again as a new work.")
+                raise WorkflowError("run_finalized", "A finalized run cannot be restarted; start a new run on "
+                                                     "the work to publish a new version.")
             if state["status"] == "CANCELLED":
                 raise WorkflowError("run_cancelled", "This run was already stopped.")
             if state["status"] == "RUNNING" and not confirm_stopped:
@@ -394,7 +395,8 @@ class WorkflowService:
                 with self._transaction():
                     new_id = self._create(template, row["work_id"], owner, state["manuscript_language"], None,
                                           agent_models, restart_of=run_id,
-                                          skip_stages=state.get("skipped_stages") or ())
+                                          skip_stages=state.get("skipped_stages") or (),
+                                          settings=state.get("settings"))
         self._mark_superseded(row["path"], new_id, reason)
         if carry:
             with self.open_run(new_id) as new:

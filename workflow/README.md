@@ -195,7 +195,7 @@ record you last saw. `/manuscript_language` is locked once the run exists.
 To continue, reply to the current gate with a response file containing exactly
 `confirm metadata` (the service's `confirm_metadata` also binds the inspected
 record revision). The confirmation receipt is bound to that revision and hash,
-the record is published to the work library, and translation becomes `READY`. If
+the record is published to the work library, and the next stage becomes `READY`. If
 `work.json` is changed outside the gate, the reply is refused; run
 `retry RUN --refresh-gate`, then `step`, to present the current record again.
 Before the gate is presented, the run adopts the work library's latest shared
@@ -208,6 +208,26 @@ recorded as new versions and library publications without re-confirmation.
 run is unfinished, `works edit-metadata WORK --field ... --value-file ...` edits
 the work's shared metadata and `works metadata WORK [--history | --version N]`
 shows it.
+
+### Front-matter reviews and the translation brief
+
+Every prepared work starts with one front-matter unit, and the reviews made
+before the first chapter belong to it: the shared metadata review, then each
+workflow's own front-matter stages. A template marks such a stage with
+`"front_matter": true` (a non-iterating agent stage after preparation); its gates
+carry the front-matter chapter ID. A gate rule can list `documents`, workspace
+files that are snapshotted when the gate is presented and shown to the reviewer;
+it must also declare the approval `command`. Any other reply is feedback for the
+agent, a changed document invalidates the gate, and the approval completes the
+stage without another agent turn. The approval is kept in
+`front_matter_approvals` and in the accepted version's `run.json`.
+
+`literary-translation-v1` uses this for its translation brief (stage `brief`):
+the agent drafts `translation/glossary.md` and `translation/voice.md` from the
+whole prepared manuscript, starting from any files carried from an earlier run,
+and the `translation_brief` gate presents both. Reply `approve brief` to approve
+them, or send corrections. The approved files become the chapter stage's
+starting point, also after a chapter-stage restart.
 
 ### Final acceptance
 
