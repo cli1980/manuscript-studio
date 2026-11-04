@@ -692,6 +692,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(report["literary_quality"]["status"], "not-checked")
         self.assertEqual((self.engine.root / "candidate.en.txt").read_text(), "Story\n\nHe came back.\n")
         self.assertEqual(len(self.engine.state()["receipts"]), 7)  # Metadata, then three per unit.
+        self.assertEqual(report["automated_checks"]["closure-receipts"]["status"], "passed")
         self.assertEqual(report["automated_checks"]["stage-order"]["evidence"],
                          ["prepare", "metadata", "translate", "accept", "export"])
         # A completed run can finish its human evidence review without another model call.

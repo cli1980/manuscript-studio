@@ -378,6 +378,51 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     in progress and an accepted version, and highlights the location of each
     sheet item under review.
 
+### Translation judge improvement — sentence-level fidelity
+
+- **Status:** `planned` (recorded by the owner on 2026-11-03 after a trial)
+- **Owner:** `cli1980`
+- **Depends on:** the evals judge runner (`evals/run_judge.py`) and the
+  local-only case `zh-en-fangke-001`
+- **Outcome:** The translation judge detects clause-level fidelity shifts that
+  fluent English hides, so evals can catch the drift the owner found in the
+  literary-translation workflow's output.
+- **Findings (2026-11-03):**
+  - In the workflow's translation of 《房客》 (run `b625857d`), the owner found
+    meaning shifts in paragraph 1: 来 rendered as "go" (the narrator writes from
+    inside K), the concessive and causal chain 固然…而又…便…于是 split into
+    unconnected statements, 这种 rendered as "a", 空 omitted, and "seeming"
+    added to 做从容. The literal Path A draft of the same run kept most of these.
+  - Case `zh-en-fangke-001` (local-only; authorship and usage rights pending)
+    holds the source and two candidates: the workflow's final English and its
+    Path A draft.
+  - With rubric v1, `azure/openai/gpt-4.1` scored both candidates 5/5 on every
+    dimension.
+  - A trial added a sentence-by-sentence fidelity check (point of view and
+    deixis, connectives, omissions, additions, certainty) to rubric v1 and the
+    judge skill, with fidelity caps. `gpt-4.1` still gave 5/5 and claimed the
+    check without quoting evidence; `azure/openai/gpt-5.5` quoted minor issues
+    in Path A but still found no shifts in the final English. The trial was
+    reverted; rubric v1 and the judge skill are unchanged.
+  - Conclusion: one call over a whole story does not perform a real
+    sentence-level check, whatever the rubric says.
+- **Scope (candidate approaches, not yet chosen):**
+  1. **Segmented judging:** the runner splits source and candidate into aligned
+     paragraph groups, judges each with a sentence-level fidelity procedure,
+     and combines the findings and score caps for the whole text.
+  2. **Known-issue checks:** cases record expected findings (source span and
+     kind of shift); the eval checks whether the judge reports them, measuring
+     the judge directly on known problems.
+  3. A rubric version with the sentence-level criterion, shared with human
+     reviewers, once an approach is shown to work.
+- **Acceptance criteria:**
+  - On `zh-en-fangke-001`, the judge reports the five known paragraph-1 shifts
+    in the workflow's final English and scores its fidelity below 5.
+  - The judge does not report natural restructuring that preserves viewpoint,
+    logic, qualifiers, and certainty as a shift.
+  - Any rubric change gets a new rubric version, and the judge skill's embedded
+    copy matches it.
+
 ### Later (unordered)
 
 - DOCX formatting from the web application

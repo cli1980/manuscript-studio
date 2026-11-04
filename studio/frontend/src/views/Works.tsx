@@ -213,10 +213,8 @@ function StartWorkflow({ workId, unfinishedRun, workflows, onStarted }: {
     }
   }
 
-  if (unfinishedRun) {
-    return <div className="panel">A workflow is running on this work: <a href={`#/runs/${unfinishedRun}`}>open run {unfinishedRun.slice(0, 8)}</a>.
-      Another can start when it finishes.</div>;
-  }
+  // While a run is unfinished the Runs section already shows it; the start panel simply stays hidden.
+  if (unfinishedRun) return null;
   return (
     <div className="panel">
       <h2>Start a workflow</h2>

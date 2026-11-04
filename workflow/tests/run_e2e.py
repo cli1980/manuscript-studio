@@ -389,17 +389,27 @@ def write_report(engine, case):
         def receipts():
             if state["workflow"] == "literary-editing":
                 return editorial_receipts()
+            reviewed = 0
             for output in state["outputs"]:
+                chapter_id = output["chapter_id"]
+                # Closure is an explicit closure command, or a complete resolving submission where it is implied.
                 closures = [(number, receipt["gate"]) for number, receipt in enumerate(state["receipts"])
-                            if receipt["gate"].get("chapter_id") == output["chapter_id"]
+                            if receipt["gate"].get("chapter_id") == chapter_id
                             and receipt["gate"].get("attempt") == output.get("attempt")
-                            and receipt["parsed"]["type"] == "final-closure"]
-                maps = [number for number, gate in closures if gate["kind"] == "map_exceptions"]
+                            and (receipt["parsed"]["type"] == "final-closure" or receipt["parsed"].get("implied_closure"))]
                 sanity = [number for number, gate in closures if gate["kind"] == "chapter_sanity"
                           and gate["binding"]["sha256"] == output["sanity_review_sha256"]]
-                require(maps and sanity and min(maps) < max(sanity),
-                        f"Missing ordered map/sanity closure receipts for {output['chapter_id']}.")
-            return "Completed chapters have map and bound sanity closure receipts; drafting behavior needs domain review."
+                require(sanity, f"Missing chapter approval bound to the reviewed text for {chapter_id}.")
+                # The passage map is internal; only a map with exceptions needs the user's closure, before approval.
+                path = engine.workspace / "translation/maps" / f"{chapter_id}.json"
+                require(path.is_file(), f"Missing passage map for {chapter_id}.")
+                if json.loads(path.read_text(encoding="utf-8")).get("exceptions"):
+                    maps = [number for number, gate in closures if gate["kind"] == "map_exceptions"]
+                    require(maps and min(maps) < max(sanity),
+                            f"Passage-map exceptions for {chapter_id} lack a closure before chapter approval.")
+                    reviewed += 1
+            return (f"Every completed chapter has a bound chapter approval; {reviewed} chapter(s) with passage-map "
+                    "exceptions closed them first. Drafting behavior needs domain review.")
 
         check("closure-receipts", receipts, ready=bool(state["outputs"]))
 

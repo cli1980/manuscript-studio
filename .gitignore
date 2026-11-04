@@ -16,3 +16,6 @@ __pycache__/
 /workflow/tests/fixtures/short-story-ciqing/
 /workflow/tests/cases/editing-ciqing-001/
 /workflow/tests/fixtures/short-story-ciqing-english/
+/evals/cases/literary-translation/zh-en-fangke-001/
+/fixtures/manuscripts/short-story-fangke/
+/workflow/tests/cases/translation-fangke-001/
