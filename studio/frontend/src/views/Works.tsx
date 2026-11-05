@@ -210,11 +210,12 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
     setError(null);
     try {
       const settings = defaultSize && passageSize.trim() ? { passage_size: Number(passageSize) } : undefined;
-      await api.create({ template_id: templateId, work_id: workId, skip_stages: skip, settings });
+      const run = await api.create({ template_id: templateId, work_id: workId, skip_stages: skip, settings });
       setTemplateId("");
       setSkip([]);
       setPassageSize("");
       onStarted();
+      window.location.hash = `#/runs/${run.id}/chapters`;  // Every decision of the run happens in the viewer.
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc));
     } finally {

@@ -60,7 +60,7 @@ function NewRun({ initialWork }: { initialWork?: string }) {
     setError(null);
     try {
       const run = await api.create({ template_id: templateId, work_id: workId, skip_stages: skip });
-      window.location.hash = `#/runs/${run.id}`;
+      window.location.hash = template?.consumes ? `#/runs/${run.id}` : `#/runs/${run.id}/chapters`;
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc));
     } finally {

@@ -324,10 +324,8 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   2. **Run inspector.** The run page becomes inspection and control only:
      stage progress, chapter progress, a readable decision history (receipts,
      already summarized in each version's `run.json`), errors, and controls,
-     with no forms. Metadata review moves to the work page next to the metadata
-     form; final acceptance moves to the page viewer as an "all chapters
-     approved, finalize" step; the dashboard drops its duplicate start form and
-     only lists runs.
+     with no forms. Decisions move to the page viewer (see the frontend
+     structure decision below).
   3. **Works explorer.** The library is browsed as workflow → version → files,
      using the version preview card from the format panel (`run.json` and
      `manifest.json`). The work page is organized into sections: overview and
@@ -392,6 +390,37 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   longer passage unless an `oversize` exception for its exact range is
   approved through the existing map-exceptions review. One live run on
   《房客》 divided the story into three passages within the default.
+- **Frontend structure** (owner decision, 2026-11-04):
+  - Four components: the **work explorer** (works list, intake, work page),
+    the **workflow explorer** (the cross-work list of runs, today's
+    "Workflows" tab, with filters such as workflow, status, and needs-me), **run
+    management** (status, progress, timeline, and controls only), and the
+    **chapter viewer** (the run's review page). Shared widgets serve all four:
+    the decision panel (approval sheets, sample poll, document review, chapter
+    approval, metadata review, final acceptance), the Markdown and document
+    viewer, the metadata editor, and status and progress tags.
+  - A run can be started from both the work explorer and the workflow explorer.
+  - Every decision of a chapter-based run happens in the chapter viewer, and
+    starting a run opens it.
+  - Phase 1 (implemented and committed locally, 2026-11-04): starting a run opens the
+    viewer; the viewer shows a run status bar with problem banners linking to
+    run management, preparation questions before chapters exist, and final
+    acceptance; the run page links to the viewer instead of showing decision
+    forms for chapter-based runs.
+  - Inline comments (owner decision, 2026-11-04; committed locally): feedback on text is given as inline
+    comments on the translation (not the original) and on the brief documents, using Recogito's text
+    annotator. Drafts stay in the browser until sent; each comment keeps its quote, range, and paragraph
+    number so a later source/translation alignment can show it beside the matching original paragraph.
+    Comments are sent as ordinary feedback, so the engine is unchanged.
+  - Phase 2 (planned): a "Whole book" entry in the viewer for decisions not
+    tied to one chapter, such as literary editing's developmental verdict and
+    consistency passes. Needs a small web-API addition, because the chapter
+    endpoint does not serve the internal whole-book ID; today these decisions
+    have no working page. Needed before the editing workflow is used in the
+    studio.
+  - Phase 3 (planned): formatting decisions (settings sheet, visual check) stay
+    on the run page until a formatted-document preview exists, then move into
+    the viewer as a "Formatted document" entry that reuses the decision panel.
 - **Suggested order:** 1 (unified decision panel), 2 (run inspector), 3 (works
   explorer by version), 4 (paragraph-aligned page viewer; the largest piece,
   needed before the editing workflow reaches the GUI). All four are frontend
@@ -400,9 +429,9 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - Every human decision, of any kind, is presented by the same decision panel
     with a consistent header, conversation, closure, and irreversible-action
     style.
-  - The run page contains no decision forms; chapter decisions open in the page
-    viewer, metadata review on the work page, and final acceptance in the page
-    viewer.
+  - The run page contains no decision forms; every decision, including
+    metadata review, whole-book decisions, final acceptance, and (once a
+    preview exists) formatting decisions, opens in the page viewer.
   - A work's accepted versions can be browsed, previewed, formatted, and
     downloaded from the works explorer.
   - The page viewer shows source and output aligned by paragraph for both a run

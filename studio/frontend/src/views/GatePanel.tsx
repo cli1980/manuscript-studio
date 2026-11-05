@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, type Gate, type RunDetail, type Sheet } from "../api";
 import { Documents, documentTitle, reviewName, TextBlock } from "./common";
 import { Markdown } from "./Markdown";
+import { clearComments, CommentSummary, composeComments, loadComments, type InlineComment } from "./CommentableText";
 import { MetadataTable } from "./Metadata";
 import { SheetReview } from "./SheetReview";
 import { SamplePoll } from "./SamplePoll";
@@ -13,18 +14,21 @@ type Perform = (op: () => Promise<RunDetail>) => void;
 
 // Native forms for each human gate. They only compose the exact reply; the server validates it.
 export function GatePanel({ run, perform, inViewer = false }: { run: RunDetail; perform: Perform; inViewer?: boolean }) {
-  if (run.status === "WAITING_FOR_ACCEPTANCE" && run.acceptance) return <Acceptance run={run} perform={perform} />;
-  if (run.status !== "WAITING_FOR_HUMAN" || !run.gate) return null;
-  const gate = run.gate;
-  if (!inViewer && gate.chapter_id) {
+  // Formatting runs have no chapters, so their decisions stay on the run page.
+  const viewerDecides = run.workflow !== "manuscript-formatting";
+  if (!inViewer && viewerDecides && (run.status === "WAITING_FOR_ACCEPTANCE" || (run.status === "WAITING_FOR_HUMAN" && run.gate))) {
+    const where = run.gate?.chapter_id ? `/${encodeURIComponent(run.gate.chapter_id)}` : "";
     return (
       <div className="panel gate">
-        <h2>Your review: {gate.kind === "chapter_sanity" ? "approve" : reviewName(gate.kind) + " ·"} {gate.chapter_id}</h2>
-        <p>Chapter decisions happen in the chapter viewer, beside the source text.</p>
-        <a className="button" href={`#/runs/${run.id}/chapters/${encodeURIComponent(gate.chapter_id ?? "")}`}>Review {gate.chapter_id} in the chapter viewer</a>
+        <h2>{run.status === "WAITING_FOR_ACCEPTANCE" ? "Ready to finalize" : `Your review: ${reviewName(run.gate?.kind ?? "")}`}</h2>
+        <p>Decisions happen in the review viewer, beside the text.</p>
+        <a className="button" href={`#/runs/${run.id}/chapters${where}`}>Open the review viewer</a>
       </div>
     );
   }
+  if (run.status === "WAITING_FOR_ACCEPTANCE" && run.acceptance) return <Acceptance run={run} perform={perform} />;
+  if (run.status !== "WAITING_FOR_HUMAN" || !run.gate) return null;
+  const gate = run.gate;
   return (
     <div className="panel gate">
       <h2>Your review: {reviewName(gate.kind)}{gate.chapter_id ? ` · ${gate.chapter_id}` : ""}</h2>
@@ -107,8 +111,21 @@ function SheetForm({ run, gate, sheet, perform }: { run: RunDetail; gate: Gate; 
 // then approve or request changes. Changes are feedback for the agent, which presents a revised version.
 function DocumentReview({ run, gate, perform }: { run: RunDetail; gate: Gate; perform: Perform }) {
   const [text, setText] = useState("");
-  useEffect(() => setText(""), [gate.id]);
+  const commentKey = `comments:${gate.id}`;
+  const load = () => Object.fromEntries(gate.documents.map((d) => [d.path, loadComments(`${commentKey}:${d.path}`)]));
+  const [comments, setComments] = useState<Record<string, InlineComment[]>>(load);
+  useEffect(() => { setText(""); setComments(load()); }, [gate.id]);  // eslint-disable-line react-hooks/exhaustive-deps
   const approve = gate.commands[0];
+  const all = Object.values(comments).flat();
+  function send() {
+    const message = [...gate.documents.map((d) => composeComments(comments[d.path] ?? [], "", documentTitle(d.path)))
+      .filter(Boolean), text.trim() ? `General: ${text.trim()}` : ""].filter(Boolean).join("\n\n");
+    perform(async () => {
+      const next = await api.reply(run.id, gate.id, message);
+      gate.documents.forEach((d) => clearComments(`${commentKey}:${d.path}`));
+      return next;
+    });
+  }
   return (
     <div className="document-review">
       {gate.answer_to && (
@@ -119,14 +136,14 @@ function DocumentReview({ run, gate, perform }: { run: RunDetail; gate: Gate; pe
         <Markdown text={gate.message} />
         <p className="muted">Please review: {gate.documents.map((d) => documentTitle(d.path)).join(", ")}.</p>
       </div>
-      <Documents documents={gate.documents} />
+      <Documents documents={gate.documents} commentKey={commentKey}
+        onComments={(path, list) => setComments((old) => ({ ...old, [path]: list }))} />
       <div className="decision-bar">
         {approve && <button className="primary" onClick={() => perform(() => api.reply(run.id, gate.id, approve))}>
           {approve.charAt(0).toUpperCase() + approve.slice(1)}</button>}
-        <textarea rows={3} value={text} onChange={(e) => setText(e.target.value)}
-          placeholder="Or describe the changes you want; the translator revises and presents the brief again." />
-        <button disabled={!text.trim()} onClick={() => perform(() => api.reply(run.id, gate.id, text))}>Request changes</button>
+        <CommentSummary comments={all} general={text} onGeneral={setText} onSend={send} sendLabel="Request changes" />
       </div>
+      <p className="muted">Select text in a document to comment on it; the translator revises and presents the brief again.</p>
     </div>
   );
 }
@@ -171,7 +188,7 @@ function Acceptance({ run, perform }: { run: RunDetail; perform: Perform }) {
   return (
     <div className="panel gate">
       <h2>Final acceptance</h2>
-      <p>Review every output in the <a href={`#/runs/${run.id}/chapters`}>chapter browser</a> before accepting.</p>
+      <p>Read every chapter before accepting:</p>
       <ul>{acceptance.outputs.map((o) => <li key={o.chapter_id}><a href={`#/runs/${run.id}/chapters/${encodeURIComponent(o.chapter_id)}`}>{o.chapter_id}</a> <span className="mono muted">{o.sha256.slice(0, 12)}</span></li>)}</ul>
       <div className="banner warn"><strong>This is irreversible.</strong> {acceptance.notice}</div>
       <label><input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} /> I understand that accepting finalizes this run.</label>

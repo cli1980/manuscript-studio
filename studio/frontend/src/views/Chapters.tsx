@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, type Gate, type RunDetail } from "../api";
-import { Documents, ErrorBox, reviewName, TextBlock, useLoad, when } from "./common";
+import { Documents, ErrorBox, reviewName, Status, TextBlock, useLoad, when } from "./common";
 import { SheetReview } from "./SheetReview";
 import { GatePanel } from "./GatePanel";
 import { Markdown } from "./Markdown";
+import { clearComments, CommentableText, CommentSummary, composeComments, type InlineComment } from "./CommentableText";
 
 // Chapter browser inside a workflow run: prepared chapters and each stage's completed outputs.
 export function Chapters({ runId, chapterId }: { runId: string; chapterId?: string }) {
@@ -13,8 +14,12 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
   const [approved, setApproved] = useState<string | null>(null);
   const gate = run.data?.status === "WAITING_FOR_HUMAN" && run.data.gate?.kind === "chapter_sanity" ? run.data.gate : null;
   const draft = gate && chapterId && gate.chapter_id === chapterId ? gate.binding_text : null;
+  // Feedback on the assembled draft is given as inline comments on the translation, drafted in the browser.
+  const commentKey = gate && !gate.sheet ? `comments:${gate.id}:draft` : null;
+  const [comments, setComments] = useState<InlineComment[]>([]);
   // Any human exchange for a chapter (translation advice, questions, map exceptions) is shown with that chapter.
   const pending = run.data?.status === "WAITING_FOR_HUMAN" && run.data.gate?.chapter_id ? run.data.gate : null;
+  const unattached = run.data?.status === "WAITING_FOR_HUMAN" && run.data.gate && !run.data.gate.chapter_id;
   const [exchangeError, setExchangeError] = useState<string | null>(null);
   // Keep the chapter list, text, and status in step with the run as it moves.
   const progressKey = `${run.data?.status}|${run.data?.gate?.id ?? ""}|${run.data?.progress?.completed ?? ""}|${run.data?.chapter_id ?? ""}`;
@@ -42,8 +47,17 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
     <section>
       <p><a href={`#/runs/${runId}`}>← Run {runId.slice(0, 8)}</a></p>
       <h1>Chapters</h1>
+      {run.data && <RunStatusBar run={run.data} />}
       <ErrorBox error={index.error} />
-      {data && !data.prepared && <p className="muted">Chapters appear here once preparation completes.</p>}
+      {/* Decisions not tied to a chapter, such as a question during preparation. */}
+      {unattached && run.data && (
+        <>
+          <GatePanel run={run.data} inViewer perform={(operation) => void performExchange(operation)} />
+          <ErrorBox error={exchangeError} />
+        </>
+      )}
+      {data && !data.prepared && !unattached && <p className="muted">The agent is preparing the manuscript; chapters appear here
+        once preparation completes, and you are brought to each decision as it comes up.</p>}
       {data && data.prepared && (
         <div className="split">
           <ol className="list chapters">
@@ -66,9 +80,15 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
             ))}
           </ol>
           <div>
+            {run.data?.status === "WAITING_FOR_ACCEPTANCE" && run.data.acceptance && (
+              <>
+                <GatePanel run={run.data} inViewer perform={(operation) => void performExchange(operation)} />
+                <ErrorBox error={exchangeError} />
+              </>
+            )}
             {!chapterId && gate && <p><a className="button" href={`#/runs/${runId}/chapters/${encodeURIComponent(gate.chapter_id ?? "")}`}>Review {gate.chapter_id} for approval</a></p>}
             {approved && (
-              <div className="banner final">{approved} is approved. Translation continues with the next chapter; you will be brought back here when it is ready. <a href={`#/runs/${runId}`}>Back to the run</a></div>
+              <div className="banner final">{approved} is approved. Translation continues with the next chapter; you will be brought back here when it is ready.</div>
             )}
             {!chapterId && <p className="muted">Select a chapter to read it.</p>}
             <ErrorBox error={detail.error} />
@@ -111,7 +131,9 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
                   ))}
                   {draft != null && (
                     <div className="awaiting"><h3>Translation <span className="tag busy">awaiting your approval</span></h3>
-                      <Markdown text={draft} /></div>
+                      {commentKey
+                        ? <CommentableText key={commentKey} storageKey={commentKey} onChange={setComments}><Markdown text={draft} /></CommentableText>
+                        : <Markdown text={draft} />}</div>
                   )}
                   {detail.data.outputs.length === 0 && draft == null &&
                     <div className="muted">No stage output is ready for this chapter yet.</div>}
@@ -124,7 +146,7 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
                 )}
                 {/* Approval sits under the side-by-side text, after the reviewer has read it. */}
                 {chapterId && gate?.chapter_id === chapterId && run.data && (
-                  <ChapterApproval run={run.data} onDone={(closed) => {
+                  <ChapterApproval run={run.data} comments={comments} commentKey={commentKey} onDone={(closed) => {
                     if (closed) setApproved(chapterId);
                     void run.reload(); void detail.reload(); void index.reload();
                   }} />
@@ -138,8 +160,35 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
   );
 }
 
+// Where the run stands, so the viewer is enough to follow it; problems link to run management.
+function RunStatusBar({ run }: { run: RunDetail }) {
+  const working = run.status === "RUNNING" || run.worker.active;
+  const state = working ? "agent working" : run.status === "WAITING_FOR_HUMAN" ? "waiting for you"
+    : run.status === "WAITING_FOR_ACCEPTANCE" ? "ready to finalize" : null;
+  const ended = run.status === "COMPLETED" || run.status === "CANCELLED";
+  const problem = !run.engine_current && !ended && !run.finalized
+    ? "The workflow engine changed after this run started; it can only be restarted."
+    : run.status === "FAILED" ? `The last step failed${run.error ? `: ${run.error}` : "."}`
+    : run.status === "BLOCKED" ? `The run is blocked${run.error ? `: ${run.error}` : "."}`
+    : run.worker.paused ? "The run is paused." : null;
+  return (
+    <>
+      <div className="run-bar">
+        <strong>{run.template_title ?? run.template_id}</strong>
+        <span>stage {run.stage}</span>
+        {run.progress && <span>{run.progress.completed}/{run.progress.total} chapters</span>}
+        <Status value={run.status} />
+        {state && <span className={`tag ${working ? "busy" : "awaiting-tag"}`}>{state}</span>}
+      </div>
+      {problem && <div className="banner warn">{problem} <a href={`#/runs/${run.id}`}>Open run management</a> to retry, resume, or restart.</div>}
+    </>
+  );
+}
+
 // Chapter approval happens here, beside the source: approve the assembled draft or review proposed edits.
-function ChapterApproval({ run, onDone }: { run: RunDetail; onDone: (closed: boolean) => void }) {
+function ChapterApproval({ run, comments, commentKey, onDone }: {
+  run: RunDetail; comments: InlineComment[]; commentKey: string | null; onDone: (closed: boolean) => void;
+}) {
   const gate = run.gate!;
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
@@ -151,6 +200,7 @@ function ChapterApproval({ run, onDone }: { run: RunDetail; onDone: (closed: boo
     try {
       await api.reply(run.id, gate.id, text);
       setFeedback("");
+      if (commentKey) clearComments(commentKey);
       // Only the approval command or the edits sheet's closure approves the chapter; item decisions do not.
       onDone(text === (gate.commands[0] ?? "approve chapter") || text === gate.sheet?.submission.closure_command);
     } catch (exc) {
@@ -178,15 +228,15 @@ function ChapterApproval({ run, onDone }: { run: RunDetail; onDone: (closed: boo
               <Markdown text={gate.message} />
             </div>
           ) : (
-            <p className="muted">The final check proposes no changes. Read the translation beside the source, then approve it or
-              send corrections (corrections are feedback and do not approve the chapter).</p>
+            <p className="muted">The final check proposes no changes. Read the translation beside the source, then approve it, or
+              select text in the translation to comment on it and send your comments (comments are feedback and do not
+              approve the chapter).</p>
           )}
           <div className="row">
             <button className="primary" disabled={busy} onClick={() => void reply(gate.commands[0] ?? "approve chapter")}>Approve chapter</button>
           </div>
-          <textarea rows={3} value={feedback} placeholder="Corrections or questions for the translator"
-            onChange={(e) => setFeedback(e.target.value)} />
-          <button disabled={busy || !feedback.trim()} onClick={() => void reply(feedback)}>Send feedback</button>
+          <CommentSummary comments={comments} general={feedback} onGeneral={setFeedback} busy={busy}
+            onSend={() => void reply(composeComments(comments, feedback))} />
         </>
       )}
       <ErrorBox error={error} />

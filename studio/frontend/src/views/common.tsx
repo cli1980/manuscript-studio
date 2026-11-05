@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
+import { CommentableText, type InlineComment } from "./CommentableText";
 
 export function useLoad<T>(load: () => Promise<T>, deps: unknown[], intervalMs?: number) {
   const [data, setData] = useState<T | null>(null);
@@ -55,7 +56,11 @@ export function documentTitle(path: string) {
 
 // Workspace documents presented for review, such as a translation brief's glossary, voice notes, and samples:
 // one tab per document, rendered as formatted text.
-export function Documents({ documents }: { documents: { path: string; text: string }[] }) {
+export function Documents({ documents, commentKey, onComments }: {
+  documents: { path: string; text: string }[];
+  commentKey?: string;  // When set, the documents accept inline comments (drafted in the browser under this key).
+  onComments?: (path: string, comments: InlineComment[]) => void;
+}) {
   const [active, setActive] = useState(0);
   const doc = documents[Math.min(active, documents.length - 1)];
   if (!doc) return null;
@@ -67,7 +72,12 @@ export function Documents({ documents }: { documents: { path: string; text: stri
             onClick={() => setActive(i)} title={d.path}>{documentTitle(d.path)}</button>
         ))}
       </div>
-      <div className="doc-body" role="tabpanel"><Markdown text={doc.text} /></div>
+      <div className="doc-body" role="tabpanel">
+        {commentKey && onComments
+          ? <CommentableText key={`${commentKey}:${doc.path}`} storageKey={`${commentKey}:${doc.path}`}
+              onChange={(comments) => onComments(doc.path, comments)}><Markdown text={doc.text} /></CommentableText>
+          : <Markdown text={doc.text} />}
+      </div>
     </div>
   );
 }

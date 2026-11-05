@@ -5,15 +5,18 @@ import { GatePanel } from "./GatePanel";
 
 export function RunView({ runId }: { runId: string }) {
   const { data: run, error, reload, setData } = useLoad(() => api.run(runId), [runId], 3000);
-  const approval = run?.status === "WAITING_FOR_HUMAN" && run.gate?.chapter_id ? run.gate : null;
+  // Every decision of a chapter-based run happens in the review viewer; go there once per decision.
+  const decision = run && run.workflow !== "manuscript-formatting"
+    ? (run.status === "WAITING_FOR_HUMAN" && run.gate ? { id: run.gate.id, chapter: run.gate.chapter_id }
+      : run.status === "WAITING_FOR_ACCEPTANCE" && run.acceptance ? { id: run.acceptance.acceptance_id, chapter: null } : null)
+    : null;
   useEffect(() => {
-    // Chapter decisions (advice, questions, approval) happen in the chapter viewer; go there once per gate.
-    if (!approval) return;
-    const key = `chapter-gate-opened:${approval.id}`;
+    if (!decision) return;
+    const key = `chapter-gate-opened:${decision.id}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, "1");
-    window.location.hash = `#/runs/${runId}/chapters/${encodeURIComponent(approval.chapter_id ?? "")}`;
-  }, [approval, runId]);
+    window.location.hash = `#/runs/${runId}/chapters${decision.chapter ? `/${encodeURIComponent(decision.chapter)}` : ""}`;
+  }, [decision?.id, runId]);  // eslint-disable-line react-hooks/exhaustive-deps
   const [actionError, setActionError] = useState<string | null>(null);
 
   async function perform(operation: () => Promise<RunDetail>) {

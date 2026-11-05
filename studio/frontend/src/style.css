@@ -126,3 +126,16 @@ h2 .tag.status { font-size: 0.8rem; vertical-align: middle; }
 .decision-bar { display: grid; grid-template-columns: auto 1fr auto; gap: 0.6rem; align-items: start;
   border-top: 1px solid #e3e6ea; padding-top: 0.8rem; }
 .decision-bar textarea { width: 100%; }
+
+.run-bar { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center; background: #f7f8fa;
+  border: 1px solid #dde2e7; border-radius: 10px; padding: 0.5rem 0.9rem; margin-bottom: 0.8rem; }
+
+/* Inline comments (drafted in the browser, sent as feedback). */
+.commentable { position: relative; }
+.comment-popup { background: #fff; border: 1px solid #c9d2db; border-radius: 8px; padding: 0.6rem; width: 22rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); }
+.comment-popup textarea { width: 100%; margin: 0.4rem 0; }
+.comment-summary { display: grid; gap: 0.4rem; }
+.comment-summary ul { margin: 0; padding-left: 1.2rem; }
+.comment-summary input { width: 100%; }
+.decision-bar { grid-template-columns: auto 1fr; }
