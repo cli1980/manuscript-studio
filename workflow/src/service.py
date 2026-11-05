@@ -7,6 +7,7 @@ import getpass
 import json
 import re
 import sqlite3
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -105,6 +106,11 @@ class WorkflowService:
         for record in library.finalized():  # The latest accepted version of each workflow.
             workflows[record["workflow"]] = {"status": "completed", "finalized_run_id": record["run_id"],
                                              "version": next((a.split("/")[1] for a in record["areas"]), None)}
+        info = library.info()
+        work["origin"] = info.get("origin")
+        work["handed_off"] = [{**self.library(row["id"]).info()["origin"], "work_id": row["id"], "title": row["title"]}
+                              for row in self.list_works()
+                              if (self.library(row["id"]).info().get("origin") or {}).get("work_id") == work_id]
         work.update(workflows=workflows, runs=self.list_runs(work_id=work_id),
                     unfinished_run=self._unfinished(work_id),
                     heads={artifact: {key: record.get(key) for key in (
@@ -123,7 +129,7 @@ class WorkflowService:
         with self._transaction():
             return self._create_work(upload, manuscript_language, owner or self.owner)
 
-    def _create_work(self, upload, manuscript_language, owner):
+    def _create_work(self, upload, manuscript_language, owner, *, origin=None, carried=None):
         upload = plain(Path(upload))
         if not upload.is_file():
             raise ValueError("Designate one regular source file.")
@@ -133,11 +139,16 @@ class WorkflowService:
         work_id = f"{slug(upload.name)}-{uuid.uuid4().hex[:6]}"
         info = {"work_id": work_id, "title": Path(upload.name).stem, "owner": owner,
                 "manuscript_language": manuscript_language, "source_name": upload.name, "created_at": now()}
+        if origin:
+            info["origin"] = origin  # The work and run whose output this work was created from.
         library = WorkLibrary.create(self.root / "works" / work_id, source=upload, source_name=upload.name, info=info)
         _, record = library.source()
         # User-provided fields start empty so the user can fill them in right after intake.
         helper, contract = self._current_metadata_helper()
         work = helper.blank(work_id, manuscript_language, location=upload.name, actor=owner or "user")
+        for field, (value, rationale) in (carried or {}).items():
+            helper.put(work["metadata"], field, value)
+            helper.record(work, field, "provided", actor=owner or "user", rationale=rationale)
         contract.schema_check(contract.validators()[0], work, "work")
         library.publish_many([{"artifact": "work.json", "data": json_bytes(work), "expected_head": None,
                                "review_status": "unreviewed", "basis": {"metadata_record_revision": 1}}],
@@ -327,7 +338,51 @@ class WorkflowService:
 
     def step(self, run_id, runtime):
         with self.open_run(run_id) as engine:
-            return engine.summary(engine.advance(runtime))
+            summary = engine.summary(engine.advance(runtime))
+        if summary["status"] == "COMPLETED" and registry.get(summary["template_id"]).get("hands_off"):
+            self.hand_off(run_id)
+            with self.open_run(run_id) as engine:
+                summary = engine.summary(engine.state())
+        return summary
+
+    # Basic metadata a handed-off work starts with; language-specific fields (description, keywords) and
+    # computed ones are not carried, and the new work's own preparation and metadata review complete them.
+    HAND_OFF_FIELDS = ("/title", "/subtitle", "/contributors", "/work_type", "/form", "/genres", "/audience",
+                       "/series/name", "/series/position", "/series/relationship")
+
+    def hand_off(self, run_id):
+        """Create a new work from a completed run's document, with basic metadata carried over (idempotent)."""
+        row = self._run_row(run_id)
+        with self.open_run(run_id) as engine:
+            state = engine.state()
+            if state.get("handed_off_work"):
+                return state["handed_off_work"]
+            if state["status"] != "COMPLETED" or not state.get("document_path"):
+                raise ValueError("Only a completed run with a document can hand off its output.")
+            document = Path(state["document_path"])
+            language = state.get("manuscript_language") or row["manuscript_language"]
+            source = self.library(row["work_id"])
+            head = source.head("work.json")
+            metadata = json.loads(source.read(head))["metadata"] if head else {}
+            helper, _ = self._current_metadata_helper()
+            note = f"Carried over from work {row['work_id']} when its {state['source_version']} output was formatted."
+            carried = {field: (helper.field_value(metadata, field), note) for field in self.HAND_OFF_FIELDS
+                       if metadata and not helper.missing(helper.field_value(metadata, field))}
+            original = metadata.get("original_language") or self._work_row(row["work_id"])["manuscript_language"]
+            if original and original.split("-")[0] != language.split("-")[0]:
+                carried["/original_language"] = (original, note)
+            name = f"{Path(self._work_row(row['work_id'])['source_name']).stem}-{state['source_version']}.docx"
+            with tempfile.TemporaryDirectory() as folder:
+                upload = Path(folder) / name
+                upload.write_bytes(document.read_bytes())
+                origin = {"work_id": row["work_id"], "workflow": row["workflow"], "run_id": run_id,
+                          "source_version": state["source_version"], "publication_id": state.get("publication_id"),
+                          "parent_run_id": state.get("parent_run_id")}
+                with self._transaction():
+                    work_id = self._create_work(upload, language, state.get("owner") or self.owner,
+                                                origin=origin, carried=carried)
+            engine.mark_handed_off(work_id)
+            return work_id
 
     def reply(self, run_id, gate_id, text, *, decision_source="human"):
         with self.open_run(run_id) as engine:

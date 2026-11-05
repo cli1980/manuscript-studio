@@ -59,6 +59,8 @@ export function RunView({ runId }: { runId: string }) {
       {run.error && <div className="error"><strong>Last error:</strong> {run.error}</div>}
       {run.worker.error && <div className="error"><strong>Worker:</strong> {run.worker.error}</div>}
       {run.document_path && <p>Formatted document: <span className="mono">{run.document_path}</span></p>}
+      {run.handed_off_work && <div className="banner final">The formatted document is now a work of its own, ready for further
+        workflows: <a href={`#/works/${encodeURIComponent(run.handed_off_work)}`}>{run.handed_off_work}</a>.</div>}
       {run.export_path && !run.document_path && <p>Export: <span className="mono">{run.export_path}</span></p>}
       {run.finalized && run.template_id !== "manuscript-formatting-v1" && (
         <p><button className="primary" onClick={() => perform(async () => {

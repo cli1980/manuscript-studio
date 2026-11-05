@@ -1041,6 +1041,19 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["status"], "COMPLETED")
         self.assertTrue(Path(state["document_path"]).is_file())
         self.assertEqual(Path(state["document_path"]).name, "manuscript-v001.docx")  # Source version in the name.
+        # The formatted document becomes a new work, ready for further workflows, with basic metadata carried over.
+        handed = self.service.hand_off(state["id"])
+        self.assertEqual(self.service.hand_off(state["id"]), handed)  # Recorded once; repeating is harmless.
+        work = self.service.get_work(handed)
+        self.assertEqual((work["manuscript_language"], work["source_name"]), (state["manuscript_language"], "original-v001.docx"))
+        self.assertEqual(work["origin"]["work_id"], self.work_id)
+        self.assertEqual(work["origin"]["run_id"], state["id"])
+        self.assertEqual(self.service.library(handed).source()[0].read_bytes(), Path(state["document_path"]).read_bytes())
+        metadata = self.service.get_work_metadata(handed)["metadata"]
+        self.assertEqual((metadata["title"], metadata["work_type"], metadata["original_language"], metadata["description"]),
+                         ("Story", "fiction", "zh", None))
+        self.assertEqual([w["work_id"] for w in self.service.get_work(self.work_id)["handed_off"]], [handed])
+        self.assertEqual(job.state()["handed_off_work"], handed)
         self.assertTrue((job.root / "export/manifest.json").is_file())
         self.assertEqual(self.engine.state()["status"], "COMPLETED")
         self.assertEqual(self.engine.state()["acceptance"], accepted)

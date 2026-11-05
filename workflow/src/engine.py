@@ -729,6 +729,16 @@ class Engine:
         self.store.save(revision, state, "run.completed", {"export": str(target)})
         return state
 
+    def mark_handed_off(self, work_id):
+        """Record the work created from this completed run's document (see the template's hands_off)."""
+        with self.store.locked():
+            revision, state = self.store.load()
+            if state["status"] != "COMPLETED":
+                raise ValueError("Only a completed run can hand off its output.")
+            state["handed_off_work"] = work_id
+            self.store.save(revision, state, "work.handed_off", {"work_id": work_id})
+            return state
+
     # ----- recovery -------------------------------------------------------------------------
 
     def retry(self, *, confirm_stopped=False, refresh_gate=False):
@@ -839,7 +849,8 @@ class Engine:
         iteration = self.current_iteration(state) if self._stage_or_empty(state).get("iterate") else None
         result = {key: state.get(key) for key in (
             "id", "template_id", "workflow", "work_id", "owner", "status", "stage", "attempts", "error",
-            "export_path", "document_path", "manuscript_language", "restart_of", "superseded_by", "settings")}
+            "export_path", "document_path", "manuscript_language", "restart_of", "superseded_by", "settings",
+            "handed_off_work")}
         result["chapter_id"] = iteration["chapter_id"] if iteration else None
         iterations = state.get("iterations") or []
         result["progress"] = {"completed": sum(item["status"] == "completed" for item in iterations),

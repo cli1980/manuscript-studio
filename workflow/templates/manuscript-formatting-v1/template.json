@@ -5,6 +5,7 @@
   "engine": "workflow.src.formatting:FormattingEngine",
   "consumes": "accepted-markdown-chapters/1",
   "target_format": "docx",
+  "hands_off": true,
   "document_backend": {
     "builder": "python-docx",
     "renderer": "platform-default",

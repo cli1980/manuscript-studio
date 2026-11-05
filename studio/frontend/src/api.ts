@@ -56,6 +56,7 @@ export interface MetadataField { field: string; group: "author" | "suggested" | 
 export interface RunSummary {
   id: string;
   settings?: { passage_size?: number } | null;
+  handed_off_work?: string | null;
   manuscript_language: string;
   template_id: string;
   workflow: string;
@@ -118,6 +119,9 @@ export interface WorkDetail extends Omit<WorkSummary, "runs" | "artifacts"> {
   metadata_fields: MetadataField[];
   metadata_history: { publication_id: string; record_revision: number; created_at: string; stage: string; status: string }[];
   publications: Publication[];
+  // The work and run this work was created from (a formatted document), and works created from this one.
+  origin: { work_id: string; workflow: string; run_id: string; source_version: string } | null;
+  handed_off: { work_id: string; title: string; run_id: string; source_version: string }[];
 }
 
 export interface ChapterIndex {

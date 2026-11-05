@@ -109,6 +109,16 @@ export function WorkView({ workId }: { workId: string }) {
       <p><a href="#/works">← Works</a></p>
       <h1>{data.title}</h1>
       <p className="muted mono">{data.id} · {data.manuscript_language} · source {data.source_name} · owner {data.owner}</p>
+      {data.origin && (
+        <p>Created from the formatted <a href={`#/runs/${data.origin.run_id}`}>{data.origin.source_version}</a> output of work{" "}
+          <a href={`#/works/${encodeURIComponent(data.origin.work_id)}`}>{data.origin.work_id}</a>.</p>
+      )}
+      {data.handed_off?.length > 0 && (
+        <p>Formatted editions continued as works:{" "}
+          {data.handed_off.map((w, i) => (
+            <span key={w.work_id}>{i ? ", " : ""}<a href={`#/works/${encodeURIComponent(w.work_id)}`}>{w.title}</a> ({w.source_version})</span>
+          ))}</p>
+      )}
       <ErrorBox error={error} />
       {data.metadata && data.runs.length === 0 && !data.unfinished_run && (
         <AuthorForm metadata={data.metadata.metadata} fields={data.metadata_fields}

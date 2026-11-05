@@ -30,6 +30,8 @@ TEMPLATE_SCHEMA = {
                          "properties": {"cjk_chars": {"type": "integer", "minimum": 100},
                                         "words": {"type": "integer", "minimum": 100}}},
         "produces": {"type": "string"},
+        # The completed run's document becomes a new work, ready for further workflows.
+        "hands_off": {"type": "boolean"},
         "consumes": {"type": "string"},
         "agents": {"type": "object", "minProperties": 1, "additionalProperties": {
             "type": "object", "required": ["skill", "skills", "model"],

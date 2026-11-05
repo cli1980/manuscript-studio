@@ -421,6 +421,14 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - Phase 3 (planned): formatting decisions (settings sheet, visual check) stay
     on the run page until a formatted-document preview exists, then move into
     the viewer as a "Formatted document" entry that reuses the decision panel.
+- **Formatted output becomes a new work** (owner decision, 2026-11-05;
+  implemented locally, uncommitted): formatting stays the optional "Format
+  this output" step after a completed translation; when it completes, its DOCX
+  automatically becomes a new work in Works, linked to the original work and
+  run, with basic metadata carried over (title, subtitle, contributors, work
+  type, form, genres, audience, series, and `original_language`), ready for
+  further workflows such as editing. This also covers M4's open item on
+  linking an edited translation to its source work, for formatted output.
 - **Suggested order:** 1 (unified decision panel), 2 (run inspector), 3 (works
   explorer by version), 4 (paragraph-aligned page viewer; the largest piece,
   needed before the editing workflow reaches the GUI). All four are frontend

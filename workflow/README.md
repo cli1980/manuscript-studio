@@ -313,7 +313,14 @@ For a work whose translation is finalized:
 latest). This creates a run under `runs/` and prints its ID; an unchanged request
 reuses the existing edition, and `--new-edition` creates a distinct one. Formatting
 runs count toward the one-unfinished-run-per-work limit, publish nothing into the
-work, and never make formatting read-only. Use the normal commands on that run:
+work, and never make formatting read-only. When a formatting run completes through
+`step` (the CLI or the studio's worker), its DOCX is handed off as a new work
+(template `"hands_off": true`): the document is that work's source, in the output's
+manuscript language, and its metadata starts with the original work's basic fields
+(title, subtitle, contributors, work type, form, genres, audience, series) plus
+`original_language`. The new work's `library.json` records its `origin` (work,
+run, and source version), and both works show the link. Use the normal commands on
+that run:
 
 ```powershell
 .\.venv-workflow\Scripts\python.exe -m workflow step FORMAT-RUN --codex "C:/path/to/codex.exe"
