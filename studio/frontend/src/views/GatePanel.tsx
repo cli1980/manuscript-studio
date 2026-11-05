@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, type Gate, type RunDetail, type Sheet } from "../api";
 import { Documents, documentTitle, reviewName, TextBlock } from "./common";
 import { Markdown } from "./Markdown";
+import { workflowUI } from "../workflows";
 import { clearComments, CommentSummary, composeComments, loadComments, type InlineComment } from "./CommentableText";
 import { MetadataTable } from "./Metadata";
 import { SheetReview } from "./SheetReview";
@@ -14,15 +15,14 @@ type Perform = (op: () => Promise<RunDetail>) => void;
 
 // Native forms for each human gate. They only compose the exact reply; the server validates it.
 export function GatePanel({ run, perform, inViewer = false }: { run: RunDetail; perform: Perform; inViewer?: boolean }) {
-  // Formatting runs have no chapters, so their decisions stay on the run page.
-  const viewerDecides = run.workflow !== "manuscript-formatting";
-  if (!inViewer && viewerDecides && (run.status === "WAITING_FOR_ACCEPTANCE" || (run.status === "WAITING_FOR_HUMAN" && run.gate))) {
-    const where = run.gate?.chapter_id ? `/${encodeURIComponent(run.gate.chapter_id)}` : "";
+  // The workflow decides where its decisions are made; elsewhere the panel only links there.
+  const page = inViewer ? null : workflowUI(run.workflow).decisionPage(run);
+  if (page) {
     return (
       <div className="panel gate">
         <h2>{run.status === "WAITING_FOR_ACCEPTANCE" ? "Ready to finalize" : `Your review: ${reviewName(run.gate?.kind ?? "")}`}</h2>
         <p>Decisions happen in the review viewer, beside the text.</p>
-        <a className="button" href={`#/runs/${run.id}/chapters${where}`}>Open the review viewer</a>
+        <a className="button" href={page}>Open the review viewer</a>
       </div>
     );
   }
@@ -189,7 +189,9 @@ function Acceptance({ run, perform }: { run: RunDetail; perform: Perform }) {
     <div className="panel gate">
       <h2>Final acceptance</h2>
       <p>Read every chapter before accepting:</p>
-      <ul>{acceptance.outputs.map((o) => <li key={o.chapter_id}><a href={`#/runs/${run.id}/chapters/${encodeURIComponent(o.chapter_id)}`}>{o.chapter_id}</a> <span className="mono muted">{o.sha256.slice(0, 12)}</span></li>)}</ul>
+      <ul>{acceptance.outputs.map((o) => <li key={o.chapter_id}>{workflowUI(run.workflow).hasChapterViewer
+        ? <a href={`#/runs/${run.id}/chapters/${encodeURIComponent(o.chapter_id)}`}>{o.chapter_id}</a> : o.chapter_id}{" "}
+        <span className="mono muted">{o.sha256.slice(0, 12)}</span></li>)}</ul>
       <div className="banner warn"><strong>This is irreversible.</strong> {acceptance.notice}</div>
       <label><input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} /> I understand that accepting finalizes this run.</label>
       <p><button className="danger" disabled={!understood}

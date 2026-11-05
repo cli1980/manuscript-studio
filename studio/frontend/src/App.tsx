@@ -5,6 +5,7 @@ import { RunView } from "./views/RunView";
 import { Chapters } from "./views/Chapters";
 import { api, type RunSummary } from "./api";
 import { reviewName } from "./views/common";
+import { workflowUI } from "./workflows";
 
 function useHash() {
   const [hash, setHash] = useState(() => window.location.hash || "#/runs");
@@ -56,7 +57,7 @@ function ApprovalNotice() {
   return (
     <div className="approval-notice">
       {waiting.map((r) => (
-        <a key={r.id} href={`#/runs/${r.id}/chapters/${encodeURIComponent(r.gate_chapter_id ?? "")}`}>
+        <a key={r.id} href={workflowUI(r.workflow).gateLink(r)}>
           {r.gate_chapter_id} of {r.work_id} {r.gate_kind === "chapter_sanity" ? "is translated and awaits your approval"
             : r.gate_review ? `awaits your review (${reviewName(r.gate_kind ?? "")})`
             : `awaits your decision (${(r.gate_kind ?? "").replaceAll("_", " ")})`} →

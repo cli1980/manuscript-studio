@@ -400,8 +400,11 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     approval, metadata review, final acceptance), the Markdown and document
     viewer, the metadata editor, and status and progress tags.
   - A run can be started from both the work explorer and the workflow explorer.
-  - Every decision of a chapter-based run happens in the chapter viewer, and
-    starting a run opens it.
+  - Each workflow defines its page behavior in the frontend (`studio/frontend/src/workflows.ts`: a base
+    class keeping everything on the run page, with per-workflow subclasses). Literary translation makes
+    every decision in the chapter viewer, and starting a run opens it; formatting keeps its decisions on
+    the run page and has no chapter link. Literary editing uses the base behavior until its viewer
+    support (phase 2) exists.
   - Phase 1 (implemented and committed locally, 2026-11-04): starting a run opens the
     viewer; the viewer shows a run status bar with problem banners linking to
     run management, preparation questions before chapters exist, and final
@@ -422,12 +425,15 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     on the run page until a formatted-document preview exists, then move into
     the viewer as a "Formatted document" entry that reuses the decision panel.
 - **Formatted output becomes a new work** (owner decision, 2026-11-05;
-  implemented locally, uncommitted): formatting stays the optional "Format
+  committed locally; derived metadata uncommitted): formatting stays the optional "Format
   this output" step after a completed translation; when it completes, its DOCX
   automatically becomes a new work in Works, linked to the original work and
-  run, with basic metadata carried over (title, subtitle, contributors, work
-  type, form, genres, audience, series, and `original_language`), ready for
-  further workflows such as editing. This also covers M4's open item on
+  run, with metadata derived from the original rather than copied: the title
+  from the translated front matter, language-neutral facts (work type, form,
+  audience, series position and relationship, contributors for review), and
+  `original_language`; free text in the original's language starts empty for
+  the new work's preparation to infer. Ready for further workflows such as
+  editing. This also covers M4's open item on
   linking an edited translation to its source work, for formatted output.
 - **Suggested order:** 1 (unified decision panel), 2 (run inspector), 3 (works
   explorer by version), 4 (paragraph-aligned page viewer; the largest piece,

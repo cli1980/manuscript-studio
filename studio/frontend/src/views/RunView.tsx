@@ -2,21 +2,21 @@ import { useEffect, useState } from "react";
 import { api, type Action, type RunDetail, type WorkflowEvent } from "../api";
 import { ErrorBox, Status, useLoad, when } from "./common";
 import { GatePanel } from "./GatePanel";
+import { workflowUI } from "../workflows";
 
 export function RunView({ runId }: { runId: string }) {
   const { data: run, error, reload, setData } = useLoad(() => api.run(runId), [runId], 3000);
-  // Every decision of a chapter-based run happens in the review viewer; go there once per decision.
-  const decision = run && run.workflow !== "manuscript-formatting"
-    ? (run.status === "WAITING_FOR_HUMAN" && run.gate ? { id: run.gate.id, chapter: run.gate.chapter_id }
-      : run.status === "WAITING_FOR_ACCEPTANCE" && run.acceptance ? { id: run.acceptance.acceptance_id, chapter: null } : null)
-    : null;
+  // When the workflow makes its decisions elsewhere (translation: the chapter viewer), go there once per decision.
+  const ui = workflowUI(run?.workflow);
+  const page = run ? ui.decisionPage(run) : null;
+  const decisionId = run?.gate?.id ?? run?.acceptance?.acceptance_id;
   useEffect(() => {
-    if (!decision) return;
-    const key = `chapter-gate-opened:${decision.id}`;
+    if (!page || !decisionId) return;
+    const key = `chapter-gate-opened:${decisionId}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, "1");
-    window.location.hash = `#/runs/${runId}/chapters${decision.chapter ? `/${encodeURIComponent(decision.chapter)}` : ""}`;
-  }, [decision?.id, runId]);  // eslint-disable-line react-hooks/exhaustive-deps
+    window.location.hash = page;
+  }, [page, decisionId]);
   const [actionError, setActionError] = useState<string | null>(null);
 
   async function perform(operation: () => Promise<RunDetail>) {
@@ -54,7 +54,7 @@ export function RunView({ runId }: { runId: string }) {
         <div><span>Turns</span>{run.attempts}</div>
         {run.settings?.passage_size && <div><span>Passage size</span>at most {run.settings.passage_size}
           {["zh", "ja", "ko"].includes(run.manuscript_language.split("-")[0].toLowerCase()) ? " characters" : " words"}</div>}
-        <div><span>Chapters</span><a href={`#/runs/${run.id}/chapters`}>Open chapter browser</a></div>
+        {ui.hasChapterViewer && <div><span>Chapters</span><a href={`#/runs/${run.id}/chapters`}>Open chapter browser</a></div>}
       </div>
       {run.error && <div className="error"><strong>Last error:</strong> {run.error}</div>}
       {run.worker.error && <div className="error"><strong>Worker:</strong> {run.worker.error}</div>}

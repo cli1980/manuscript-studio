@@ -1045,13 +1045,18 @@ class WorkflowTests(unittest.TestCase):
         handed = self.service.hand_off(state["id"])
         self.assertEqual(self.service.hand_off(state["id"]), handed)  # Recorded once; repeating is harmless.
         work = self.service.get_work(handed)
-        self.assertEqual((work["manuscript_language"], work["source_name"]), (state["manuscript_language"], "original-v001.docx"))
+        # The title comes from the translated front matter; the work is named after it.
+        self.assertEqual((work["manuscript_language"], work["source_name"]), (state["manuscript_language"], "Story.docx"))
         self.assertEqual(work["origin"]["work_id"], self.work_id)
         self.assertEqual(work["origin"]["run_id"], state["id"])
         self.assertEqual(self.service.library(handed).source()[0].read_bytes(), Path(state["document_path"]).read_bytes())
         metadata = self.service.get_work_metadata(handed)["metadata"]
+        # Derived, not copied: language-neutral facts carry over; text in the original's language does not.
         self.assertEqual((metadata["title"], metadata["work_type"], metadata["original_language"], metadata["description"]),
                          ("Story", "fiction", "zh", None))
+        provenance = self.service.get_work_metadata(handed)["provenance"]
+        self.assertIn("translated front matter", provenance["/title"]["rationale"])
+        self.assertNotIn("/genres", provenance)
         self.assertEqual([w["work_id"] for w in self.service.get_work(self.work_id)["handed_off"]], [handed])
         self.assertEqual(job.state()["handed_off_work"], handed)
         self.assertTrue((job.root / "export/manifest.json").is_file())

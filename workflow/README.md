@@ -316,9 +316,12 @@ runs count toward the one-unfinished-run-per-work limit, publish nothing into th
 work, and never make formatting read-only. When a formatting run completes through
 `step` (the CLI or the studio's worker), its DOCX is handed off as a new work
 (template `"hands_off": true`): the document is that work's source, in the output's
-manuscript language, and its metadata starts with the original work's basic fields
-(title, subtitle, contributors, work type, form, genres, audience, series) plus
-`original_language`. The new work's `library.json` records its `origin` (work,
+manuscript language. Its metadata is derived from the original, not copied: the
+title comes from the translated front matter, language-neutral facts carry over
+(work type, form, audience, series position and relationship, contributors for
+review), `original_language` is set, and free text in the original's language
+(subtitle, genres, keywords, description, series name, edition label) starts empty
+for the new work's preparation to infer in its own language. The new work's `library.json` records its `origin` (work,
 run, and source version), and both works show the link. Use the normal commands on
 that run:
 

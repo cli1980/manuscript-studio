@@ -191,8 +191,8 @@ class CaseRunner:
         """Make the reviewer's choice by clicking the studio's run page, as a person would."""
         page = self.page
         gate = run.get("gate") or {}
-        if run.get("workflow") != "manuscript-formatting":
-            # Every decision of a chapter-based run is made in the review viewer.
+        if run.get("workflow") == "literary-translation":
+            # Every decision of a translation run is made in the review viewer (see studio/frontend/src/workflows.ts).
             chapter = f"/{gate['chapter_id']}" if run["status"] == "WAITING_FOR_HUMAN" and gate.get("chapter_id") else ""
             page.goto(f"{self.origin}/#/runs/{run_id}/chapters{chapter}")
             page.wait_for_selector(".panel.gate", timeout=60000)

@@ -345,13 +345,44 @@ class WorkflowService:
                 summary = engine.summary(engine.state())
         return summary
 
-    # Basic metadata a handed-off work starts with; language-specific fields (description, keywords) and
-    # computed ones are not carried, and the new work's own preparation and metadata review complete them.
-    HAND_OFF_FIELDS = ("/title", "/subtitle", "/contributors", "/work_type", "/form", "/genres", "/audience",
-                       "/series/name", "/series/position", "/series/relationship")
+    # A handed-off work is a new edition in another language, so its metadata is derived, not copied:
+    # language-neutral facts carry over; the title comes from the translated front matter; free-text fields
+    # in the original's language (subtitle, genres, keywords, description, series name, edition label) start
+    # empty, so the new work's own preparation infers them in its language and the user reviews them.
+    NEUTRAL_FIELDS = ("/work_type", "/form", "/audience", "/series/position", "/series/relationship")
+
+    def _translated_title(self, library, publication_id):
+        """The title in the output language, from the accepted version's translated front matter."""
+        try:
+            manifest = json.loads(library.read(library.publication(publication_id)))
+            front = next(c for c in sorted(manifest["chapters"], key=lambda c: c["order"]))
+            text = library.read(library.head(front["artifact"])).decode("utf-8")
+        except (ValueError, KeyError, StopIteration, TypeError):
+            return None
+        # The front matter opens with the title: its first heading, else its first line.
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        heading = next((line for line in lines if re.match(r"^#{1,6}\s+\S", line)), lines[0] if lines else None)
+        return re.sub(r"^#{1,6}\s+", "", heading).strip() if heading else None
+
+    def _derived_metadata(self, row, state, metadata, language):
+        helper, _ = self._current_metadata_helper()
+        source = f"work {row['work_id']}, {state['source_version']}"
+        carried = {field: (helper.field_value(metadata, field), f"Language-neutral; carried over from {source}.")
+                   for field in self.NEUTRAL_FIELDS if not helper.missing(helper.field_value(metadata, field))}
+        if metadata.get("contributors"):
+            # Names stay as recorded in the original; their form in the new language is for the user to review.
+            carried["/contributors"] = (metadata["contributors"], f"Carried over from {source}; review how the "
+                                        "names should appear in this edition.")
+        title = self._translated_title(self.library(row["work_id"]), state.get("publication_id"))
+        if title:
+            carried["/title"] = (title, f"First heading of the translated front matter of {source}.")
+        original = metadata.get("original_language") or self._work_row(row["work_id"])["manuscript_language"]
+        if original and original.split("-")[0] != language.split("-")[0]:
+            carried["/original_language"] = (original, f"The language of {source}.")
+        return carried, title
 
     def hand_off(self, run_id):
-        """Create a new work from a completed run's document, with basic metadata carried over (idempotent)."""
+        """Create a new work from a completed run's document, with metadata derived from the original (idempotent)."""
         row = self._run_row(run_id)
         with self.open_run(run_id) as engine:
             state = engine.state()
@@ -364,14 +395,10 @@ class WorkflowService:
             source = self.library(row["work_id"])
             head = source.head("work.json")
             metadata = json.loads(source.read(head))["metadata"] if head else {}
-            helper, _ = self._current_metadata_helper()
-            note = f"Carried over from work {row['work_id']} when its {state['source_version']} output was formatted."
-            carried = {field: (helper.field_value(metadata, field), note) for field in self.HAND_OFF_FIELDS
-                       if metadata and not helper.missing(helper.field_value(metadata, field))}
-            original = metadata.get("original_language") or self._work_row(row["work_id"])["manuscript_language"]
-            if original and original.split("-")[0] != language.split("-")[0]:
-                carried["/original_language"] = (original, note)
-            name = f"{Path(self._work_row(row['work_id'])['source_name']).stem}-{state['source_version']}.docx"
+            carried, title = self._derived_metadata(row, state, metadata, language)
+            stem = re.sub(r'[\\/:*?"<>|]+', " ", title).strip() if title else \
+                f"{Path(self._work_row(row['work_id'])['source_name']).stem}-{state['source_version']}"
+            name = f"{stem}.docx"
             with tempfile.TemporaryDirectory() as folder:
                 upload = Path(folder) / name
                 upload.write_bytes(document.read_bytes())

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, readBase64, type Publication } from "../api";
 import { ErrorBox, Status, TextBlock, useLoad, when } from "./common";
 import { Markdown } from "./Markdown";
+import { workflowUI } from "../workflows";
 import { AuthorForm, MetadataTable } from "./Metadata";
 
 // Works: manuscript intake and workflow outcomes. Every work and its library is viewable without a run.
@@ -225,7 +226,7 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
       setSkip([]);
       setPassageSize("");
       onStarted();
-      window.location.hash = `#/runs/${run.id}/chapters`;  // Every decision of the run happens in the viewer.
+      window.location.hash = workflowUI(run.workflow).landingPage(run.id);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
