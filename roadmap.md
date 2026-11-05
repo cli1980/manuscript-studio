@@ -149,14 +149,19 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 ### M2 — DOCX manuscript intake
 
-- **Status:** `planned`
+- **Status:** `done` (marked by the owner on 2026-11-05)
 - **Owner:** `cli1980`
 - **Outcome:** Preparation accepts DOCX uploads through an extraction adapter with
   source comparison.
 - **Acceptance criteria:**
   - A DOCX manuscript produces a verified chapter package, and
-    `validate_preparation.py --check-sources` succeeds.
-  - Unsupported DOCX content blocks preparation instead of being silently dropped.
+    `validate_preparation.py --check-sources` succeeds. Met in live runs:
+    《房客》, 黑松石, and 《刺秦》 were prepared from DOCX, and the E2E
+    preparation-validation check (that validator with local source checks)
+    passed.
+  - ~~Unsupported DOCX content blocks preparation instead of being silently dropped.~~
+    Removed from the criteria by the owner on 2026-11-05; not demonstrated by a
+    test or run.
 - **Out of scope:** PDF intake (later).
 
 ### M3 — Web MVP for literary translation
