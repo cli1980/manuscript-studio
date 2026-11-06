@@ -96,6 +96,14 @@ h2 .tag.status { font-size: 0.8rem; vertical-align: middle; }
 .version-preview { margin-top: 0.7rem; background: #f7f8fa; border: 1px solid #dde2e7; border-radius: 8px; padding: 0.7rem 1rem; }
 .conversation { margin: 0.4rem 0 0.8rem; }
 .conversation .text { max-height: 40vh; }
+/* The chapter viewer scrolls a pending decision into view; keep a little space above it. */
+.decision-anchor { scroll-margin-top: 0.8rem; }
+/* The shared agent feedback widget (every workflow's decisions). */
+.agent-feedback { display: grid; gap: 0.6rem; }
+.agent-message { background: #f7f8fa; border: 1px solid #dde2e7; border-radius: 10px; padding: 0.5rem 1rem; }
+.feedback-box { display: grid; gap: 0.4rem; }
+.feedback-box textarea { width: 100%; }
+.feedback-box button { justify-self: start; }
 .sample-poll .sample { margin-bottom: 1rem; }
 .sample-poll .variant { display: block; border: 1px solid #dde2e7; border-radius: 8px; padding: 0.6rem; cursor: pointer; }
 .sample-poll .variant.chosen { border-color: #2f6fdb; background: #eef4ff; }
@@ -126,6 +134,11 @@ h2 .tag.status { font-size: 0.8rem; vertical-align: middle; }
 .decision-bar { display: grid; grid-template-columns: auto 1fr auto; gap: 0.6rem; align-items: start;
   border-top: 1px solid #e3e6ea; padding-top: 0.8rem; }
 .decision-bar textarea { width: 100%; }
+
+/* Engine-owned choices, such as accepting an editing pass and choosing the next one. */
+.choices { display: flex; gap: 0.5rem; }
+.choice-pick { margin-bottom: 0.8rem; padding-bottom: 0.8rem; border-bottom: 1px solid #e3e6ea; }
+.choice-pick p { margin: 0.5rem 0 0; }
 
 .run-bar { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: center; background: #f7f8fa;
   border: 1px solid #dde2e7; border-radius: 10px; padding: 0.5rem 0.9rem; margin-bottom: 0.8rem; }

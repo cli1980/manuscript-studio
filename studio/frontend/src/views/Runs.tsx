@@ -50,7 +50,6 @@ function NewRun({ initialWork }: { initialWork?: string }) {
   const works = useLoad(api.works, []);
   const [templateId, setTemplateId] = useState("literary-translation-v1");
   const [workId, setWorkId] = useState(initialWork ?? "");
-  const [skip, setSkip] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const template = templates.data?.find((t) => t.id === templateId);
@@ -60,7 +59,7 @@ function NewRun({ initialWork }: { initialWork?: string }) {
     setBusy(true);
     setError(null);
     try {
-      const run = await api.create({ template_id: templateId, work_id: workId, skip_stages: skip });
+      const run = await api.create({ template_id: templateId, work_id: workId });
       window.location.hash = workflowUI(run.workflow).landingPage(run.id);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc));
@@ -74,7 +73,7 @@ function NewRun({ initialWork }: { initialWork?: string }) {
       <h2>Start a workflow</h2>
       <div className="row">
         <label>Workflow{" "}
-          <select value={templateId} onChange={(e) => { setTemplateId(e.target.value); setSkip([]); }}>
+          <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
             {templates.data?.filter((t) => !t.consumes).map((t) => <option key={t.id} value={t.id}>{t.title} ({t.id})</option>)}
           </select>
         </label>
@@ -89,17 +88,7 @@ function NewRun({ initialWork }: { initialWork?: string }) {
           </select>
         </label>
       </div>
-      {template && template.optional_stages.length > 0 && (
-        <fieldset>
-          <legend>Optional stages to skip</legend>
-          {template.optional_stages.map((stage) => (
-            <label key={stage}>
-              <input type="checkbox" checked={skip.includes(stage)}
-                onChange={(e) => setSkip(e.target.checked ? [...skip, stage] : skip.filter((s) => s !== stage))} /> {stage}
-            </label>
-          ))}
-        </fieldset>
-      )}
+      {template && <p className="muted">{workflowUI(template.workflow).stageSummary(template)}</p>}
       <ErrorBox error={error ?? templates.error} />
       <button type="submit" disabled={busy || !workId}>{busy ? "Starting…" : "Create and start"}</button>
       <p className="muted">Add new manuscripts on the <a href="#/works">Works</a> page. Preparation is the workflow's first

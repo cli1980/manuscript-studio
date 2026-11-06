@@ -49,8 +49,11 @@ export function RunView({ runId }: { runId: string }) {
         <div><span>Status</span><Status value={run.status} />{live && <span className="tag busy">agent working</span>}{run.worker.paused && <span className="tag">paused</span>}</div>
         <div><span>Stage</span>{run.stage}{run.chapter_id ? ` · ${run.chapter_id}` : ""}</div>
         <div><span>Progress</span>{run.progress ? `${run.progress.completed}/${run.progress.total} chapters` : "—"}</div>
-        <div><span>Stages</span>{run.stages.map((s) => <span key={s} className={`tag ${s === run.stage ? "busy" : ""}`}>{s}</span>)}
-          {run.skipped_stages.map((s) => <span key={s} className="tag skipped">{s} (skipped)</span>)}</div>
+        <div><span>Stages</span>{run.stages.map((s) => <span key={s} className={`tag ${s === run.stage ? "busy" : ""}`}>{s}</span>)}</div>
+        {!!run.passes?.length && <div><span>Passes</span>{run.passes.map((p) => (
+          <span key={p.number} className={`tag ${p.accepted ? "" : "busy"}`}>
+            {p.number} · {ui.stageTitle(run, p.stage)} · {p.accepted ? "accepted" : p.completed ? "awaiting acceptance" : "in progress"}
+          </span>))}</div>}
         <div><span>Turns</span>{run.attempts}</div>
         {run.settings?.passage_size && <div><span>Passage size</span>at most {run.settings.passage_size}
           {["zh", "ja", "ko"].includes(run.manuscript_language.split("-")[0].toLowerCase()) ? " characters" : " words"}</div>}
@@ -139,7 +142,7 @@ function Timeline({ runId, live }: { runId: string; live: boolean }) {
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [runId, last, live]);
   return (
-    <details className="panel" open>
+    <details className="panel">
       <summary><h2>Timeline</h2></summary>
       <ol className="timeline">
         {events.slice().reverse().map((event) => (

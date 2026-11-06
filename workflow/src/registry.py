@@ -66,10 +66,16 @@ TEMPLATE_SCHEMA = {
             "type": "object", "required": ["id", "kind"],
             "properties": {
                 "id": ID,
-                "kind": {"enum": ["agent", "metadata_review", "acceptance", "export"]},
+                "kind": {"enum": ["agent", "metadata_review", "select", "acceptance", "export"]},
                 "agent": {"type": "string"},
                 "preparation": {"type": "boolean"},
-                "optional": {"type": "boolean"},
+                # A select stage: the user picks option stages one at a time (e.g. editing passes) and accepts
+                # each one's output, until choosing to continue with the next stage.
+                "options": {"type": "array", "minItems": 1, "items": {
+                    "type": "object", "required": ["stage", "title"], "additionalProperties": False,
+                    "properties": {"stage": ID, "title": {"type": "string", "minLength": 1},
+                                   "description": {"type": "string", "minLength": 1}},
+                }},
                 # A workflow-specific review presented with the front-matter unit, after preparation.
                 "front_matter": {"type": "boolean"},
                 "edits_text": {"type": "boolean"},
@@ -103,8 +109,8 @@ def validate(template, *, origin="template"):
         for gate in stage.get("gates", []):
             if gate not in template["gates"]:
                 raise ValueError(f"{origin}: stage {stage['id']} names an undeclared gate {gate}.")
-        if stage.get("optional") and (stage["kind"] != "agent" or stage.get("preparation")):
-            raise ValueError(f"{origin}: only non-preparation agent stages can be optional.")
+        if (stage["kind"] == "select") != ("options" in stage):
+            raise ValueError(f"{origin}: select stages, and only they, declare options.")
         if stage.get("front_matter"):
             before = template["stages"][:template["stages"].index(stage)]
             if stage["kind"] != "agent" or stage.get("iterate") or stage.get("preparation") \
@@ -115,6 +121,14 @@ def validate(template, *, origin="template"):
     for name, rules in template["gates"].items():
         if "documents" in rules and not rules.get("command"):
             raise ValueError(f"{origin}: document gate {name} needs an approval command.")
+    stages = {stage["id"]: stage for stage in template["stages"]}
+    chosen = [option["stage"] for stage in template["stages"] for option in stage.get("options", [])]
+    if len(chosen) != len(set(chosen)):
+        raise ValueError(f"{origin}: a stage can be an option of only one select stage, once.")
+    for stage_id in chosen:
+        option = stages.get(stage_id)
+        if option is None or option["kind"] != "agent" or option.get("preparation") or option.get("front_matter"):
+            raise ValueError(f"{origin}: select option {stage_id} must be an agent stage other than preparation or front matter.")
     kinds = [stage["kind"] for stage in template["stages"]]
     if "export" in kinds and kinds.index("export") != len(kinds) - 1:
         raise ValueError(f"{origin}: export must be the final stage.")

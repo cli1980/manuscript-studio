@@ -43,8 +43,10 @@ export function when(value?: string | null) {
 
 // Readable name of a review: metadata_review -> "metadata", translation_brief -> "translation brief".
 export function reviewName(kind: string) {
-  return kind.replace(/_review$/, "").replaceAll("_", " ");
+  return REVIEW_NAMES[kind] ?? kind.replace(/_review$/, "").replaceAll("_", " ");
 }
+
+const REVIEW_NAMES: Record<string, string> = { pass_review: "pass result", pass_choice: "next pass" };
 
 const DOCUMENT_TITLES: Record<string, string> = { "glossary.md": "Glossary", "voice.md": "Voice notes",
   "brief-samples.md": "Sample translations" };

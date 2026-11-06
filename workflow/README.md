@@ -21,7 +21,7 @@ Implementation modules live in `workflow/src/`:
 | `engine.py` | Base engine: lifecycle, lock, stage walker, template-declared gates, receipts, acceptance, export, retry, stage restart |
 | `prepared.py` | Shared preparation stage, prepared-package verification, per-chapter iterations, restart chapter, metadata review |
 | `translation.py` | `literary-translation-v1` prompts, translation gate rules, chapter completion, accepted-output publication |
-| `editing.py` | `literary-editing-v1`: optional developmental, line, and copy editing, each chapter by chapter with a whole-book pass |
+| `editing.py` | `literary-editing-v1`: developmental, line, and copy editing passes chosen by the user, each chapter by chapter with a whole-book pass |
 | `formatting.py` | `manuscript-formatting-v1`, a derived template over an accepted-output publication |
 | `library.py` | Per-work artifact library with an append-only publication log |
 | `service.py` | The service API shared by the CLI and the future web application; run/work index |
@@ -262,28 +262,41 @@ source or claim to create a formatted edition.
 The Manuscript Studio web application (M3) is a separate client of the same
 service API and lives in [`studio/`](../studio/README.md).
 
-## Literary editing (first M4 iteration)
+## Literary editing (M4)
 
 ```text
-prepare → metadata review → [developmental, optional] → line edit → copyedit → accept → Markdown export
+prepare → metadata review → [choose a pass → run it → accept its output]* → accept → Markdown export
 ```
 
 Upload the text to edit (for example an accepted translation's assembled
-Markdown) as a new work and skip optional stages at creation:
+Markdown) as a new work:
 
 ```text
-.venv-workflow/Scripts/python.exe -m workflow create --template literary-editing-v1 --source book.en.md --manuscript-language en-US --skip-stage developmental
+.venv-workflow/Scripts/python.exe -m workflow create --template literary-editing-v1 --source book.en.md --manuscript-language en-US
 ```
+
+After metadata review the run waits at the `passes` select stage. Reply exactly
+`run developmental`, `run line`, or `run copy` to start a pass, or `finish` to
+go to final acceptance (also with no pass at all). When a pass completes, the
+run asks you to accept its output (`accept pass`); the accepted text and
+editorial files are the next pass's starting point. Passes can run in any order
+and repeat; each has its own job folders (`editorial/passes/<NNN>-<pass>/`) and
+restart epoch. Before you accept a pass, `restart-stage --stage <pass>` returns
+the text and editorial files to the pass's start; accepted passes are final,
+and the text cannot change between passes. The select stage is a generic
+engine stage kind (`"kind": "select"` with `options`), usable by any template.
 
 The engine copies the verified prepared chapters verbatim into
 `manuscript/chapters/`. Line and copy editing each run chapter by chapter, sharing
 `editorial/style-sheet.md`, `continuity-concordance.md`, and `editorial-brief.md`,
-and end with a whole-book consistency pass. Each job uses three gates: an
-`editorial_review` decision sheet with separate closure (or, with no proposals,
-the exact reply `approve review`), then an `apply_authorization` gate requiring
+and end with a whole-book consistency pass. Each job uses two gates: an
+`editorial_review` decision sheet, closed by a submission that resolves every
+item (closure is implied, since the next gate shows exactly what changes; a
+reopening decision gets a new revision), or, with no proposals, the exact reply
+`approve review`; then an `apply_authorization` gate requiring
 exactly `apply accepted changes`, and only then application. A chapter cannot
 complete if its text changed without that authorization, and other chapters
-cannot change outside their own jobs. The optional developmental stage collects
+cannot change outside their own jobs. The developmental pass collects
 chapter evidence and ends with one whole-book verdict and `DEV-###`
 recommendations; it never changes text. Final acceptance publishes the edited
 chapters under `literary-editing/` and an `accepted-markdown-chapters/1`

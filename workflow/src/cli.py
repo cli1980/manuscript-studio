@@ -47,6 +47,10 @@ def display(engine, state, *, review=False):
             print("\nReply with explicit item lines, bound to the displayed gate ID.")
         elif gate["kind"] == "chapter_sanity":
             print("\nReply 'approve chapter' to approve the empty-diff chapter review, or provide feedback.")
+        elif gate.get("options"):
+            for option in gate["options"]:
+                print(f"- {option['title']}: reply exactly '{option['command']}'"
+                      + (f"\n  {option['description']}" if option.get("description") else ""))
         elif gate["kind"] == "metadata_review":
             print("\nEdit: python -m workflow metadata RUN --gate GATE-ID --field /PATH --value-file VALUE.json"
                   "\nEach edit presents a new gate ID. Confirm with a reply containing exactly 'confirm metadata'.")
@@ -112,8 +116,6 @@ def parser():
     create.add_argument("--publication", help="Derived templates: the accepted-output publication (default: latest).")
     create.add_argument("--model", help="Model for every agent.")
     create.add_argument("--agent-model", action="append", metavar="AGENT=MODEL", help="Model for one agent.")
-    create.add_argument("--skip-stage", action="append", metavar="STAGE",
-                        help="Skip an optional stage of the template (see `templates`).")
     create.add_argument("--passage-size", type=int, metavar="N",
                         help="Maximum passage size for this run (characters for CJK text, else words); "
                              "default from the template.")
@@ -218,7 +220,6 @@ def run(service, args):
             run_id = service.create_run(args.template, upload=args.source, work_id=args.work,
                                         manuscript_language=args.manuscript_language, model=args.model,
                                         agent_models=agent_models(args.agent_model),
-                                        skip_stages=args.skip_stage or (),
                                         settings={"passage_size": args.passage_size} if args.passage_size else None)
         show(service, run_id)
         print(f'\nNext: python -m workflow --server-root "{service.root}" step {run_id}')

@@ -16,7 +16,7 @@ from workflow.src.engine import WorkflowError, finalization_notice
 from workflow.src.prepared import WHOLE
 from workflow.src.runtime import CodexRuntime
 from workflow.src.service import WorkflowService
-from workflow.src.storage import plain
+from workflow.src.storage import digest, plain
 from .worker import Workers
 
 MAX_BODY = 48 * 1024 * 1024
@@ -161,7 +161,8 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
             state = engine.state()
             detail["template_title"] = state.get("definition", {}).get("title")
             detail["stages"] = engine.stage_ids(state)
-            detail["skipped_stages"] = state.get("skipped_stages") or []
+            detail["stage_titles"] = {o["stage"]: o["title"] for s in state.get("definition", {}).get("stages", [])
+                                      for o in s.get("options", [])}
             gate = state.get("gate")
             if gate:
                 view = detail["gate"]
@@ -212,7 +213,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                                             options=payload.get("options") or {}, model=payload.get("model"))
         else:
             run_id = svc.create_run(template_id, work_id=payload.get("work_id"), model=payload.get("model"),
-                                    skip_stages=payload.get("skip_stages") or (), settings=payload.get("settings"))
+                                    settings=payload.get("settings"))
         if payload.get("start", True):
             workers.start(run_id)
         return run_detail(svc, run_id)
@@ -295,14 +296,26 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
 
     # ----- chapter browser (inside a run) --------------------------------------------------
 
+    def pass_keys(state):
+        """Chosen passes (e.g. editing) by key "<number>-<stage>", so a repeated pass gets its own entry."""
+        titles = {o["stage"]: o["title"] for s in state["definition"].get("stages", []) for o in s.get("options", [])}
+        return {f"{p['number']}-{p['stage']}": {"stage": p["stage"], "title": f"Pass {p['number']} · "
+                                                f"{titles.get(p['stage'], p['stage'])}"} for p in state.get("passes") or []}
+
     def chapter_records(engine, state):
-        """Per-stage iteration records keyed by stage, including stages that already finished."""
+        """Per-stage (or per-pass) iteration records, including stages and passes that already finished."""
         default = (engine.iterating_stage(state) or {}).get("id")
         groups = dict(state.get("stage_iterations") or {})
+        passes = state.get("passes") or []
+        for record in passes:
+            if "iterations" in record:  # Kept with the pass when it was accepted.
+                groups[f"{record['number']}-{record['stage']}"] = record["iterations"]
+        current = f"{passes[-1]['number']}-{passes[-1]['stage']}" if passes and "iterations" not in passes[-1] else None
         for item in state.get("iterations") or []:
-            groups.setdefault(item.get("stage") or default, [])
-            if item not in groups[item.get("stage") or default]:
-                groups[item.get("stage") or default].append(item)
+            key = current or item.get("stage") or default
+            groups.setdefault(key, [])
+            if item not in groups[key]:
+                groups[key].append(item)
         return groups
 
     @app.get("/api/runs/{run_id}/chapters")
@@ -310,7 +323,8 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         with svc.open_run(run_id) as engine:
             state = engine.state()
             groups = chapter_records(engine, state)
-            stages = [s for s in engine.stage_ids(state) if s in groups] if groups else []
+            keys = pass_keys(state)
+            stages = [s for s in engine.stage_ids(state) + list(keys) if s in groups] if groups else []
             result = []
             for chapter in state.get("chapters") or []:
                 outputs = {}
@@ -325,6 +339,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                 result.append({key: chapter.get(key) for key in ("chapter_id", "order", "title", "role", "sha256")}
                               | {"outputs": outputs})
             return {"prepared": bool(state.get("prepared")), "stages": stages, "chapters": result,
+                    "stage_info": {key: keys[key] for key in stages if key in keys},
                     "whole_book": {stage: next((i["status"] for i in groups[stage] if i["chapter_id"] == WHOLE), None)
                                    for stage in stages}}
 
@@ -339,11 +354,18 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                 raise HTTPException(404, "Unknown chapter.")
             prepared = engine.store.content(state["prepared"]["files"][record["path"]]).decode("utf-8")
             outputs = []
-            for stage, items in chapter_records(engine, state).items():
-                item = next((i for i in items if i["chapter_id"] == chapter_id), None)
-                if item and item["status"] == "completed" and item.get("output"):
-                    outputs.append({"stage": stage, "attempt": item["attempt"], "sha256": item["output"]["sha256"],
-                                    "text": engine.store.content(item["output"]).decode("utf-8")})
+            if state.get("manuscript"):
+                # Editing works on one text: show it as it stands now, beside the original, once a pass changed it.
+                current = engine.file(state["manuscript"][chapter_id]).read_bytes()
+                if current.decode("utf-8") != prepared:
+                    outputs.append({"stage": "current", "title": "Edited text", "attempt": None,
+                                    "sha256": digest(current), "text": current.decode("utf-8")})
+            else:
+                for stage, items in chapter_records(engine, state).items():
+                    item = next((i for i in items if i["chapter_id"] == chapter_id), None)
+                    if item and item["status"] == "completed" and item.get("output"):
+                        outputs.append({"stage": stage, "attempt": item["attempt"], "sha256": item["output"]["sha256"],
+                                        "text": engine.store.content(item["output"]).decode("utf-8")})
             map_path = engine.workspace / "translation" / "maps" / f"{chapter_id}.json"
             passage_map = json.loads(map_path.read_text(encoding="utf-8")) if map_path.is_file() else None
             # Completed front-matter reviews: the shared metadata and each workflow's own (e.g. translation brief).

@@ -126,8 +126,7 @@ class CaseRunner:
 
     def step_start_run(self, step):
         """The work page's Start button: create a run on an existing work."""
-        status, body = self.request("POST", "/api/runs", {"template_id": step["template_id"], "work_id": step["work_id"],
-                                                          "skip_stages": step.get("skip_stages", [])})
+        status, body = self.request("POST", "/api/runs", {"template_id": step["template_id"], "work_id": step["work_id"]})
         self.expect_status(status, step.get("status", 200), body)
         return body
 
@@ -157,7 +156,7 @@ class CaseRunner:
             if self.page is not None:
                 if run["status"] == "WAITING_FOR_ACCEPTANCE" and not step.get("accept"):
                     raise CaseFailure("final acceptance reached but the step does not accept")
-                self.answer_in_browser(run_id, run)
+                self.answer_in_browser(run_id, run, step)
                 answered += 1
                 continue
             if run["status"] == "WAITING_FOR_ACCEPTANCE":
@@ -171,6 +170,8 @@ class CaseRunner:
                 if gate["kind"] == "metadata_review":
                     path, payload = f"/api/runs/{run_id}/metadata/confirm", {
                         "gate_id": gate["id"], "record_revision": run["metadata"]["record_revision"]}
+                elif gate.get("options"):
+                    payload = {"gate_id": gate["id"], "text": self.pass_command(run, step)}
                 elif gate["sheet"]:
                     payload = {"gate_id": gate["id"], "text": self.sheet_reply(gate["sheet"])}
                 else:
@@ -187,13 +188,23 @@ class CaseRunner:
             raise CaseFailure(f"{item['id']} has no decision that resolves without a note")
         return choice
 
-    def answer_in_browser(self, run_id, run):
+    @staticmethod
+    def pass_command(run, step):
+        """Editing passes follow the step's plan ("passes": ["line", ...]); each is accepted, then final acceptance."""
+        if run["gate"]["kind"] == "pass_review":
+            return run["gate"]["options"][0]["command"]
+        plan, done = step.get("passes", []), len(run.get("passes") or [])
+        return f"run {plan[done]}" if done < len(plan) else "finish"
+
+    def answer_in_browser(self, run_id, run, step):
         """Make the reviewer's choice by clicking the studio's run page, as a person would."""
         page = self.page
         gate = run.get("gate") or {}
-        if run.get("workflow") == "literary-translation":
-            # Every decision of a translation run is made in the review viewer (see studio/frontend/src/workflows.ts).
-            chapter = f"/{gate['chapter_id']}" if run["status"] == "WAITING_FOR_HUMAN" and gate.get("chapter_id") else ""
+        if run.get("workflow") in ("literary-translation", "literary-editing"):
+            # Every decision of these runs is made in the review viewer (see studio/frontend/src/workflows.ts);
+            # whole-book and pass decisions show at its top.
+            chapter = (f"/{gate['chapter_id']}" if run["status"] == "WAITING_FOR_HUMAN" and gate.get("chapter_id")
+                       and gate["chapter_id"] != "_whole" else "")
             page.goto(f"{self.origin}/#/runs/{run_id}/chapters{chapter}")
             page.wait_for_selector(".panel.gate", timeout=60000)
         else:
@@ -209,6 +220,14 @@ class CaseRunner:
             page.get_by_role("button", name="Approve chapter").click()
         elif gate["kind"] == "metadata_review":
             page.get_by_role("button", name=re.compile(r"^Confirm metadata")).click()
+        elif gate.get("options"):
+            command = self.pass_command(run, step)
+            option = next(o for o in gate["options"] if o["command"] == command)
+            if option.get("stage"):
+                page.get_by_label("Next pass").select_option(label=option["title"])
+                page.get_by_role("button", name="Start pass").click()
+            else:
+                page.get_by_role("button", name=option["title"], exact=True).click()
         elif sheet and page.locator(".sample-poll").count():
             # The sample poll: pick the first variant of every open sample, then submit.
             for index, item in enumerate(sheet["items"]):
@@ -225,20 +244,12 @@ class CaseRunner:
                     label = self.choose(sheet, item)["label"]
                     page.locator(".review-card button.decision").filter(has_text=label).first.click()
                 page.get_by_role("button", name=re.compile(r"^Submit all")).click()
-        elif sheet:
-            open_items = [item for item in sheet["items"] if item["status"] != "resolved"]
-            if not open_items:
-                page.get_by_role("button", name=sheet["submission"]["closure_label"] or sheet["submission"]["closure_command"]).click()
-            else:
-                for item in open_items:
-                    index = item["allowed_decisions"].index(self.choose(sheet, item)["id"])
-                    page.locator(f"input[name='{gate['id']}-{item['id']}']").nth(index).check()
-                page.get_by_role("button", name=re.compile(r"^Submit \d+ decision")).click()
         elif gate.get("commands"):
-            page.get_by_role("button", name=gate["commands"][0], exact=True).click()
+            # The shared agent feedback widget shows each command as a button, capitalized.
+            page.get_by_role("button", name=re.compile(f"^{re.escape(gate['commands'][0])}$", re.I)).click()
         else:
             page.locator(".panel.gate textarea").fill("continue")
-            page.get_by_role("button", name="Send response").click()
+            page.get_by_role("button", name="Send answer").click()
         for _ in range(120):  # Wait until the server records the choice.
             code, now = self.request("GET", f"/api/runs/{run_id}")
             if not isinstance(now, dict):

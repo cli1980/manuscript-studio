@@ -62,9 +62,13 @@ def load_case(path):
             require(archive.testzip() is None, "DOCX archive integrity check failed.")
     from workflow.src import registry
     template = registry.get(inputs["template_id"])
-    skipped = inputs.get("skip_stages", [])
-    require([stage["id"] for stage in template["stages"] if stage["id"] not in skipped]
-            == spec["expected_output"]["stage_sequence"], "Case stage sequence differs from the workflow template.")
+    # Passes chosen at a select stage (literary editing) are part of the case: they run in place of that stage.
+    passes = inputs.get("passes", [])
+    options = {option["stage"] for stage in template["stages"] for option in stage.get("options", [])}
+    require(set(passes) <= options, "The case chooses a pass the template does not offer.")
+    sequence = [s for stage in template["stages"] if stage["id"] not in options
+                for s in (passes if stage["kind"] == "select" else [stage["id"]])]
+    require(sequence == spec["expected_output"]["stage_sequence"], "Case stage sequence differs from the workflow template.")
     require(template.get("target_language") == inputs.get("target_language"), "Target-language mismatch.")
     task_path = (path.parent / inputs["task_specification"]).resolve()
     task_raw = task_path.read_bytes()
@@ -183,15 +187,17 @@ class CaseRuntime:
                     "revision-bound decision sheet and recommend explicit item lines only for proposals you "
                     "recommend accepting; a recommendation to reject, defer, or query an item is needs_review, "
                     "so propose only changes you actually recommend and raise genuine author questions as "
-                    "queries. Item dispositions, the separate closure command, and the apply authorization "
-                    "remain separate responses: recommend exactly 'apply accepted changes' at the "
+                    "queries. A submission resolving every item closes the review (no separate closure); item "
+                    "dispositions and the apply authorization remain separate responses: recommend exactly "
+                    "'apply accepted changes' at the "
                     "apply_authorization gate only when you recommend applying exactly the accepted rows, and "
                     "exactly 'approve review' for an empty review. Editing a translation: never recommend a "
                     "change that could alter meaning. approval_recommendation is required in EVERY result, "
                     "including completed jobs: when a completed job leads to another editorial job, return "
                     "action='accept', response='continue', and a short reason (no gate follows, so it is not "
-                    "used); when the completed job is the last one before final artifact acceptance, recommend "
-                    "response='accept' only if you recommend accepting the complete edited manuscript."
+                    "used); when the completed job ends a pass (the whole-book job), recommend response='accept' "
+                    "only if you recommend accepting the pass's edited manuscript; the same recommendation is "
+                    "used for final artifact acceptance after the case's last pass."
                 )
             if self.operation == "formatting":
                 prompt += (
@@ -236,6 +242,11 @@ def recommended_response(engine):
         require(not any(e["kind"] == "metadata.edited" and e["id"] > completed["id"] for e in events),
                 "Metadata changed after the recommendation; resume interactively.")
         require(response == "confirm metadata", "Metadata confirmation was not recommended.")
+    elif state["gate"]["kind"] == "pass_review":
+        from workflow.src.engine import PASS_ACCEPT
+        require(response == "accept" and completed["payload"]["outcome"] == "completed",
+                "Accepting the pass was not recommended.")
+        response = PASS_ACCEPT
     else:
         gate = state["gate"]
         rules = state["definition"]["gates"].get(gate["kind"], {})
@@ -360,6 +371,9 @@ def write_report(engine, case):
         def stage_order():
             stages = []
             for event in events:
+                if event["kind"] == "pass.started":
+                    stages.append(event["payload"]["stage"])  # A repeated pass is a new entry.
+                    continue
                 stage = (event["payload"].get("stage") if event["kind"] == "execution.started" else
                          {"metadata.confirmed": "metadata", "artifacts.accepted": "accept",
                           "run.completed": "export"}.get(event["kind"]))
@@ -372,15 +386,16 @@ def write_report(engine, case):
         check("stage-order", stage_order, ready=state["status"] == "COMPLETED")
 
         def editorial_receipts():
-            items = [i for group in state.get("stage_iterations", {}).values() for i in group] + state["iterations"]
+            items = [(p["epoch"], i) for p in state["passes"] for i in (p.get("iterations") or
+                     (state["iterations"] if p is state["passes"][-1] else []))]
             closed = {(r["gate"].get("instance"), r["gate"]["kind"]) for r in state["receipts"]
-                      if r["parsed"]["type"] in ("final-closure",)}
+                      if r["parsed"]["type"] == "final-closure" or r["parsed"].get("implied_closure")}
             jobs = 0
-            for item in items:
+            for epoch, item in items:
                 stage = next(s for s in state["definition"]["stages"] if s["id"] == item["stage"])
                 if item["status"] != "completed" or (not stage.get("edits_text", True) and item["chapter_id"] != "_whole"):
                     continue
-                key = f"{item['stage']}/{state['stage_epochs'].get(item['stage'], 1)}/{item['chapter_id']}/{item['attempt']}"
+                key = f"{item['stage']}/{epoch}/{item['chapter_id']}/{item['attempt']}"
                 require((key, "editorial_review") in closed, f"Missing decision closure for {key}.")
                 if item.get("changed"):
                     require((key, "apply_authorization") in closed, f"Text changed without apply authorization: {key}.")
@@ -544,6 +559,7 @@ def review_checks(engine, case, input_fn):
 
 def drive(engine, case, runtime, *, max_turns=100, input_fn=input, auto_approve_recommended=False):
     from workflow.src.cli import display
+    from workflow.src.engine import PASS_FINISH
     turns = 0
     try:
         while True:
@@ -583,7 +599,15 @@ def drive(engine, case, runtime, *, max_turns=100, input_fn=input, auto_approve_
                         raise
                 display(engine, state, review=True)
                 try:
-                    if auto_approve_recommended:
+                    if auto_approve_recommended and state["gate"]["kind"] == "pass_choice":
+                        # The case declares which passes run, in order; then final acceptance.
+                        planned = case["spec"]["input"].get("passes", [])
+                        done = len(state["passes"])
+                        response = f"run {planned[done]}" if done < len(planned) else PASS_FINISH
+                        suggestion = {"action": "accept", "response": response, "reason": "Pass chosen by the case."}
+                        action = "reply"
+                        engine.store.event("e2e.delegated_approval", {"gate_id": state["gate"]["id"], **suggestion})
+                    elif auto_approve_recommended:
                         try:
                             response, suggestion = recommended_response(engine)
                         except ValueError as exc:
@@ -799,8 +823,7 @@ def main(argv=None):
         if run_id is None:
             # Each launch uploads the case manuscript, which always creates a new work.
             run_id = service.create_run(case["template_id"], upload=Path(case["source_path"]),
-                                        manuscript_language=case["spec"]["input"]["manuscript_language"], model=model,
-                                        skip_stages=case["spec"]["input"].get("skip_stages", ()))
+                                        manuscript_language=case["spec"]["input"]["manuscript_language"], model=model)
         with service.open_run(run_id) as engine:
             bind_case(engine, case, runtime_info, model if not args.resume else args.model, resume=bool(args.resume))
             print(f"Run: {run_id}\nPath: {engine.root}\nResume: python workflow/tests/run_e2e.py --case "

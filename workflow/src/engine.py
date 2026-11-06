@@ -21,6 +21,8 @@ WORKFLOW_ROOT = registry.WORKFLOW_ROOT
 REPO = WORKFLOW_ROOT.parent
 SKILLS = REPO / "plugins/manuscript-studio/skills"
 TERMINAL = ("COMPLETED", "CANCELLED")
+PASS_ACCEPT, PASS_FINISH = "accept pass", "finish"
+SELECT_GATES = ("pass_review", "pass_choice")
 LANGUAGE_TAG = re.compile(r"[a-z]{2,3}(-[A-Za-z0-9]{2,8})*")
 WORK_ID = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 NULL_PATH = {"type": ["string", "null"]}
@@ -183,12 +185,12 @@ class Engine:
             "status": "READY", "stage": template["stages"][0]["id"], "attempts": 0, "error": None,
             "thread_id": None, "gate": None, "receipts": [], "next_input": None, "domain_state": None,
             "approvals": {}, "outputs": [], "restarts": [], "stage_epochs": {}, "inputs": [],
-            "library_heads": {}, **fields,
+            "library_heads": {}, "passes": [], **fields,
         }
 
     @classmethod
     def create(cls, root, template, *, source, manuscript_language, work_id, owner=None, source_name=None,
-               model=None, agent_models=None, library=None, run_id=None, skip_stages=(), settings=None):
+               model=None, agent_models=None, library=None, run_id=None, settings=None):
         root, source = plain(Path(root)), plain(Path(source))
         if not source.is_file() or source.stat().st_nlink != 1:
             raise ValueError("Designate one regular, non-linked source file.")
@@ -202,13 +204,6 @@ class Engine:
         if Path(name).name != name or name in ("", ".", ".."):
             raise ValueError("Invalid source file name.")
         template = configure(template, model, agent_models)
-        skip_stages = list(dict.fromkeys(skip_stages or ()))
-        stages = {stage["id"]: stage for stage in template["stages"]}
-        for stage_id in skip_stages:
-            if stage_id not in stages:
-                raise ValueError(f"Unknown stage for this template: {stage_id}")
-            if not stages[stage_id].get("optional"):
-                raise ValueError(f"Stage {stage_id} is required and cannot be skipped.")
         source_data = read_bytes(source)
         settings = cls.resolve_settings(template, dict(settings or {}), manuscript_language)
         cls.preflight(template)
@@ -216,8 +211,7 @@ class Engine:
         state = cls.initial_state(
             template, work_id=work_id, owner=owner, manuscript_language=manuscript_language,
             source_name=name, source_origin=str(source), source_hash=digest(source_data),
-            skills={relative: sha for relative, (_, sha) in inventory.items()}, skipped_stages=skip_stages,
-            settings=settings,
+            skills={relative: sha for relative, (_, sha) in inventory.items()}, settings=settings,
             **({"id": run_id} if run_id else {}),
         )
         Store.create(root, state).close()
@@ -243,7 +237,9 @@ class Engine:
             self.store.save(0, state, "run.created", {"template": state["template_id"], "work_id": state["work_id"]})
 
     def format_path(self, state, text, **extra):
-        values = {"target": state.get("target_language"), "work_id": state["work_id"], **extra}
+        passes = state.get("passes") or []
+        label = f"{passes[-1]['number']:03d}-{passes[-1]['stage']}" if passes else "000"
+        values = {"target": state.get("target_language"), "work_id": state["work_id"], "pass": label, **extra}
         return text.format_map(values)
 
     def _checkout(self, state):
@@ -315,10 +311,28 @@ class Engine:
             return {}  # Pre-M1 runs are readable but not executable.
 
     @staticmethod
+    def option_stages(state):
+        """Stages that run only when the user picks them at a select stage (e.g. editing passes)."""
+        return {option["stage"] for stage in state["definition"]["stages"] if stage["kind"] == "select"
+                for option in stage["options"]}
+
+    @staticmethod
     def stage_ids(state):
-        """The run's stage sequence: the template's stages minus optional stages skipped at creation."""
-        skipped = set(state.get("skipped_stages") or ())
-        return [stage["id"] for stage in state["definition"]["stages"] if stage["id"] not in skipped]
+        """The run's fixed stage sequence; option stages run in between, at their select stage."""
+        options = Engine.option_stages(state)
+        return [stage["id"] for stage in state["definition"]["stages"] if stage["id"] not in options]
+
+    @staticmethod
+    def select_of(state, stage_id):
+        """The select stage offering stage_id as an option, or None for a stage of the fixed sequence."""
+        return next((stage for stage in state["definition"]["stages"] if stage["kind"] == "select"
+                     and any(option["stage"] == stage_id for option in stage["options"])), None)
+
+    @staticmethod
+    def open_pass(state):
+        """The latest chosen pass while its output is not yet accepted."""
+        passes = state.get("passes") or []
+        return passes[-1] if passes and not passes[-1]["accepted"] else None
 
     def stage_of_kind(self, state, kind):
         return next((stage for stage in state["definition"]["stages"] if stage["kind"] == kind), None)
@@ -411,6 +425,8 @@ class Engine:
 
     def gate_commands(self, state, gate):
         """Exact replies a client can offer as buttons for a gate without an approval sheet."""
+        if gate.get("options"):
+            return [option["command"] for option in gate["options"]]
         if gate.get("sheet"):
             return []
         if gate["kind"] == "metadata_review":
@@ -462,6 +478,83 @@ class Engine:
         """Hook: workspace files to restore after a stage restart, as {path: snapshot or None}."""
         return {}
 
+    def pass_result(self, state):
+        """Hook: the protected result of a completed pass (e.g. chapter snapshots), checked until it is replaced."""
+        return None
+
+    def pass_summary(self, state, record):
+        """Hook: a short description of a completed pass's result for its acceptance decision."""
+        return ""
+
+    def on_pass_accepted(self, state, record):
+        """Hook after the user accepts a pass's output."""
+
+    # ----- select stages: passes chosen by the user ---------------------------------------
+    # The engine owns both decisions of a select stage: accepting the last pass's output, then choosing the
+    # next pass or continuing with the fixed sequence. No agent reads them, so only exact commands count.
+
+    def _present_choice(self, state):
+        stage = self.stage_def(state)
+        passes = state.setdefault("passes", [])
+        current = self.open_pass(state)
+        if current:
+            title = next(o["title"] for o in stage["options"] if o["stage"] == current["stage"])
+            kind = "pass_review"
+            options = [{"command": PASS_ACCEPT, "title": f"Accept the {title.lower()} output"}]
+            message = (f"Pass {current['number']}, {title.lower()}, is complete. "
+                       f"{self.pass_summary(state, current)}".strip() + "\n\nAccept its output to continue: the "
+                       "accepted text is the starting point for the next pass or final acceptance. To redo the pass "
+                       "instead, restart its stage.")
+        else:
+            ids = self.stage_ids(state)
+            following = ids[ids.index(stage["id"]) + 1] if ids.index(stage["id"]) + 1 < len(ids) else None
+            finish = ("Proceed to final acceptance" if following and self.stage_def(state, following)["kind"]
+                      == "acceptance" else "Finish")
+            kind = "pass_choice"
+            options = [{"command": f"run {o['stage']}", "stage": o["stage"], "title": o["title"],
+                        "description": o.get("description")} for o in stage["options"]]
+            options.append({"command": PASS_FINISH, "finish": True, "title": finish})
+            message = (f"{len(passes)} pass{'es' if len(passes) != 1 else ''} accepted so far. " if passes else "") + \
+                f"Choose the next pass, or {finish.lower()}."
+        epoch = state["stage_epochs"].get(stage["id"], 1)
+        state["gate"] = {"id": str(uuid.uuid4()), "kind": kind, "message": message, "stage": stage["id"],
+                         "chapter_id": None, "attempt": len(passes), "instance": f"{stage['id']}/{epoch}/-/{len(passes)}",
+                         "binding": None, "sheet": None, "options": options,
+                         "pass": current["number"] if current else None}
+        state["status"] = "WAITING_FOR_HUMAN"
+
+    def _choose(self, revision, state, gate, text, decision_source):
+        option = next((o for o in gate["options"] if o["command"] == text.strip()), None)
+        if option is None:
+            raise ValueError("Reply with exactly one of: " + ", ".join(f"'{o['command']}'" for o in gate["options"]) + ".")
+        receipt = {"id": str(uuid.uuid4()), "created_at": now(), "gate": gate, "text": text,
+                   "parsed": {"type": "final-closure", "command": option["command"]}, "decision_source": decision_source}
+        state["receipts"].append(receipt)
+        state.update(next_input=None, gate=None, status="READY")
+        if gate["kind"] == "pass_review":
+            record = self.open_pass(state)
+            record["accepted"] = {"receipt_id": receipt["id"], "created_at": receipt["created_at"],
+                                  "decision_source": decision_source}
+            self.on_pass_accepted(state, record)
+            self._present_choice(state)
+            event, payload = "pass.accepted", {"pass": record["number"], "stage": record["stage"]}
+        elif option.get("finish"):
+            self._advance_stage(state)
+            event, payload = "passes.finished", {"passes": len(state["passes"])}
+        else:
+            passes = state["passes"]
+            if any(p["stage"] == option["stage"] for p in passes):
+                # A repeated pass gets its own restart epoch, so its decisions never mix with an earlier pass.
+                state["stage_epochs"][option["stage"]] = state["stage_epochs"].get(option["stage"], 1) + 1
+            record = {"number": len(passes) + 1, "stage": option["stage"],
+                      "epoch": state["stage_epochs"].get(option["stage"], 1), "receipt_id": receipt["id"],
+                      "started_at": now(), "completed_at": None, "result": None, "accepted": None, "restarts": 0}
+            passes.append(record)
+            self._enter_stage(state, option["stage"])
+            event, payload = "pass.started", {"pass": record["number"], "stage": record["stage"]}
+        self.store.save(revision, state, event, {**payload, "receipt_id": receipt["id"], "gate_id": gate["id"]})
+        return state
+
     def _present_metadata(self, state):
         raise ValueError("This template has no metadata review support.")
 
@@ -475,12 +568,20 @@ class Engine:
         kind = self.stage_def(state)["kind"]
         if kind == "metadata_review":
             self._present_metadata(state)
+        elif kind == "select":
+            self._present_choice(state)
         elif kind == "acceptance":
             state.update(status="WAITING_FOR_ACCEPTANCE", acceptance_id=str(uuid.uuid4()))
         else:
             state["status"] = "READY"
 
     def _advance_stage(self, state):
+        select = self.select_of(state, state["stage"])
+        if select:
+            # A completed pass returns to its select stage, where the user accepts its output.
+            self.open_pass(state).update(completed_at=now(), result=self.pass_result(state))
+            self._enter_stage(state, select["id"])
+            return
         ids = self.stage_ids(state)
         position = ids.index(state["stage"]) + 1
         if position == len(ids):
@@ -498,12 +599,15 @@ class Engine:
             stage = self.stage_def(state)
             if stage["kind"] == "export":
                 return self._export(revision, state)
-            if stage["kind"] in ("metadata_review", "acceptance"):
+            if stage["kind"] in ("metadata_review", "select", "acceptance"):
                 self._enter_stage(state, stage["id"])
                 state["next_input"] = None
                 if stage["kind"] == "metadata_review":
                     self.store.save(revision, state, "metadata.review_requested",
                                     {"gate_id": state["gate"]["id"], "record_revision": state["gate"]["record_revision"]})
+                elif stage["kind"] == "select":
+                    self.store.save(revision, state, "selection.requested",
+                                    {"gate_id": state["gate"]["id"], "gate": state["gate"]["kind"]})
                 else:
                     self.store.save(revision, state, "acceptance.requested", {"acceptance_id": state["acceptance_id"]})
                 return state
@@ -650,6 +754,8 @@ class Engine:
                     raise ValueError("Review changed after presentation; retry and request a new revision.")
             if gate["kind"] == "metadata_review":
                 return self._confirm_metadata(revision, state, gate, text, decision_source)
+            if gate["kind"] in SELECT_GATES:
+                return self._choose(revision, state, gate, text, decision_source)
             if gate["sheet"]:
                 sheet = json.loads(self.store.content(gate["sheet"]))
                 self._verify_dispositions(state, gate, sheet)
@@ -817,21 +923,41 @@ class Engine:
             self._guard(state, "restart")
             self._require_mutable(state)
             ids = self.stage_ids(state)
-            if stage_id not in ids:
+            current = self.open_pass(state)
+            select = self.select_of(state, state["stage"])
+            position = ids.index(select["id"] if select else state["stage"])
+            if self.select_of(state, stage_id):
+                # A pass is redone only before its output is accepted; accepted passes are final.
+                if not current or current["stage"] != stage_id:
+                    raise ValueError("Only the pass in progress can be restarted; accepted passes are final.")
+                reset = [stage_id]
+            elif stage_id not in ids:
                 raise ValueError(f"Unknown stage: {stage_id}")
-            if ids.index(stage_id) > ids.index(state["stage"]):
+            elif ids.index(stage_id) > position:
                 raise ValueError("Only the current stage or an earlier one can be restarted.")
-            reset = ids[ids.index(stage_id):]
+            else:
+                reset = ids[ids.index(stage_id):]
+                selects = [s for s in reset if self.stage_def(state, s)["kind"] == "select"]
+                if state.get("passes") and any(s != stage_id for s in selects):
+                    raise ValueError("Passes have already run after this stage; restart the workflow to start over.")
+                if current and selects:
+                    raise ValueError(f"Restart the pass in progress ({current['stage']}) instead.")
             restore = self.restart_restore(state, reset)
             number = len([r for r in state["restarts"] if r.get("kind") == "stage"]) + 1
             archive = self._new_archive(f"restart-{number}")
             for stage in reset:
                 for relative in self.stage_def(state, stage).get("owns", []):
                     self._archive(self.format_path(state, relative), archive)
-            superseded = [r["id"] for r in state["receipts"] if r["gate"].get("stage") in reset]
+            # Receipts of an earlier pass of the same stage belong to that accepted pass and stay valid.
+            scope = f"{stage_id}/{current['epoch']}/" if current and reset == [stage_id] else None
+            superseded = [r["id"] for r in state["receipts"] if r["gate"].get("stage") in reset
+                          and (scope is None or (r["gate"].get("instance") or "").startswith(scope))]
             for stage in reset:
                 self.reset_stage(state, self.stage_def(state, stage))
                 state["stage_epochs"][stage] = state["stage_epochs"].get(stage, 1) + 1
+            if scope:
+                current.update(epoch=state["stage_epochs"][stage_id], completed_at=None, result=None,
+                               restarts=current["restarts"] + 1)
             state.pop("acceptance_id", None)
             state.update(next_input=None, error=None)
             self._restore(state, restore, archive)
@@ -855,6 +981,8 @@ class Engine:
         iterations = state.get("iterations") or []
         result["progress"] = {"completed": sum(item["status"] == "completed" for item in iterations),
                               "total": len(iterations)} if iterations else None
+        result["passes"] = [{"number": p["number"], "stage": p["stage"], "completed": bool(p["completed_at"]),
+                             "accepted": bool(p["accepted"])} for p in state.get("passes") or []]
         result["finalized"] = self.finalized(state)
         result["engine_current"] = not self.engine_outdated(state)
         if state.get("gate"):

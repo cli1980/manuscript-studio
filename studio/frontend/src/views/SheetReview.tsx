@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Sheet, SheetItem } from "../api";
 
-// Reusable item-by-item review for any approval sheet (translation advice now, editorial reviews later).
+// Reusable item-by-item review for every approval sheet (used by the shared AgentFeedback widget).
 // Decisions stay in the browser (per sheet revision) until one complete submission of every open item.
 
 type Draft = { decision: string; note: string };

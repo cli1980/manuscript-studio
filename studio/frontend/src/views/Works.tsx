@@ -206,7 +206,6 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
 }) {
   const templates = useLoad(api.templates, []);
   const [templateId, setTemplateId] = useState("");
-  const [skip, setSkip] = useState<string[]>([]);
   const [passageSize, setPassageSize] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -221,9 +220,8 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
     setError(null);
     try {
       const settings = defaultSize && passageSize.trim() ? { passage_size: Number(passageSize) } : undefined;
-      const run = await api.create({ template_id: templateId, work_id: workId, skip_stages: skip, settings });
+      const run = await api.create({ template_id: templateId, work_id: workId, settings });
       setTemplateId("");
-      setSkip([]);
       setPassageSize("");
       onStarted();
       window.location.hash = workflowUI(run.workflow).landingPage(run.id);
@@ -240,7 +238,7 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
     <div className="panel">
       <h2>Start a workflow</h2>
       <div className="row">
-        <select value={templateId} onChange={(e) => { setTemplateId(e.target.value); setSkip([]); setPassageSize(""); }}>
+        <select value={templateId} onChange={(e) => { setTemplateId(e.target.value); setPassageSize(""); }}>
           <option value="">Choose a workflow…</option>
           {available.map((t) => (
             <option key={t.id} value={t.id}>
@@ -248,12 +246,6 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
             </option>
           ))}
         </select>
-        {template?.optional_stages.map((stage) => (
-          <label key={stage}>
-            <input type="checkbox" checked={skip.includes(stage)}
-              onChange={(e) => setSkip(e.target.checked ? [...skip, stage] : skip.filter((s) => s !== stage))} /> skip {stage}
-          </label>
-        ))}
         <button className="primary" disabled={!templateId || busy} onClick={() => void start()}>{busy ? "Starting…" : "Start"}</button>
       </div>
       {defaultSize && (
@@ -266,8 +258,7 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
             review; a longer passage needs your approval as an exception. Fixed for the run.</p>
         </details>
       )}
-      {template && <p className="muted">Stages: {template.stages.filter((s) => !skip.includes(s)).join(" → ")}. Preparation runs first;
-        the agent then works until it needs you. Open the run below to follow it.</p>}
+      {template && <p className="muted">{workflowUI(template.workflow).stageSummary(template)}</p>}
       <ErrorBox error={error ?? templates.error} />
     </div>
   );

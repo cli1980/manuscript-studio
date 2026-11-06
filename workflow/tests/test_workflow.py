@@ -1469,10 +1469,11 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(self.service.reindex()), runs)
         self.assertEqual(len(self.service.list_works()), 2)
 
-    # ----- literary editing (developmental stage skipped) -----------------------------------
+    # ----- literary editing: passes chosen by the user -------------------------------------
 
     def edit_job(self, stage, chapter_id):
-        return f"editorial/reports/{stage}/{chapter_id}/"
+        number = self.engine.state()["passes"][-1]["number"]
+        return f"editorial/passes/{number:03d}-{stage}/{chapter_id}/"
 
     def editorial_review(self, stage, chapter_id, revision="1", resolved=False):
         job = self.edit_job(stage, chapter_id)
@@ -1491,6 +1492,12 @@ class WorkflowTests(unittest.TestCase):
                       binding_path=self.write(job + f"proposals-r{revision}.md", "LE-001: He came back. -> He returned.\n"),
                       review_path=self.write(job + "decision-table.json", sheet))
 
+    def apply_gate(self, stage, chapter_id, message="Apply LE-001? Reply 'apply accepted changes'."):
+        job = self.edit_job(stage, chapter_id)
+        return result("needs_human_input", gate="apply_authorization", message=message,
+                      state_path=self.write(job + "state.md", "Awaiting apply instruction.\n"),
+                      binding_path=self.write(job + "decision-table.md", "| LE-001 | accept |\n"))
+
     def empty_review(self, stage, chapter_id):
         job = self.edit_job(stage, chapter_id)
         return result("needs_human_input", gate="editorial_review", message="Verdict: ready. No changes proposed.",
@@ -1508,51 +1515,72 @@ class WorkflowTests(unittest.TestCase):
         output = None if chapter_id == "_whole" else self.engine.state()["manuscript"][chapter_id]
         return self.engine.advance(ScriptedRuntime(lambda r: self.finish_job(stage, chapter_id, output)))
 
-    def test_literary_editing_line_and_copy_with_developmental_skipped(self):
+    def apply_change(self, stage, chapter_id, text, style):
+        """One accepted proposal: review (the complete submission is its closure), apply authorization, application."""
+        self.engine.advance(ScriptedRuntime(lambda r: self.editorial_review(stage, chapter_id)))
+        self.engine.reply(self.engine.state()["gate"]["id"], "LE-001 accept")
+        self.engine.advance(ScriptedRuntime(lambda r: self.apply_gate(stage, chapter_id)))
+        self.engine.reply(self.engine.state()["gate"]["id"], "apply accepted changes")
+        path = self.engine.state()["manuscript"][chapter_id]
+
+        def apply(request):
+            self.write(path, text)
+            self.write("editorial/style-sheet.md", style)
+            return self.finish_job(stage, chapter_id, path)
+
+        return self.engine.advance(ScriptedRuntime(apply))
+
+    def choose(self, command):
+        return self.engine.reply(self.engine.state()["gate"]["id"], command)
+
+    def start_editing(self):
         english = self.base / "to-kill.en.md"
         self.parts = ["## 1\n\nHe came back.\n", "## 2\n\nShe left.\n"]
         english.write_text("".join(self.parts), encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "required and cannot be skipped"):
-            self.service.create_run("literary-editing-v1", upload=english, manuscript_language="en-US",
-                                    skip_stages=["line"])
         self.engine.close()
         self.source, self.language = english, "en-US"
-        self.run_id = self.service.create_run("literary-editing-v1", upload=english, manuscript_language="en-US",
-                                              skip_stages=["developmental"])
+        self.run_id = self.service.create_run("literary-editing-v1", upload=english, manuscript_language="en-US")
         self.work_id = self.service._run_row(self.run_id)["work_id"]
         self.reopen()
-        self.assertEqual(self.engine.stage_ids(self.engine.state()),
-                         ["prepare", "metadata", "line", "copy", "accept", "export"])
         self.prepare()
-        state = self.engine.state()
+        return self.engine.state()
+
+    def test_literary_editing_passes_are_chosen_accepted_and_repeatable(self):
+        state = self.start_editing()
+        self.assertEqual(self.engine.stage_ids(state), ["prepare", "metadata", "passes", "accept", "export"])
+        # After metadata review the user chooses a pass, or goes straight to final acceptance.
+        self.assertEqual((state["stage"], state["status"], state["gate"]["kind"]), ("passes", "WAITING_FOR_HUMAN", "pass_choice"))
+        self.assertEqual(self.engine.gate_commands(state, state["gate"]),
+                         ["run developmental", "run line", "run copy", "finish"])
+        self.assertEqual(state["gate"]["options"][-1]["title"], "Proceed to final acceptance")
+        with self.assertRaisesRegex(ValueError, "Reply with exactly one of"):
+            self.choose("run everything")
+
+        state = self.choose("run line")
         self.assertEqual((state["stage"], state["status"]), ("line", "READY"))
-        chapter_1 = state["manuscript"]["chapter-1"]
+        self.assertEqual([(p["number"], p["stage"], p["epoch"]) for p in state["passes"]], [(1, "line", 1)])
+        chapter_1, chapter_2 = state["manuscript"]["chapter-1"], state["manuscript"]["chapter-2"]
         self.assertEqual(self.engine.file(chapter_1).read_text(encoding="utf-8"), self.parts[0])  # Verbatim intake.
         self.assertEqual([i["chapter_id"] for i in state["iterations"]], ["front-matter", "chapter-1", "chapter-2", "_whole"])
         self.approve_empty_job("line")  # The front matter has nothing to edit.
 
-        # Chapter 1: proposal review, separate closure, explicit apply authorization, then application.
+        # Chapter 1: proposal review, explicit apply authorization, then application. A reopening decision does
+        # not close the review; a complete resolving submission is its closure, with no separate confirmation.
         self.engine.advance(ScriptedRuntime(lambda r: self.editorial_review("line", "chapter-1")))
-        self.engine.reply(self.engine.state()["gate"]["id"], "LE-001 accept")
+        self.engine.reply(self.engine.state()["gate"]["id"], "LE-001 revise proposal: keep the plain verb")
+        self.assertNotIn("editorial_review", self.engine.state()["approvals"])
         with self.assertRaisesRegex(ValueError, "Decision closure is required"):
-            self.engine.advance(ScriptedRuntime(lambda r: result(
-                "needs_human_input", gate="apply_authorization", message="Apply?",
-                state_path=self.write("editorial/reports/line/chapter-1/state.md", "Apply?\n"),
-                binding_path=self.write("editorial/reports/line/chapter-1/decision-table.md", "| LE-001 | accept |\n"))))
+            self.engine.advance(ScriptedRuntime(lambda r: self.apply_gate("line", "chapter-1", "Apply?")))
         self.engine.retry()
-        self.engine.advance(ScriptedRuntime(lambda r: self.editorial_review("line", "chapter-1", "2", True)))
-        self.engine.reply(self.engine.state()["gate"]["id"], "confirm final closure")
-        self.engine.advance(ScriptedRuntime(lambda r: result(
-            "needs_human_input", gate="apply_authorization", message="Apply LE-001? Reply 'apply accepted changes'.",
-            state_path=self.write("editorial/reports/line/chapter-1/state.md", "Awaiting apply instruction.\n"),
-            binding_path=self.write("editorial/reports/line/chapter-1/decision-table.md", "| LE-001 | accept |\n"))))
-        gate = self.engine.state()["gate"]["id"]
-        self.engine.reply(gate, "go ahead")  # Not the exact command: recorded as feedback, no authorization.
+        self.engine.advance(ScriptedRuntime(lambda r: self.editorial_review("line", "chapter-1", "2")))
+        self.engine.reply(self.engine.state()["gate"]["id"], "LE-001 accept")
+        state = self.engine.state()
+        self.assertIn("editorial_review", state["approvals"])
+        self.assertTrue(state["receipts"][-1]["parsed"]["implied_closure"])
+        self.engine.advance(ScriptedRuntime(lambda r: self.apply_gate("line", "chapter-1")))
+        self.engine.reply(self.engine.state()["gate"]["id"], "go ahead")  # Not the exact command: feedback only.
         self.assertNotIn("apply_authorization", self.engine.state()["approvals"])
-        self.engine.advance(ScriptedRuntime(lambda r: result(
-            "needs_human_input", gate="apply_authorization", message="Reply exactly 'apply accepted changes'.",
-            state_path=self.write("editorial/reports/line/chapter-1/state.md", "Awaiting apply instruction.\n"),
-            binding_path=self.write("editorial/reports/line/chapter-1/decision-table.md", "| LE-001 | accept |\n"))))
+        self.engine.advance(ScriptedRuntime(lambda r: self.apply_gate("line", "chapter-1", "Reply exactly 'apply accepted changes'.")))
         self.engine.reply(self.engine.state()["gate"]["id"], "apply accepted changes")
 
         def apply(request):
@@ -1562,10 +1590,10 @@ class WorkflowTests(unittest.TestCase):
 
         state = self.engine.advance(ScriptedRuntime(apply))
         self.assertEqual(state["iterations"][1]["changed"], [chapter_1])
-        self.assertEqual(state["outputs"], [])  # Text keeps changing until the last editing stage.
+        self.assertEqual(state["outputs"], [])  # Text can change in any pass until final acceptance.
+        self.assertTrue((self.workspace / "editorial/passes/001-line/chapter-1/application-report.md").is_file())
 
         # A pending chapter cannot change outside its job; an unauthorized change cannot complete.
-        chapter_2 = state["manuscript"]["chapter-2"]
         self.write(chapter_2, "## 2\n\nTampered.\n")
         with self.assertRaisesRegex(ValueError, "changed outside its approved editorial job"):
             self.engine.advance(ScriptedRuntime(lambda r: self.empty_review("line", "chapter-2")))
@@ -1584,14 +1612,60 @@ class WorkflowTests(unittest.TestCase):
         self.engine.advance(ScriptedRuntime(lambda r: self.finish_job("line", "chapter-2", chapter_2)))
         with self.assertRaisesRegex(ValueError, "planned for M4"):
             self.engine.restart_chapter("chapter-1", reason="x")
-        state = self.approve_empty_job("line")  # Whole-book consistency pass.
+
+        # The whole-book pass ends the pass; its output is accepted in a separate decision.
+        state = self.approve_empty_job("line")
+        self.assertEqual((state["stage"], state["gate"]["kind"]), ("passes", "pass_review"))
+        self.assertIn("Changed chapters: chapter-1.", state["gate"]["message"])
+        self.assertEqual(self.engine.gate_commands(state, state["gate"]), ["accept pass"])
+        self.write(chapter_1, "## 1\n\nEdited by hand.\n")
+        with self.assertRaisesRegex(ValueError, "changed outside an editorial pass"):
+            self.choose("accept pass")
+        self.write(chapter_1, "## 1\n\nHe returned.\n")
+        with self.assertRaisesRegex(ValueError, "restart the workflow"):
+            self.engine.restart_stage("metadata", reason="x")
+        with self.assertRaisesRegex(ValueError, "Restart the pass in progress"):
+            self.engine.restart_stage("passes", reason="x")
+        state = self.choose("accept pass")
+        self.assertEqual(state["gate"]["kind"], "pass_choice")
+        self.assertEqual(len(state["passes"][0]["iterations"]), 4)
+        self.assertEqual(state["iterations"], [])
+        with self.assertRaisesRegex(ValueError, "accepted passes are final"):
+            self.engine.restart_stage("line", reason="x")
+
+        # A copy pass starts from the accepted line edit; restarting it returns text and style sheet to that start.
+        self.choose("run copy")
+        self.approve_empty_job("copy")
+        state = self.apply_change("copy", "chapter-1", "## 1\n\nHe returned home.\n", "# Style sheet\n- home\n")
+        self.assertEqual(self.engine.file(chapter_1).read_text(encoding="utf-8"), "## 1\n\nHe returned home.\n")
+        state = self.engine.restart_stage("copy", reason="Redo the copy edit")
         self.assertEqual((state["stage"], state["status"]), ("copy", "READY"))
-        self.assertEqual([i["status"] for i in state["stage_iterations"]["line"]], ["completed"] * 4)
-        self.assertEqual(self.engine.current_iteration(state)["stage"], "copy")
+        self.assertEqual(self.engine.file(chapter_1).read_text(encoding="utf-8"), "## 1\n\nHe returned.\n")
+        self.assertEqual((self.workspace / "editorial/style-sheet.md").read_text(encoding="utf-8"),
+                         "# Style sheet\n- returned (approved)\n")
+        self.assertEqual((state["passes"][1]["restarts"], state["stage_epochs"]["copy"]), (1, 2))
         for _ in range(4):
             state = self.approve_empty_job("copy")
+        self.assertIn("No text was changed.", state["gate"]["message"])
+        self.choose("accept pass")
+
+        # The same pass can run again, with its own epoch and job folders.
+        state = self.choose("run line")
+        self.assertEqual((state["passes"][2]["number"], state["passes"][2]["epoch"]), (3, 2))
+        self.assertEqual(self.engine.instance(state)["key"], "line/2/front-matter/1")
+        for _ in range(4):
+            state = self.approve_empty_job("line")
+        self.assertTrue((self.workspace / "editorial/passes/003-line/_whole/application-report.md").is_file())
+        self.assertTrue((self.workspace / "editorial/passes/001-line/_whole/application-report.md").is_file())
+        self.choose("accept pass")
+
+        # Final acceptance: going back to the pass choice is possible until it is confirmed.
+        state = self.choose("finish")
         self.assertEqual(state["status"], "WAITING_FOR_ACCEPTANCE")
         self.assertEqual([o["chapter_id"] for o in state["outputs"]], ["front-matter", "chapter-1", "chapter-2"])
+        state = self.engine.restart_stage("passes", reason="One more look")
+        self.assertEqual(state["gate"]["kind"], "pass_choice")
+        state = self.choose("finish")
         self.engine.accept(state["acceptance_id"], confirm_final=True)
         state = self.engine.advance(None)
         self.assertEqual(state["status"], "COMPLETED")
@@ -1600,6 +1674,8 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue((export / "style-sheet.md").is_file())
         library = self.service.library(self.work_id)
         self.assertEqual(library.read(library.head("literary-editing/v001/chapters/0002.md")), b"## 1\n\nHe returned.\n")
+        record = json.loads(library.read(library.head("literary-editing/v001/run.json")))
+        self.assertEqual([(p["number"], p["stage"]) for p in record["passes"]], [(1, "line"), (2, "copy"), (3, "line")])
         work = self.service.get_work(self.work_id)
         self.assertEqual(work["workflows"]["literary-editing"]["status"], "completed")
         summary = json.loads(library.read(library.head("work.json")))["workflows"]["literary-editing"]
@@ -1610,6 +1686,19 @@ class WorkflowTests(unittest.TestCase):
         formatting = self.open_run(self.service.create_derived_run(
             self.work_id, FORMATTING, options={"documents_skill": self.base / "documents"}))
         self.assertEqual(formatting.state()["manuscript_language"], "en-US")
+
+    def test_literary_editing_can_be_accepted_without_any_pass(self):
+        state = self.start_editing()
+        state = self.choose("finish")
+        self.assertEqual(state["status"], "WAITING_FOR_ACCEPTANCE")
+        prepared = [self.engine.store.content(state["prepared"]["files"][c["path"]]) for c in state["chapters"]]
+        self.assertEqual([self.engine.store.content(o) for o in state["outputs"]], prepared)
+        self.engine.accept(state["acceptance_id"], confirm_final=True)
+        self.assertEqual(self.engine.advance(None)["status"], "COMPLETED")
+        template = registry.get("literary-editing-v1")
+        template["stages"][2]["options"].append({"stage": "prepare", "title": "Prepare again"})
+        with self.assertRaisesRegex(ValueError, "must be an agent stage other than preparation"):
+            registry.validate(template)
 
 
 class DocumentAdapterTests(unittest.TestCase):

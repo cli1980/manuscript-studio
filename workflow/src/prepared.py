@@ -96,16 +96,25 @@ class PreparedManuscriptEngine(Engine):
     # ----- chapters -------------------------------------------------------------------------
 
     def iterating_stage(self, state):
-        """The chapter stage in progress, else the latest one before the current stage, else the first."""
+        """The chapter stage in progress, else the latest pass's or earlier chapter stage, else the first."""
+        current = self._stage_or_empty(state)
+        if current.get("iterate"):
+            return current
+        if state.get("passes"):
+            return self.stage_def(state, state["passes"][-1]["stage"])
         ids = self.stage_ids(state)
         iterating = [stage for stage in ids if self.stage_def(state, stage).get("iterate")]
-        if not iterating:
-            return None
-        if state["stage"] in iterating:
-            return self.stage_def(state, state["stage"])
         position = ids.index(state["stage"]) if state["stage"] in ids else 0
         earlier = [stage for stage in iterating if ids.index(stage) < position]
-        return self.stage_def(state, earlier[-1] if earlier else iterating[0])
+        if earlier or iterating:
+            return self.stage_def(state, earlier[-1] if earlier else iterating[0])
+        options = [s for s in state["definition"]["stages"] if s["id"] in self.option_stages(state) and s.get("iterate")]
+        return options[0] if options else None
+
+    def on_pass_accepted(self, state, record):
+        # The accepted pass keeps its chapter jobs; the next pass starts with fresh ones.
+        record["iterations"] = state.get("iterations") or []
+        state["iterations"] = []
 
     def build_iterations(self, state, stage):
         previous = {item["chapter_id"]: item["attempt"] for item in state.get("iterations", [])
@@ -275,7 +284,12 @@ class PreparedManuscriptEngine(Engine):
             if not stage or not stage.get("iteration", {}).get("restartable"):
                 raise ValueError("This workflow has no restartable chapters.")
             acceptance = self.stage_of_kind(state, "acceptance")
-            if state["stage"] not in (stage["id"], acceptance and acceptance["id"]):
+            if self.select_of(state, stage["id"]):
+                # A pass's chapters can be restarted until the user accepts the pass.
+                current = self.open_pass(state)
+                if not current or current["stage"] != stage["id"]:
+                    raise ValueError("Chapters can be restarted only in the pass in progress.")
+            elif state["stage"] not in (stage["id"], acceptance and acceptance["id"]):
                 raise ValueError("Chapters can be restarted during the chapter stage or before final acceptance.")
             item = next((i for i in state["iterations"] if i["chapter_id"] == chapter_id), None)
             if item is None:
@@ -307,7 +321,9 @@ class PreparedManuscriptEngine(Engine):
                         continuity_after=None, started_at=None, completed_at=None)
             self._refresh_outputs(state)
             state.pop("acceptance_id", None)
-            state.update(stage=stage["id"], status="READY", error=None)
+            if self.select_of(state, stage["id"]):
+                self.open_pass(state).update(completed_at=None, result=None)  # The pass is incomplete again.
+            state.update(stage=stage["id"], status="READY", error=None, gate=None)
             state["restarts"].append(record)
             self.store.save(revision, state, "chapter.restarted", {"chapter_id": chapter_id, "reason": reason})
             return state
@@ -359,7 +375,9 @@ class PreparedManuscriptEngine(Engine):
             "run_id": state["id"], "work_id": state["work_id"], "owner": state.get("owner"),
             "engine": state.get("engine"), "created_at": state["created_at"],
             "accepted_at": state["acceptance"]["created_at"], "acceptance": state["acceptance"],
-            "restart_of": state.get("restart_of"), "skipped_stages": state.get("skipped_stages") or [],
+            "restart_of": state.get("restart_of"),
+            "passes": [{"number": p["number"], "stage": p["stage"], "accepted_at": (p["accepted"] or {}).get("created_at")}
+                       for p in state.get("passes") or []],
             "source": {"name": state["source_name"], "sha256": state["source"]["sha256"]},
             "manuscript_language": state["manuscript_language"], "output_language": self.output_language(state),
             "prepared_revision": state["prepared"]["base"]["preparation"]["current_revision"],

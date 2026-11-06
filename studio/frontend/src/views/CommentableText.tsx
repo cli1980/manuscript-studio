@@ -117,7 +117,7 @@ export function CommentableText({ storageKey, onChange, children }: {
 }
 
 // The feedback text sent to the agent: one line per comment, anchored by paragraph and quote.
-export function composeComments(comments: InlineComment[], general: string, label = "the translation") {
+export function composeComments(comments: InlineComment[], general: string, label = "the text") {
   const lines = comments.filter((c) => c.note.trim()).sort((a, b) => a.start - b.start).map((c) => {
     const quote = c.quote.length > 120 ? c.quote.slice(0, 117) + "…" : c.quote;
     return `- ${c.paragraph ? `P${c.paragraph} ` : ""}“${quote.replace(/\s+/g, " ")}”: ${c.note.trim().replace(/\s*\n\s*/g, " ")}`;
@@ -128,15 +128,16 @@ export function composeComments(comments: InlineComment[], general: string, labe
 }
 
 // The list of drafted comments and the send controls shared by every feedback panel.
-export function CommentSummary({ comments, general, onGeneral, onSend, busy, sendLabel = "Send comments" }: {
+export function CommentSummary({ comments, general, onGeneral, onSend, busy, sendLabel = "Send comments",
+  hint = "Select text to comment on it." }: {
   comments: InlineComment[]; general: string; onGeneral: (text: string) => void; onSend: () => void;
-  busy?: boolean; sendLabel?: string;
+  busy?: boolean; sendLabel?: string; hint?: string;
 }) {
   const written = comments.filter((c) => c.note.trim());
   return (
     <div className="comment-summary">
       <div className="label">Your comments ({written.length})</div>
-      {written.length === 0 && <p className="muted">Select text in the translation to comment on it.</p>}
+      {written.length === 0 && <p className="muted">{hint}</p>}
       <ul>
         {written.map((c) => (
           <li key={c.id}><span className="muted">{c.paragraph ? `P${c.paragraph} ` : ""}“{c.quote.slice(0, 60)}{c.quote.length > 60 ? "…" : ""}”</span> {c.note}</li>

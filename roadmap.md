@@ -275,6 +275,38 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   whole-book consistency pass with its own gate) → final acceptance → export.
   Formatting reuses the unchanged derived template after acceptance. Text to
   edit, including a translation, is uploaded as a new work.
+- **Editing passes chosen by the user** (owner decision, 2026-11-05; replaces
+  the fixed developmental → line → copy sequence and optional stages;
+  implemented locally and uncommitted, covered by deterministic tests and a
+  browser check of the pass decisions, not yet by a live run):
+  1. Preparation and metadata review.
+  2. The user picks one pass: developmental, line, or copy editing. When the
+     pass completes, the user accepts its output in a separate decision; the
+     accepted text and editorial files are the next pass's input. Step 2
+     repeats as often as the user wants, in any order, including the same pass
+     again. There is no discard: a pass is redone with a stage restart before
+     it is accepted.
+  3. Final acceptance (irreversible), offered after metadata review and after
+     every accepted pass, including with zero passes. After it no further pass
+     can run.
+  4. Export, automatic after final acceptance, as in every workflow.
+  - Design: a generic `select` stage kind in the engine. Its options are
+    stages that run only when chosen and return to the selection when done;
+    the engine owns the pass-acceptance and pass-choice decisions and records
+    a pass history. Templates declare the options and their titles, so the
+    studio renders the choice without per-workflow code. `optional` stages
+    and `skip_stages` are removed. The studio adds an `EditingWorkflowUI`
+    page-behavior class, keeping decisions on the run page until the viewer
+    supports editing.
+- **Implied closure for editorial reviews** (owner decision, 2026-11-05;
+  uncommitted): the separate closure after item decisions is removed, as for
+  translation advice. A submission that decides every item with resolving
+  decisions closes the editorial review; a reopening decision still produces a
+  new revision. The apply authorization stays, because it shows exactly what
+  changes before the text is edited. A chapter with proposals now takes two
+  decisions instead of three. Changes the template (`"closure": "implied"`),
+  the editing engine's instructions to the agent, the E2E launcher, and tests;
+  unfinished editing runs need a workflow restart.
 - **Deferred to the remaining M4 work:** developmental-stage details,
   restarting a completed editorial chapter, linking an edited translation to
   its source work, and web support.
@@ -408,13 +440,27 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - Each workflow defines its page behavior in the frontend (`studio/frontend/src/workflows.ts`: a base
     class keeping everything on the run page, with per-workflow subclasses). Literary translation makes
     every decision in the chapter viewer, and starting a run opens it; formatting keeps its decisions on
-    the run page and has no chapter link. Literary editing uses the base behavior until its viewer
-    support (phase 2) exists.
+    the run page and has no chapter link. Literary editing (owner decision, 2026-11-05; uncommitted) follows
+    translation through a shared `ChapterViewerWorkflowUI` base: starting a run and every decision open the
+    viewer; pass choices and whole-book decisions show at its top.
+  - Viewer and decision design (owner review, 2026-11-05; uncommitted): the chapter viewer, decision panel,
+    and agent feedback widget are generic and hold no workflow-specific text or gate kinds. Each workflow's
+    `WorkflowUI` defines what differs: the reading panes (`panes()`: translation shows two, the original and
+    the translation, with inline comments on a draft awaiting approval; editing shows one, the text being
+    edited), decision wording (`decisionCopy()`: heading, explanation, button labels), chapter statuses
+    (`awaitingLabel()`, `stageVerb()`), the notice after a reply (`afterReply()`), and the agent's name.
+    The translation-only chapter approval component is replaced by the shared decision slot.
   - Phase 1 (implemented and committed locally, 2026-11-04): starting a run opens the
     viewer; the viewer shows a run status bar with problem banners linking to
     run management, preparation questions before chapters exist, and final
     acceptance; the run page links to the viewer instead of showing decision
     forms for chapter-based runs.
+  - Shared agent feedback widget (owner decision, 2026-11-05; uncommitted): every exchange with the agent in any
+    workflow (approval sheets, chapter approval, editorial reviews, apply authorizations, questions) uses one
+    widget (`AgentFeedback`): the conversation so far, the item-by-item review for every sheet, otherwise the
+    offered commands and a feedback box or inline comments. The list-style sheet form and free-reply form are
+    removed; the brief's document review, the sample poll, metadata review, pass choices, and final acceptance
+    keep their own bodies.
   - Inline comments (owner decision, 2026-11-04; committed locally): feedback on text is given as inline
     comments on the translation (not the original) and on the brief documents, using Recogito's text
     annotator. Drafts stay in the browser until sent; each comment keeps its quote, range, and paragraph

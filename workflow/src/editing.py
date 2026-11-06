@@ -1,4 +1,4 @@
-"""Literary editing template engine (literary-editing-v1): optional developmental, line, and copy editing."""
+"""Literary editing template engine (literary-editing-v1): developmental, line, and copy editing passes."""
 
 from __future__ import annotations
 
@@ -33,19 +33,23 @@ EDITING = (
     "instructions. Run bundled Python helpers with `python_executable`. Do not request runtime tool user "
     "input; persist a domain request and end the turn. Domain records remain authoritative; user_receipt is a "
     "validated user response: apply it once, record it, and resume from saved records, even in a new thread.\n"
+    "PASSES: the user chooses one service per pass, in any order and possibly more than once. This job belongs "
+    "to the current pass; the manuscript, editorial brief, style sheet, and concordance already carry every "
+    "earlier accepted pass (see `earlier_passes`). The orchestrator presents the completed pass to the user "
+    "for acceptance; do not ask for it.\n"
     "SERVICES:\n"
     "- developmental chapter job: read the chapter with the context of the whole manuscript and save evidence "
     "notes for the later whole-book verdict in job_dir. No proposals and no review gate; return completed with "
     "state_path=the notes and output_path=null. Never change manuscript text.\n"
     "- developmental whole-book job: read the complete manuscript and every chapter's notes; save the verdict "
     "with its editorial-acceptance score and DEV-### recommendation records; present them through an "
-    "editorial_review sheet (revision requests reopen items). After closure write the approved recommendations "
+    "editorial_review sheet (revision requests reopen items). After closure (see REVIEW CLOSURE) write the approved recommendations "
     "to editorial/editorial-brief.md as guidance for later stages and return completed with output_path=null. "
     "Never change manuscript text.\n"
     "- line or copy chapter job: run the verdict-first lifecycle for this chapter only: save the verdict and the "
     "source-ordered LE-### (line, including the first-class paragraph-break pass) or CE-### (copy) proposal "
-    "ledger, then decision-table.md and decision-table.json, and return an editorial_review gate. After the "
-    "separate closure, quick-check the decisions. If at least one valid accepted row remains, return an "
+    "ledger, then decision-table.md and decision-table.json, and return an editorial_review gate. After its "
+    "closure (see REVIEW CLOSURE), quick-check the decisions. If at least one valid accepted row remains, return an "
     "apply_authorization gate summarizing exactly what would be applied and asking the user to reply exactly "
     "'apply accepted changes'. After that receipt, persist approvals.md, apply only accepted proposals to "
     "`chapter_path`, update approved style/continuity records, verify, write application-report.md, and return "
@@ -58,6 +62,11 @@ EDITING = (
     "'No changes proposed' in the state_path record, then return editorial_review with review_path=null and "
     "binding_path=the verdict, asking the user to reply exactly 'approve review'. After that receipt return "
     "completed without changing text.\n"
+    "REVIEW CLOSURE: closure of an editorial_review sheet is implied. A user submission that decides every open "
+    "item with resolving decisions IS the review's final closure (its receipt has implied_closure: true), because "
+    "the apply authorization then shows exactly what would change. Record the decisions and continue (quick check, "
+    "then apply_authorization, or completion when nothing was accepted) without asking for closure. A revise, "
+    "discuss, or other reopening decision still needs a NEW sheet revision with only the affected items reopened.\n"
     "Editing translated text: preserve meaning, information, and voice; raise a query instead of proposing a "
     "change that could alter what the text says.\n"
 )
@@ -65,12 +74,12 @@ RETURN = (
     "RETURN CONTRACT: final message is JSON matching the supplied schema; use null for unused fields and "
     "work_record except in preparation. All paths are workspace-relative with forward slashes. state_path is the "
     "saved job record (project state, notes, or report). needs_human_input must name a gate: editorial_review "
-    "(review_path=decision-table.json following the shared approval-sheet schema with closure_required=true, or "
-    "null for an empty review; binding_path=an immutable copy of the proposal ledger or verdict for that "
-    "revision); apply_authorization (binding_path=decision-table.md); or question (no sheet). Never mark items "
-    "resolved before the user's explicit matching dispositions; after dispositions save a NEW sheet revision "
-    "and return the next review, including a separate closure request when all items resolve. Never confirm "
-    "closure or apply authorization yourself. message must contain the full human-facing verdict, proposals "
+    "(review_path=decision-table.json following the shared approval-sheet schema, or null for an empty review; "
+    "binding_path=an immutable copy of the proposal ledger or verdict for that revision); apply_authorization "
+    "(binding_path=decision-table.md); or question (no sheet). Never mark items resolved before the user's "
+    "explicit matching dispositions; when a submission reopens items, save a NEW sheet revision and return it. "
+    "Never request a separate review closure, and never confirm closure or apply authorization yourself. "
+    "message must contain the full human-facing verdict, proposals "
     "with exact current and proposed text, or question, not merely a file link.\n\n"
 )
 
@@ -86,30 +95,60 @@ class EditingEngine(PreparedManuscriptEngine):
     def _chapter_snapshots(self, state):
         return {cid: self.checkpoint(path, "editorial_chapter") for cid, path in state["manuscript"].items()}
 
+    def _ensure_manuscript(self, state):
+        if state.get("manuscript"):
+            return
+        # Intake: verbatim copies of the verified prepared chapters form the editable workspace manuscript.
+        mapping = {}
+        for chapter in state["chapters"]:
+            target = plain(self.workspace / self.manuscript_path(chapter))
+            if target.exists():
+                raise ValueError("The editorial manuscript already exists; refusing to overwrite it.")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(self.store.content(state["prepared"]["files"][chapter["path"]]))
+            mapping[chapter["chapter_id"]] = self.manuscript_path(chapter)
+        state["manuscript"] = mapping
+
     def on_enter_iterating(self, state, stage):
-        if not state.get("manuscript"):
-            # Intake: verbatim copies of the verified prepared chapters form the editable workspace manuscript.
-            mapping = {}
-            for chapter in state["chapters"]:
-                target = plain(self.workspace / self.manuscript_path(chapter))
-                if target.exists():
-                    raise ValueError("The editorial manuscript already exists; refusing to overwrite it.")
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(self.store.content(state["prepared"]["files"][chapter["path"]]))
-                mapping[chapter["chapter_id"]] = self.manuscript_path(chapter)
-            state["manuscript"] = mapping
+        self._ensure_manuscript(state)
+        # The pass's starting point: the accepted text and editorial files, restored if the pass is restarted.
         state.setdefault("stage_baseline", {})[stage["id"]] = self._chapter_snapshots(state)
+        state.setdefault("files_baseline", {})[stage["id"]] = self.carry_snapshot(state, stage)
+
+    def _enter_stage(self, state, stage_id):
+        if self.stage_def(state, stage_id)["kind"] == "acceptance":
+            # The text to accept is the manuscript as the last accepted pass left it (or as prepared).
+            self._ensure_manuscript(state)
+            state["outputs"] = [self._chapter_artifact(state, c["chapter_id"]) for c in state["chapters"]]
+            stage = self.iterating_stage(state)
+            state["continuity"] = {p.rsplit("/", 1)[-1][:-3]: s for p, s in
+                                   (self.carry_snapshot(state, stage) if stage else {}).items() if s}
+        super()._enter_stage(state, stage_id)
+
+    def pass_result(self, state):
+        return self._chapter_snapshots(state) if state.get("manuscript") else None
+
+    def pass_summary(self, state, record):
+        if self.stage_def(state, record["stage"]).get("edits_text") is False:
+            return "It reports on the manuscript and does not change the text."
+        before = (state.get("stage_baseline") or {}).get(record["stage"]) or {}
+        changed = [cid for cid, snapshot in (record["result"] or {}).items()
+                   if cid in before and before[cid]["sha256"] != snapshot["sha256"]]
+        return f"Changed chapters: {', '.join(changed)}." if changed else "No text was changed."
 
     def reset_stage(self, state, stage):
         super().reset_stage(state, stage)
         if stage.get("preparation"):
-            state.update(manuscript=None, stage_baseline={})
+            state.update(manuscript=None, stage_baseline={}, files_baseline={})
+        elif stage["kind"] == "acceptance":
+            state.update(outputs=[], continuity={})
 
     def restart_restore(self, state, stage_ids):
         result = super().restart_restore(state, stage_ids)
         first = next((stage for stage in stage_ids if stage in (state.get("stage_baseline") or {})), None)
         if first and state.get("manuscript"):
-            # Chapter text returns to its state when that stage first started.
+            # Chapter text and editorial files return to their state when that pass started.
+            result.update((state.get("files_baseline") or {}).get(first) or {})
             for chapter_id, snapshot in state["stage_baseline"][first].items():
                 result[state["manuscript"][chapter_id]] = snapshot
         return result
@@ -134,12 +173,19 @@ class EditingEngine(PreparedManuscriptEngine):
                 {path: self.checkpoint(path, "editorial_chapter") for path in self.editable_paths(state, item)})
 
     def _refresh_outputs(self, state):
-        state["outputs"] = []  # Chapter text keeps changing until the last editing stage completes.
+        state["outputs"] = []  # Chapter text can change in any pass until final acceptance.
 
     def verify_extra(self, state):
         super().verify_extra(state)
         stage = self._stage_or_empty(state)
-        if not stage.get("iterate") or not state.get("manuscript"):
+        if not state.get("manuscript"):
+            return
+        if not stage.get("iterate"):
+            # Between passes the text stays exactly as the last completed pass left it.
+            last = next((p for p in reversed(state.get("passes") or []) if p.get("result")), None)
+            for chapter_id, snapshot in ((last or {}).get("result") or {}).items():
+                if digest(read_bytes(self.file(state["manuscript"][chapter_id]))) != snapshot["sha256"]:
+                    raise ValueError(f"Manuscript chapter {chapter_id} changed outside an editorial pass.")
             return
         baseline = state["stage_baseline"][stage["id"]]
         current = self.current_iteration(state)
@@ -212,10 +258,7 @@ class EditingEngine(PreparedManuscriptEngine):
         if self.current_iteration(state) is not None:
             state["status"] = "READY"
             return
-        ids = self.stage_ids(state)
-        if not any(self.stage_def(state, s).get("iterate") for s in ids[ids.index(stage["id"]) + 1:]):
-            state["outputs"] = [self._chapter_artifact(state, c["chapter_id"]) for c in state["chapters"]]
-        self._advance_stage(state)
+        self._advance_stage(state)  # Back to the pass choice, where the user accepts this pass.
 
     def _chapter_artifact(self, state, chapter_id):
         chapter = next(c for c in state["chapters"] if c["chapter_id"] == chapter_id)
@@ -255,8 +298,9 @@ class EditingEngine(PreparedManuscriptEngine):
                 "approvals": {kind: bool(binding) for kind, binding in state["approvals"].items()},
                 "completed_jobs": [{"chapter_id": i["chapter_id"], "report": i.get("report", {}).get("path")}
                                    for i in state["iterations"] if i["status"] == "completed"],
-                "earlier_stages": {name: [i.get("report", {}).get("path") for i in items if i.get("report")]
-                                   for name, items in state.get("stage_iterations", {}).items()},
+                "earlier_passes": [{"pass": p["number"], "service": p["stage"],
+                                    "reports": [i["report"]["path"] for i in p.get("iterations") or [] if i.get("report")]}
+                                   for p in state.get("passes") or [] if p["accepted"]],
             })
         if state["prepared"]:
             work = json.loads(self.file(state["prepared"]["work_record"]).read_text(encoding="utf-8"))

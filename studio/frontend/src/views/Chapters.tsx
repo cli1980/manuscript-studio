@@ -1,26 +1,32 @@
-import { useEffect, useState } from "react";
-import { api, type Gate, type RunDetail } from "../api";
-import { Documents, ErrorBox, reviewName, Status, TextBlock, useLoad, when } from "./common";
-import { SheetReview } from "./SheetReview";
+import { useEffect, useRef, useState } from "react";
+import { api, type RunDetail } from "../api";
+import { Documents, ErrorBox, reviewName, Status, useLoad, when } from "./common";
+import { WHOLE_BOOK, workflowUI } from "../workflows";
 import { GatePanel } from "./GatePanel";
-import { Markdown } from "./Markdown";
-import { clearComments, CommentableText, CommentSummary, composeComments, type InlineComment } from "./CommentableText";
+import { ChapterPanes } from "./ChapterPanes";
+import { clearComments, type InlineComment } from "./CommentableText";
 
-// Chapter browser inside a workflow run: prepared chapters and each stage's completed outputs.
+// The chapter viewer: a run's review page, generic across workflows. It lays out the chapter list, the reading
+// panes, and the decision slots; the run's WorkflowUI decides what differs (the panes, decision wording, statuses).
 export function Chapters({ runId, chapterId }: { runId: string; chapterId?: string }) {
   const index = useLoad(() => api.chapters(runId), [runId], 4000);
   const detail = useLoad(() => (chapterId ? api.chapter(runId, chapterId) : Promise.resolve(null)), [runId, chapterId]);
   const run = useLoad(() => api.run(runId), [runId], 4000);
-  const [approved, setApproved] = useState<string | null>(null);
-  const gate = run.data?.status === "WAITING_FOR_HUMAN" && run.data.gate?.kind === "chapter_sanity" ? run.data.gate : null;
-  const draft = gate && chapterId && gate.chapter_id === chapterId ? gate.binding_text : null;
-  // Feedback on the assembled draft is given as inline comments on the translation, drafted in the browser.
-  const commentKey = gate && !gate.sheet ? `comments:${gate.id}:draft` : null;
+  const ui = workflowUI(run.data?.workflow);
+  const [notice, setNotice] = useState<string | null>(null);
   const [comments, setComments] = useState<InlineComment[]>([]);
-  // Any human exchange for a chapter (translation advice, questions, map exceptions) is shown with that chapter.
-  const pending = run.data?.status === "WAITING_FOR_HUMAN" && run.data.gate?.chapter_id ? run.data.gate : null;
-  const unattached = run.data?.status === "WAITING_FOR_HUMAN" && run.data.gate && !run.data.gate.chapter_id;
   const [exchangeError, setExchangeError] = useState<string | null>(null);
+  // A decision on a chapter is made beside that chapter's text; the rest (preparation questions, pass choices,
+  // whole-book passes) at the top.
+  const waiting = run.data?.status === "WAITING_FOR_HUMAN" && run.data.gate ? run.data.gate : null;
+  const pending = waiting?.chapter_id && waiting.chapter_id !== WHOLE_BOOK ? waiting : null;
+  const unattached = !!waiting && !pending;
+  const here = pending && pending.chapter_id === chapterId ? pending : null;
+  const panes = detail.data ? ui.panes(detail.data, here) : [];
+  const commentable = panes.find((pane) => pane.commentKey);
+  const data = index.data;
+  const stageTitle = (stage: string) => data?.stage_info?.[stage]?.title ?? stage;
+  const stageKind = (stage: string) => data?.stage_info?.[stage]?.stage ?? stage;
   // Keep the chapter list, text, and status in step with the run as it moves.
   const progressKey = `${run.data?.status}|${run.data?.gate?.id ?? ""}|${run.data?.progress?.completed ?? ""}|${run.data?.chapter_id ?? ""}`;
   useEffect(() => { void index.reload(); void detail.reload(); }, [progressKey]);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -33,6 +39,16 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
     window.location.hash = `#/runs/${runId}/chapters/${encodeURIComponent(pending.chapter_id ?? "")}`;
   }, [pending?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Bring a chapter's pending decision into view once per decision (on arrival, and when the agent answers
+  // feedback with a new request), so the reviewer lands on the form instead of the top of the page.
+  const decisionRef = useRef<HTMLDivElement>(null);
+  const shown = useRef<string | null>(null);
+  useEffect(() => {
+    if (!here || !detail.data || shown.current === here.id) return;
+    shown.current = here.id;
+    requestAnimationFrame(() => decisionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, [here?.id, detail.data]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   async function performExchange(operation: () => Promise<RunDetail>) {
     try {
       await operation();
@@ -42,20 +58,32 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
     }
     void run.reload(); void index.reload(); void detail.reload();
   }
-  const data = index.data;
+
+  // One decision slot, used at the top, beside a chapter's text (with its inline comments), and for final acceptance.
+  const decision = (beside: boolean) => run.data && (
+    <>
+      <GatePanel run={run.data} inViewer perform={(operation) => void performExchange(operation)}
+        comments={beside && commentable ? comments : undefined} commentLabel={commentable?.commentLabel}
+        onSent={(gate, text) => {
+          if (beside && commentable?.commentKey) clearComments(commentable.commentKey);
+          setNotice(ui.afterReply(gate, text));
+        }} />
+      <ErrorBox error={exchangeError} />
+    </>
+  );
+  const statusTags = (outputs: Record<string, { status: string; ready: boolean; saving?: boolean }> | undefined,
+    id: string, className: string) => data?.stages.map((stage) => {
+    const status = chapterStatus(outputs?.[stage], ui.stageVerb(stageKind(stage)),
+      pending?.chapter_id === id ? ui.awaitingLabel(pending) : null, !!run.data?.finalized);
+    return <span key={stage} className={`${className} ${status.cls}`}>{data.stages.length > 1 ? `${stageTitle(stage)}: ` : ""}{status.label}</span>;
+  });
   return (
     <section>
       <p><a href={`#/runs/${runId}`}>← Run {runId.slice(0, 8)}</a></p>
       <h1>Chapters</h1>
       {run.data && <RunStatusBar run={run.data} />}
       <ErrorBox error={index.error} />
-      {/* Decisions not tied to a chapter, such as a question during preparation. */}
-      {unattached && run.data && (
-        <>
-          <GatePanel run={run.data} inViewer perform={(operation) => void performExchange(operation)} />
-          <ErrorBox error={exchangeError} />
-        </>
-      )}
+      {unattached && decision(false)}
       {data && !data.prepared && !unattached && <p className="muted">The agent is preparing the manuscript; chapters appear here
         once preparation completes, and you are brought to each decision as it comes up.</p>}
       {data && data.prepared && (
@@ -66,40 +94,24 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
                 <a href={`#/runs/${runId}/chapters/${encodeURIComponent(chapter.chapter_id)}`}>
                   {chapter.order}. {chapter.title ?? chapter.chapter_id}
                 </a>
-                <div>
-                  <span className="tag ready">prepared</span>
-                  {data.stages.map((stage) => {
-                    const status = chapterStatus(chapter.outputs[stage], stage, pending?.chapter_id === chapter.chapter_id ? awaiting(pending) : null, !!run.data?.finalized);
-                    return <span key={stage} className={`tag ${status.cls}`}>{data.stages.length > 1 ? `${stage}: ` : ""}{status.label}</span>;
-                  })}
-                </div>
+                <div><span className="tag ready">prepared</span>{statusTags(chapter.outputs, chapter.chapter_id, "tag")}</div>
               </li>
             ))}
             {Object.entries(data.whole_book).filter(([, status]) => status).map(([stage, status]) => (
-              <li key={stage} className="muted">Whole-book {stage} pass: {status?.replaceAll("_", " ")}</li>
+              <li key={stage} className="muted">Whole book, {stageTitle(stage)}: {status?.replaceAll("_", " ")}</li>
             ))}
           </ol>
           <div>
-            {run.data?.status === "WAITING_FOR_ACCEPTANCE" && run.data.acceptance && (
-              <>
-                <GatePanel run={run.data} inViewer perform={(operation) => void performExchange(operation)} />
-                <ErrorBox error={exchangeError} />
-              </>
-            )}
-            {!chapterId && gate && <p><a className="button" href={`#/runs/${runId}/chapters/${encodeURIComponent(gate.chapter_id ?? "")}`}>Review {gate.chapter_id} for approval</a></p>}
-            {approved && (
-              <div className="banner final">{approved} is approved. Translation continues with the next chapter; you will be brought back here when it is ready.</div>
-            )}
+            {run.data?.status === "WAITING_FOR_ACCEPTANCE" && run.data.acceptance && decision(false)}
+            {!chapterId && pending && <p><a className="button" href={`#/runs/${runId}/chapters/${encodeURIComponent(pending.chapter_id ?? "")}`}>
+              Open {pending.chapter_id} for your decision</a></p>}
+            {notice && <div className="banner final">{notice}</div>}
             {!chapterId && <p className="muted">Select a chapter to read it.</p>}
             <ErrorBox error={detail.error} />
             {detail.data && (
               <>
                 <h2>{detail.data.chapter.title ?? detail.data.chapter.chapter_id} <span className="muted">({detail.data.chapter.role})</span>{" "}
-                  {data.stages.map((stage) => {
-                    const entry = data.chapters.find((c) => c.chapter_id === chapterId);
-                    const status = chapterStatus(entry?.outputs[stage], stage, pending && pending.chapter_id === chapterId ? awaiting(pending) : null, !!run.data?.finalized);
-                    return <span key={stage} className={`tag status ${status.cls}`}>{data.stages.length > 1 ? `${stage}: ` : ""}{status.label}</span>;
-                  })}
+                  {statusTags(data.chapters.find((c) => c.chapter_id === chapterId)?.outputs, chapterId ?? "", "tag status")}
                 </h2>
                 {detail.data.passage_map && (
                   <details className="panel"><summary>Passage map (internal): {detail.data.passage_map.passages.length} passages,
@@ -123,34 +135,9 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
                     ))}
                   </div>
                 )}
-                <div className="columns">
-                  <div><h3>Prepared</h3><Markdown text={detail.data.prepared_text} /></div>
-                  {detail.data.outputs.map((output) => (
-                    <div key={output.stage}><h3>{output.stage} <span className="muted mono">attempt {output.attempt} · {output.sha256.slice(0, 10)}</span></h3>
-                      <Markdown text={output.text} /></div>
-                  ))}
-                  {draft != null && (
-                    <div className="awaiting"><h3>Translation <span className="tag busy">awaiting your approval</span></h3>
-                      {commentKey
-                        ? <CommentableText key={commentKey} storageKey={commentKey} onChange={setComments}><Markdown text={draft} /></CommentableText>
-                        : <Markdown text={draft} />}</div>
-                  )}
-                  {detail.data.outputs.length === 0 && draft == null &&
-                    <div className="muted">No stage output is ready for this chapter yet.</div>}
-                </div>
-                {pending && pending.chapter_id === chapterId && pending.kind !== "chapter_sanity" && run.data && (
-                  <>
-                    <GatePanel run={run.data} inViewer perform={(operation) => void performExchange(operation)} />
-                    <ErrorBox error={exchangeError} />
-                  </>
-                )}
-                {/* Approval sits under the side-by-side text, after the reviewer has read it. */}
-                {chapterId && gate?.chapter_id === chapterId && run.data && (
-                  <ChapterApproval run={run.data} comments={comments} commentKey={commentKey} onDone={(closed) => {
-                    if (closed) setApproved(chapterId);
-                    void run.reload(); void detail.reload(); void index.reload();
-                  }} />
-                )}
+                <ChapterPanes panes={panes} onComments={setComments} />
+                {/* The decision sits under the text, after the reviewer has read it. */}
+                {here && <div ref={decisionRef} className="decision-anchor">{decision(true)}</div>}
               </>
             )}
           </div>
@@ -185,81 +172,11 @@ function RunStatusBar({ run }: { run: RunDetail }) {
   );
 }
 
-// Chapter approval happens here, beside the source: approve the assembled draft or review proposed edits.
-function ChapterApproval({ run, comments, commentKey, onDone }: {
-  run: RunDetail; comments: InlineComment[]; commentKey: string | null; onDone: (closed: boolean) => void;
-}) {
-  const gate = run.gate!;
-  const [feedback, setFeedback] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function reply(text: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.reply(run.id, gate.id, text);
-      setFeedback("");
-      if (commentKey) clearComments(commentKey);
-      // Only the approval command or the edits sheet's closure approves the chapter; item decisions do not.
-      onDone(text === (gate.commands[0] ?? "approve chapter") || text === gate.sheet?.submission.closure_command);
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : String(exc));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="panel gate chapter-approval">
-      <h2>Approve {gate.chapter_id}</h2>
-      {gate.sheet ? (
-        <>
-          <p className="muted">The final check proposes edits. Decide each one; the chapter is approved at closure.</p>
-          <SheetReview key={gate.id} sheet={gate.sheet} busy={busy} onSubmit={(text) => void reply(text)} />
-        </>
-      ) : (
-        <>
-          {gate.answer_to ? (
-            <div className="conversation">
-              <div className="label">Your feedback</div>
-              <TextBlock text={gate.answer_to.text} />
-              <div className="label">Translator's answer</div>
-              <Markdown text={gate.message} />
-            </div>
-          ) : (
-            <p className="muted">The final check proposes no changes. Read the translation beside the source, then approve it, or
-              select text in the translation to comment on it and send your comments (comments are feedback and do not
-              approve the chapter).</p>
-          )}
-          <div className="row">
-            <button className="primary" disabled={busy} onClick={() => void reply(gate.commands[0] ?? "approve chapter")}>Approve chapter</button>
-          </div>
-          <CommentSummary comments={comments} general={feedback} onGeneral={setFeedback} busy={busy}
-            onSend={() => void reply(composeComments(comments, feedback))} />
-        </>
-      )}
-      <ErrorBox error={error} />
-    </div>
-  );
-}
-
-const STAGE_VERBS: Record<string, string> = { translate: "translating", line: "line editing", copy: "copyediting",
-  developmental: "developmental review" };
-
-// Front-matter reviews (metadata, or a workflow's documents such as a translation brief) are reviews; the rest decisions.
-function awaiting(gate: Gate) {
-  if (gate.kind === "chapter_sanity") return "chapter_sanity";
-  return gate.kind === "metadata_review" || gate.documents?.length > 0
-    ? `awaiting your review: ${reviewName(gate.kind)}` : `awaiting your decision: ${gate.kind.replaceAll("_", " ")}`;
-}
-
 // One readable status per chapter and stage: not started, working, awaiting approval, approved, or final.
-function chapterStatus(output: { status: string; ready: boolean; saving?: boolean } | undefined, stage: string, awaiting: string | null, finalized: boolean) {
-  if (awaiting === "chapter_sanity") return { label: "awaiting your approval", cls: "awaiting-tag" };
+function chapterStatus(output: { status: string; ready: boolean; saving?: boolean } | undefined, verb: string, awaiting: string | null, finalized: boolean) {
   if (awaiting) return { label: awaiting, cls: "awaiting-tag" };
   if (output?.ready || output?.status === "completed") return finalized ? { label: "final", cls: "ready" } : { label: "approved", cls: "ready" };
   if (output?.status === "in_progress" && output.saving) return { label: "approved — saving", cls: "ready" };
-  if (output?.status === "in_progress") return { label: STAGE_VERBS[stage] ?? "in progress", cls: "busy" };
+  if (output?.status === "in_progress") return { label: verb, cls: "busy" };
   return { label: "not started", cls: "" };
 }

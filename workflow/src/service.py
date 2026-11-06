@@ -80,7 +80,7 @@ class WorkflowService:
     def list_templates(self):
         return [{"id": t["id"], "title": t["title"], "workflow": t["workflow"], "consumes": t.get("consumes"),
                  "produces": t.get("produces"), "stages": [s["id"] for s in t["stages"]],
-                 "optional_stages": [s["id"] for s in t["stages"] if s.get("optional")],
+                 "choices": {s["id"]: s["options"] for s in t["stages"] if s["kind"] == "select"},
                  "passage_size": t.get("passage_size")}
                 for t in registry.templates().values()]
 
@@ -241,7 +241,7 @@ class WorkflowService:
     # ----- run creation ---------------------------------------------------------------------
 
     def create_run(self, template_id, *, upload=None, manuscript_language=None, work_id=None, owner=None,
-                   model=None, agent_models=None, skip_stages=(), settings=None):
+                   model=None, agent_models=None, settings=None):
         """Exactly one of: upload (+ manuscript_language) creates a new work; work_id uses an existing work."""
         template = registry.get(template_id)
         if "consumes" in template:
@@ -260,10 +260,10 @@ class WorkflowService:
                 manuscript_language = self._work_row(work_id)["manuscript_language"]
                 self._check_can_start(work_id, template["workflow"])
             return self._create(template, work_id, owner, manuscript_language, model, agent_models,
-                                skip_stages=skip_stages, settings=settings)
+                                settings=settings)
 
     def _create(self, template, work_id, owner, manuscript_language, model, agent_models, restart_of=None,
-                skip_stages=(), settings=None):
+                settings=None):
         library = self.library(work_id)
         source, record = library.source()
         run_id = str(uuid.uuid4())
@@ -271,7 +271,7 @@ class WorkflowService:
         engine = registry.engine_class(template["engine"]).create(
             root, template, source=source, manuscript_language=manuscript_language, work_id=work_id, owner=owner,
             source_name=record.get("source_name"), model=model, agent_models=agent_models, library=library,
-            run_id=run_id, skip_stages=skip_stages, settings=settings,
+            run_id=run_id, settings=settings,
         )
         try:
             self._insert_run(engine.state(), root, restart_of)
@@ -333,7 +333,7 @@ class WorkflowService:
                           available_actions=engine.available_actions(state))
             if state.get("gate"):
                 result["gate"] = {key: state["gate"].get(key) for key in
-                                  ("id", "kind", "message", "stage", "chapter_id", "record_revision")}
+                                  ("id", "kind", "message", "stage", "chapter_id", "record_revision", "options", "pass")}
             return result
 
     def step(self, run_id, runtime):
@@ -476,9 +476,7 @@ class WorkflowService:
                 engine.cancel(superseded_by="pending", confirm_stopped=confirm_stopped)
                 with self._transaction():
                     new_id = self._create(template, row["work_id"], owner, state["manuscript_language"], None,
-                                          agent_models, restart_of=run_id,
-                                          skip_stages=state.get("skipped_stages") or (),
-                                          settings=state.get("settings"))
+                                          agent_models, restart_of=run_id, settings=state.get("settings"))
         self._mark_superseded(row["path"], new_id, reason)
         if carry:
             with self.open_run(new_id) as new:

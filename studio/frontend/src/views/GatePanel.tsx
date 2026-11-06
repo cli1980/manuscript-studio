@@ -1,26 +1,35 @@
 import { useEffect, useState } from "react";
-import { api, type Gate, type RunDetail, type Sheet } from "../api";
-import { Documents, documentTitle, reviewName, TextBlock } from "./common";
+import { api, type Gate, type GateOption, type RunDetail } from "../api";
+import { Documents, documentTitle, TextBlock } from "./common";
 import { Markdown } from "./Markdown";
 import { workflowUI } from "../workflows";
 import { clearComments, CommentSummary, composeComments, loadComments, type InlineComment } from "./CommentableText";
 import { MetadataTable } from "./Metadata";
-import { SheetReview } from "./SheetReview";
+import { AgentFeedback } from "./AgentFeedback";
 import { SamplePoll } from "./SamplePoll";
 
-// Gate kinds reviewed with the item-by-item SheetReview; add editorial gates here when editing adopts it.
-const REVIEW_GATES = new Set(["translation_issue"]);
-
 type Perform = (op: () => Promise<RunDetail>) => void;
+// Sends an exact reply; `sent` runs only after the server accepted it (e.g. to clear drafted comments).
+type Reply = (text: string, sent?: () => void) => void;
 
-// Native forms for each human gate. They only compose the exact reply; the server validates it.
-export function GatePanel({ run, perform, inViewer = false }: { run: RunDetail; perform: Perform; inViewer?: boolean }) {
+// The decision panel for every workflow: one frame (heading and explanation from the run's WorkflowUI), with a
+// body by the decision's shape. Bodies only compose the exact reply; the server validates it.
+export function GatePanel({ run, perform, inViewer = false, comments, commentLabel, onSent }: {
+  run: RunDetail;
+  perform: Perform;
+  inViewer?: boolean;
+  // Inline comments drafted on the text under review (a commentable pane), sent as feedback with this decision.
+  comments?: InlineComment[];
+  commentLabel?: string;
+  onSent?: (gate: Gate, text: string) => void;
+}) {
+  const ui = workflowUI(run.workflow);
   // The workflow decides where its decisions are made; elsewhere the panel only links there.
-  const page = inViewer ? null : workflowUI(run.workflow).decisionPage(run);
+  const page = inViewer ? null : ui.decisionPage(run);
   if (page) {
     return (
       <div className="panel gate">
-        <h2>{run.status === "WAITING_FOR_ACCEPTANCE" ? "Ready to finalize" : `Your review: ${reviewName(run.gate?.kind ?? "")}`}</h2>
+        <h2>{run.status === "WAITING_FOR_ACCEPTANCE" ? "Ready to finalize" : run.gate ? ui.decisionCopy(run.gate).heading : ""}</h2>
         <p>Decisions happen in the review viewer, beside the text.</p>
         <a className="button" href={page}>Open the review viewer</a>
       </div>
@@ -29,87 +38,34 @@ export function GatePanel({ run, perform, inViewer = false }: { run: RunDetail; 
   if (run.status === "WAITING_FOR_ACCEPTANCE" && run.acceptance) return <Acceptance run={run} perform={perform} />;
   if (run.status !== "WAITING_FOR_HUMAN" || !run.gate) return null;
   const gate = run.gate;
+  const copy = ui.decisionCopy(gate);
+  const reply: Reply = (text, sent) => perform(async () => {
+    const next = await api.reply(run.id, gate.id, text);
+    sent?.();
+    onSent?.(gate, text);
+    return next;
+  });
   return (
     <div className="panel gate">
-      <h2>Your review: {reviewName(gate.kind)}{gate.chapter_id ? ` · ${gate.chapter_id}` : ""}</h2>
+      <h2>{copy.heading}</h2>
+      {copy.intro && <p className="muted">{copy.intro}</p>}
       {gate.kind === "metadata_review" && run.metadata
         ? <MetadataGate run={run} gate={gate} perform={perform} />
-        : <>
-            {/* Approval sheets carry everything the reviewer needs; the agent's raw message and bound
-                checkpoint stay internal. Questions without a sheet still show the agent's message. */}
-            {gate.documents?.length > 0 ? <DocumentReview run={run} gate={gate} perform={perform} />
-              : !gate.sheet && <Markdown text={gate.message} />}
-            {gate.documents?.length > 0 ? null : gate.sheet && gate.kind === "brief_samples"
-              ? <SamplePoll key={gate.id} sheet={gate.sheet} onSubmit={(text) => perform(() => api.reply(run.id, gate.id, text))} />
-              : gate.sheet && REVIEW_GATES.has(gate.kind)
-              ? <SheetReview key={`${gate.id}`} sheet={gate.sheet} onSubmit={(text) => perform(() => api.reply(run.id, gate.id, text))} />
-              : gate.sheet ? <SheetForm run={run} gate={gate} sheet={gate.sheet} perform={perform} />
-              : <FreeReply run={run} gate={gate} perform={perform} />}
-          </>}
+        : gate.options?.length
+        ? <ChoiceDecision gate={gate} options={gate.options} reply={reply} />
+        : gate.documents?.length > 0 ? <DocumentReview gate={gate} agent={ui.agentName} reply={reply} />
+        : gate.sheet && gate.kind === "brief_samples"
+        ? <SamplePoll key={gate.id} sheet={gate.sheet} onSubmit={reply} />
+        // Every other exchange with the agent, in any workflow, uses the same feedback widget.
+        : <AgentFeedback gate={gate} agent={ui.agentName} onReply={reply} commandLabels={copy.commandLabels}
+            comments={comments} commentLabel={commentLabel} />}
     </div>
-  );
-}
-
-function SheetForm({ run, gate, sheet, perform }: { run: RunDetail; gate: Gate; sheet: Sheet; perform: Perform }) {
-  const [choices, setChoices] = useState<Record<string, { decision: string; note: string }>>({});
-  useEffect(() => setChoices({}), [gate.id]);
-  const decisions = Object.fromEntries(sheet.decisions.map((d) => [d.id, d]));
-  const open = sheet.items.filter((item) => item.status !== "resolved");
-  const closure = open.length === 0 && sheet.gate.closure_required && sheet.gate.final_closure === "pending";
-  const lines = open.flatMap((item) => {
-    const choice = choices[item.id];
-    if (!choice?.decision) return [];
-    const command = decisions[choice.decision].command;
-    return [choice.note.trim() ? `${item.id} ${command}: ${choice.note.trim()}` : `${item.id} ${command}`];
-  });
-  const missingNote = open.some((item) => {
-    const choice = choices[item.id];
-    return choice?.decision && decisions[choice.decision].requires_note && !choice.note.trim();
-  });
-  return (
-    <>
-      <p className="muted">{sheet.submission.instruction}</p>
-      {sheet.items.map((item) => (
-        <div key={item.id} className={`item ${item.status}`}>
-          <h3>{item.id} <span className="muted">[{item.status_label ?? item.status}]</span> {item.summary}</h3>
-          {item.details.map((row, index) => (
-            <div key={index}><div className="label">{row.label}</div><TextBlock text={row.value} /></div>
-          ))}
-          {item.status !== "resolved" && (
-            <div className="row">
-              {item.allowed_decisions.map((id) => (
-                <label key={id}>
-                  <input type="radio" name={`${gate.id}-${item.id}`} checked={choices[item.id]?.decision === id}
-                    onChange={() => setChoices({ ...choices, [item.id]: { decision: id, note: choices[item.id]?.note ?? "" } })} />
-                  {" "}{decisions[id].label}{decisions[id].requires_note ? " (note required)" : ""}
-                </label>
-              ))}
-              <input placeholder="Note" value={choices[item.id]?.note ?? ""}
-                onChange={(e) => setChoices({ ...choices, [item.id]: { decision: choices[item.id]?.decision ?? "", note: e.target.value } })} />
-            </div>
-          )}
-        </div>
-      ))}
-      {closure ? (
-        <p>All items are resolved. Final closure is a separate decision:{" "}
-          <button onClick={() => perform(() => api.reply(run.id, gate.id, sheet.submission.closure_command))}>
-            {sheet.submission.closure_label || sheet.submission.closure_command}
-          </button></p>
-      ) : (
-        <>
-          <button disabled={!lines.length || missingNote} onClick={() => perform(() => api.reply(run.id, gate.id, lines.join("\n")))}>
-            Submit {lines.length} decision{lines.length === 1 ? "" : "s"}
-          </button>
-          <span className="muted"> Undecided items stay pending.</span>
-        </>
-      )}
-    </>
   );
 }
 
 // A review of presented documents (e.g. the translation brief): the agent's summary, the documents as tabs,
 // then approve or request changes. Changes are feedback for the agent, which presents a revised version.
-function DocumentReview({ run, gate, perform }: { run: RunDetail; gate: Gate; perform: Perform }) {
+function DocumentReview({ gate, agent, reply }: { gate: Gate; agent: string; reply: Reply }) {
   const [text, setText] = useState("");
   const commentKey = `comments:${gate.id}`;
   const load = () => Object.fromEntries(gate.documents.map((d) => [d.path, loadComments(`${commentKey}:${d.path}`)]));
@@ -120,11 +76,7 @@ function DocumentReview({ run, gate, perform }: { run: RunDetail; gate: Gate; pe
   function send() {
     const message = [...gate.documents.map((d) => composeComments(comments[d.path] ?? [], "", documentTitle(d.path)))
       .filter(Boolean), text.trim() ? `General: ${text.trim()}` : ""].filter(Boolean).join("\n\n");
-    perform(async () => {
-      const next = await api.reply(run.id, gate.id, message);
-      gate.documents.forEach((d) => clearComments(`${commentKey}:${d.path}`));
-      return next;
-    });
+    reply(message, () => gate.documents.forEach((d) => clearComments(`${commentKey}:${d.path}`)));
   }
   return (
     <div className="document-review">
@@ -139,27 +91,43 @@ function DocumentReview({ run, gate, perform }: { run: RunDetail; gate: Gate; pe
       <Documents documents={gate.documents} commentKey={commentKey}
         onComments={(path, list) => setComments((old) => ({ ...old, [path]: list }))} />
       <div className="decision-bar">
-        {approve && <button className="primary" onClick={() => perform(() => api.reply(run.id, gate.id, approve))}>
+        {approve && <button className="primary" onClick={() => reply(approve)}>
           {approve.charAt(0).toUpperCase() + approve.slice(1)}</button>}
-        <CommentSummary comments={all} general={text} onGeneral={setText} onSend={send} sendLabel="Request changes" />
+        <CommentSummary comments={all} general={text} onGeneral={setText} onSend={send} sendLabel="Request changes"
+          hint="Select text in a document to comment on it." />
       </div>
-      <p className="muted">Select text in a document to comment on it; the translator revises and presents the brief again.</p>
+      <p className="muted">Select text in a document to comment on it; the {agent} revises the documents and presents them again.</p>
     </div>
   );
 }
 
-function FreeReply({ run, gate, perform }: { run: RunDetail; gate: Gate; perform: Perform }) {
-  const [text, setText] = useState("");
-  useEffect(() => setText(""), [gate.id]);
+// An engine-owned choice, such as accepting an editing pass or choosing the next one. Stages to choose from are
+// a drop-down list showing the picked stage's description; other options (accept, finish) are buttons.
+function ChoiceDecision({ gate, options, reply: send }: { gate: Gate; options: GateOption[]; reply: Reply }) {
+  const [picked, setPicked] = useState("");
+  useEffect(() => setPicked(""), [gate.id]);
+  const stages = options.filter((o) => o.stage);
+  const choice = stages.find((o) => o.command === picked);
   return (
     <>
-      {gate.commands.length > 0 && (
-        <p>{gate.commands.map((command) => (
-          <button key={command} onClick={() => perform(() => api.reply(run.id, gate.id, command))}>{command}</button>
-        ))}<span className="muted"> or reply with feedback below.</span></p>
+      <Markdown text={gate.message} />
+      {stages.length > 0 && (
+        <div className="choice-pick">
+          <div className="row">
+            <select aria-label="Next pass" value={picked} onChange={(e) => setPicked(e.target.value)}>
+              <option value="">Choose a pass…</option>
+              {stages.map((o) => <option key={o.command} value={o.command}>{o.title}</option>)}
+            </select>
+            <button className="primary" disabled={!choice} onClick={() => choice && send(choice.command)}>Start pass</button>
+          </div>
+          {choice?.description && <p className="muted">{choice.description}</p>}
+        </div>
       )}
-      <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder="Your response" />
-      <button disabled={!text.trim()} onClick={() => perform(() => api.reply(run.id, gate.id, text))}>Send response</button>
+      <div className="choices">
+        {options.filter((o) => !o.stage).map((o) => (
+          <button key={o.command} className={o.finish ? "" : "primary"} onClick={() => send(o.command)}>{o.title}</button>
+        ))}
+      </div>
     </>
   );
 }
