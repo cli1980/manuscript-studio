@@ -14,22 +14,11 @@ milestones, completed checks, or human approvals.
 Until the product's first formal release, do not preserve backward compatibility
 when doing so would complicate schemas; prefer the cleaner schema.
 
-## Required before every push
+## Line endings
 
-Before every push of local commits to any remote:
-
-1. Review all local commits that will be included in the push.
-2. Update `roadmap.md` to reflect those changes and their current status. Update
-   affected milestones and add a dated progress entry describing the changes,
-   validation performed, remaining blockers or human review, and next step.
-   If no milestone is affected, explicitly say so and describe the change.
-3. Commit the roadmap update with the relevant work or in a separate commit
-   included in the same push. An uncommitted roadmap edit does not satisfy this
-   requirement.
-4. Verify that the committed roadmap accurately describes the final changes
-   being pushed. If the scope changes after the update, revise and commit it
-   before pushing.
-
-Do not push until this requirement is satisfied. This applies to every push,
-including fixes, documentation changes, and maintenance work. These instructions
-do not themselves authorize a push.
+Use LF line endings for every text file in the repository, including new files,
+regardless of the platform or the `core.autocrlf` setting. The root
+`.gitattributes` enforces LF on commit and checkout. Do not add CRLF files;
+the only exceptions are files marked `-text` by a nested `.gitattributes`
+(verbatim evaluation evidence), whose bytes must be preserved unchanged.
+Check with `git ls-files --eol`.

@@ -211,10 +211,11 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - All translation gates as native forms driven by the approval-sheet JSON and
     submitted through the existing validator and parser; final acceptance with
     source and English side by side; Markdown export download.
-  - Whole-book translation consistency (added by the owner on 2026-10-28; not yet
-    implemented). Chapters already carry continuity through shared files
+  - Whole-book translation consistency (added by the owner on 2026-10-28;
+    implemented locally on 2026-11-06; live model and human quality review
+    pending). Chapters carry continuity through shared files
     (`glossary.md`, `voice.md`, completed English chapters, and the chapter
-    brief), but each chapter is checked only against those files. After the last
+    brief). After the last
     chapter and before final acceptance, the translation workflow runs one
     whole-book consistency pass over all English chapters against the source and
     continuity files: names and terminology, forms of address, voice drift per
@@ -224,6 +225,16 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     Approved fixes are applied and the affected chapters re-verified before
     acceptance. The literary-translation skill defines the pass, and the
     template adds it as a concluding whole-book step.
+    - Completion of all saved chapters automatically starts a distinct
+      whole-book job. Its review and final acceptance stay in the chapter
+      viewer, with chapter links on findings and separate whole-book progress.
+    - The engine binds coverage and proposals to source/output hashes, requires
+      receipt-backed approve/reject decisions and separate closure, and checks
+      candidate copies against the exact approved fixes before promoting them
+      together. A clean review also requires explicit confirmation.
+    - A retry resumes the job; restarting any chapter invalidates its review.
+      Applied fixes are recorded per chapter and in the accepted version's
+      `run.json`; restarting consistency preserves completed chapter outputs.
   - Localhost by default. A documented remote deployment requires login and a
     configured HTTPS origin when not bound to loopback. Codex credentials are
     configured server-wide.
@@ -548,153 +559,89 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - Any rubric change gets a new rubric version, and the judge skill's embedded
     copy matches it.
 
+### Runtime extensibility — harnesses and inference endpoints
+
+- **Status:** `planned` (requested by the owner on 2026-11-06)
+- **Owner:** `cli1980`
+- **Priority and milestone assignment:** not yet decided.
+- **Outcome:** Users can switch from the current Codex App Server to another
+  supported agent harness and inference endpoint through configuration, while
+  retaining the same workflows, skills, review interfaces, and saved work.
+  Adding a provider does not require rewriting the workflow engine.
+- **Starting point:** [workflow/src/runtime.py](workflow/src/runtime.py) defines
+  a small `Runtime` protocol and the current `CodexRuntime` adapter. Extend this
+  boundary rather than spreading provider-specific behavior into templates,
+  the service, or the studio.
+- **Scope:**
+  - Separate the **agent harness** (tool execution, workspace access, skill
+    loading, session lifecycle, and agent turns) from the **inference endpoint**
+    (model service, model selection, authentication, and request configuration).
+    A harness may support several endpoints; supported combinations are
+    declared explicitly rather than assuming every harness works with every
+    endpoint.
+  - Define extensible adapter contracts and registration for harnesses and
+    endpoints. Keep workflow results, events, errors, usage reporting, and
+    cancellation/recovery behavior consistent at the engine boundary.
+  - Introduce named execution profiles selecting a harness, endpoint, model,
+    and relevant options. Use the same profile configuration in the CLI and
+    studio; retain Codex App Server as one supported adapter.
+  - Declare and validate capabilities, including tools, workspace access,
+    structured output, session resume, and cancellation. An incompatible
+    profile must explain the missing capability before execution starts.
+  - Support switching profiles for new runs and unfinished runs at a saved
+    turn boundary, without losing artifacts, human decisions, or completed
+    work. Provider-specific sessions are not assumed portable: when needed,
+    start a fresh session from durable workflow state and resume the pending
+    step. A switch must not bypass a gate, replay an approved operation, or
+    require retranslating completed chapters.
+  - Keep credentials in server-side configuration or secret references.
+    Record the effective harness, endpoint identity, model, and configuration
+    revision per execution attempt so work remains attributable after a
+    switch; exclude secret values from events and exported records.
+- **Acceptance criteria:**
+  - The existing Codex App Server and at least one alternative harness can
+    execute the same workflow through the common runtime contract.
+  - At least one harness can use two supported inference endpoints selected
+    through configuration, without engine or workflow-template changes.
+  - A run can switch a supported harness or endpoint at a saved boundary and
+    continue with its artifacts and approvals intact, including when the new
+    harness needs a fresh session.
+  - The CLI and studio expose the effective execution profile consistently;
+    the chapter viewer and human gate behavior remain the same across profiles.
+  - Shared adapter tests cover structured results, tool/workspace requirements,
+    event and error handling, cancellation, retry, and state recovery.
+    Integration checks exercise each supported combination; unsupported
+    combinations fail with an actionable explanation.
+- **First tryout — Pi** (selected by the owner on 2026-11-06; `planned`):
+  - Build a small `PiRuntime` adapter using Pi's subprocess
+    [RPC interface](https://pi.dev/docs/latest/rpc), alongside `CodexRuntime`.
+    Pin the tested Pi version and verify native Windows operation, workspace
+    and skill loading, session recovery, events, and cancellation.
+  - Prove the structured result contract with a schema-validated workflow-result
+    tool or equivalent extension. Pi's JSON event stream alone does not
+    constrain the final model response; the engine's validation remains
+    authoritative.
+  - Compare Codex and Pi using the same model and endpoint where both support
+    them, recording any differences that prevent a controlled comparison.
+    Then exercise Pi with two inference endpoints selected through profiles.
+  - Run a small literary-translation case through preparation, chapter review,
+    whole-book consistency with approved and rejected fixes, and final
+    acceptance/export. Exercise interruption, retry, and switching profiles
+    at a saved boundary, including recovery through a fresh harness session.
+  - **Exit criteria:** artifacts, receipts, and completed chapters survive
+    switching; human gates and exact-fix validation cannot be bypassed;
+    malformed results fail clearly; CLI and studio retain the same workflow
+    behavior. Record correctness, model quality, latency, usage where available,
+    and integration limitations before deciding whether to adopt Pi.
+  - **Status boundary:** Pi is selected for evaluation, not yet implemented,
+    validated, or selected as the default harness.
+- **Open design choices:** the initial inference endpoints and models,
+  concrete adapter interfaces, profile storage and selection UI, and the
+  capability matrix. No implementation schedule has been selected.
+
 ### Later (unordered)
 
 - DOCX formatting from the web application
 - PDF manuscript intake
 - Additional workflows, such as literary-agent querying
 - User management for multiple users
-
-## Progress updates
-
-Each update should include the date, changes being pushed, validation performed,
-remaining blockers or human review, and the next step. If no milestone is
-affected, state that explicitly and briefly describe the maintenance or
-documentation change. Do not mark work complete while required review is pending.
-
-- **2026-10-26** — Push of four local commits ahead of `origin/main`.
-  - **Changes:**
-    - `ed71c1f` standardizes the editable shared manuscript metadata contract
-      (schema, `prepare_metadata.py`, validator updates) across workflows.
-    - `610182e` adds blind multi-candidate translation evaluation (opaque
-      candidate IDs, candidate generation/anonymization, judge runner and review
-      server updates) and removes local-only full-length fixtures from Git.
-    - `dc9126f` defines this roadmap: planning decisions and milestones M1–M4.
-    - `7097366` adds `AGENTS.md`, requiring a committed roadmap update before
-      every push.
-  - **Milestones:** M1–M4 defined as `planned`; none started. The two earlier
-    commits predate the milestones and are maintenance/evaluation work.
-  - **Validation:** with Python 3.12.10 (`.venv-evals`), all existing suites
-    passed: installer 30 (3 symlink skips), `test_sample_boundary` 6,
-    `test_validate_on_demand` 6, `test_approval_review` 28 (1 Node.js skip),
-    `test_validate_preparation` 25, `evals/tests` 73, `evals/server/tests` 55
-    (7 browser skips), and `workflow.tests.test_workflow` 37. Live Codex E2E and
-    browser tests were not run.
-  - **Human review:** the owner reviewed and approved the roadmap requirements
-    in the planning session. No separate review is recorded for `ed71c1f` or
-    `610182e`.
-  - **Blockers:** none.
-  - **Next step:** start M1 by designing the workflow registry, definition schema,
-    and shared service API.
-- **2026-10-26** — M1 design and metadata review gate. The push also includes the
-  five earlier local commits described in the previous entry, which had not yet
-  been pushed.
-  - **Changes:**
-    - `8a9c22a` adds a required, engine-owned `metadata_review` gate between
-      preparation and translation (`translation.json` now has five stages), a
-      `metadata` CLI command for single-field edits through the pinned
-      `prepare_metadata.py` helper, confirmation bound to the inspected record
-      revision, a locked `manuscript_language`, E2E launcher support, tests, and
-      documentation.
-    - The roadmap commit adds the owner-reviewed M1 design
-      ([workflow/docs/m1-design.md](workflow/docs/m1-design.md)) and updates the
-      cross-cutting decisions, M1 scope and acceptance criteria, and M3 controls
-      and notifications to match it.
-  - **Milestones:** M1 moves to `in_progress`; only the metadata review gate is
-    implemented. M3 scope changes (Retry and Restart chapter/stage/workflow
-    replace checkpoint Restart; finalization and engine-update notices); M3
-    remains `planned`. M2 and M4 are unaffected.
-  - **Validation:** with Python 3.12.10 (`.venv-evals`):
-    `workflow.tests.test_workflow` 41 passed (37 existing, updated for the new
-    gate, plus 4 new), `test_validate_preparation` 25 passed,
-    `test_approval_review` 28 passed (1 skip), and `run_e2e.py --check-case`
-    passed. Live Codex E2E and the other suites were not run; no code they cover
-    changed.
-  - **Human review:** the owner reviewed the M1 design in the 2026-10-26 session
-    and answered every open question. One interpretation awaits owner
-    confirmation: formatting runs count toward the one-unfinished-run-per-work
-    limit. No separate code review is recorded for `8a9c22a`.
-  - **Notes:** the local E2E case files under
-    `workflow/tests/cases/translation-ciqing-001/` (gitignored) were updated
-    for the new stage sequence but are not part of this push.
-  - **Blockers:** none.
-  - **Next step:** implement M1 in the design's order, starting with the
-    `manuscript_language` rename and the registry/engine split.
-- **2026-10-26** — GitHub Project for external requirements.
-  Documentation-only change; no milestone scope or status changes.
-  - **Changes:** added a convention that `roadmap.md` is the only record of
-    planned work, and that the GitHub Project
-    [Manuscript Studio Requirements](https://github.com/users/cli1980/projects/2),
-    linked to the repository, is used only to collect and triage external
-    requirements. The Project is empty, with intake Status options (New,
-    Triage, Accepted, Declined, Moved to roadmap). Repository milestones and
-    issues #1–#4 briefly mirrored M1–M4; at the owner's request they were
-    permanently deleted, so the repository has no milestones or issues.
-  - **Validation:** the empty Project, its Status options and repository link,
-    and the absence of issues and milestones were read back through the GitHub
-    API. No code changed, so no test suites were run.
-  - **Human review:** the owner chose this arrangement in the 2026-10-26
-    session. The open M1 question (whether formatting runs count toward the
-    one-unfinished-run-per-work limit) still awaits confirmation.
-  - **Blockers:** none.
-  - **Next step:** continue M1 as planned.
-- **2026-10-28** — Studio web MVP progress, shared fixtures, and pre-release cleanup,
-  committed locally (not yet pushed).
-  - **Changes:** `studio/` (FastAPI server, background worker, React/TypeScript
-    frontend: works explorer with intake, typed metadata form and versioned
-    format panel; run inspector; chapter viewer with live status, every chapter
-    decision, item-by-item review screen); fixtures moved to `fixtures/`
-    (北京一夜 added under MIT, Lin Shaw); versioned accepted output with
-    `run.json`; implied closure for translation advice and map exceptions;
-    internal passage map with engine-checked coverage; mandatory front-matter
-    unit carrying the metadata review; metadata field groups and blank record
-    at intake; prior-record consolidation; one unfinished run per work with no
-    read-only rule; removal of version-1 work records, pre-M1 run shims,
-    `import_run`, and legacy evals cases; licensing split (PolyForm
-    Noncommercial for `workflow/` and `studio/`, Crossborder Art & Media LLC).
-  - **Milestones:** M3 `in_progress`; UX enhancement item `planned`; M1 rules
-    corrected (no read-only workflows).
-  - **Validation:** workflow, web, and studio case tests 58 passed (1 live case
-    skipped); prepare-manuscript skill 24; evals 127 passed (7 skipped);
-    browser smoke test through the chapter viewer; live studio runs translated
-    北京一夜 and 黑松石 to final acceptance.
-  - **Human review:** the owner directed and exercised each change in the
-    studio; no line-by-line code review is recorded.
-  - **Next step:** UX enhancement item, step 1 (unified decision panel).
-- **2026-10-27** — M1 generalized engine and first M4 literary editing
-  template, committed locally (not yet pushed).
-  - **Changes:** the M1 gap review (decisions recorded in
-    [m1-design.md](workflow/docs/m1-design.md) section 13: no reuse of
-    published preparation, formatting counts toward the one-run limit,
-    work-level metadata edits, import publishes completed translations) and
-    the complete M1 implementation: template registry and `template.json`
-    files, engine split, template-declared gates, per-chapter iterations,
-    retry and chapter/stage/workflow restarts, engine-update check, per-work
-    library, service API and index, thin CLI with `--server-root`, formatting
-    as a derived template, and the test-only template. M4's first iteration
-    adds optional stages, several chapter stages with a concluding whole-book
-    step, gate commands, and `literary-editing-v1` with `EditingEngine`. The
-    E2E launcher creates runs through the service; its delegated-mode prompt
-    now covers editing gates.
-  - **Milestones:** M1 moves to `done` at the owner's direction. M4 moves to
-    `in_progress` with its agreed scope; the remaining M4 work is listed in
-    its section. M2 and M3 are unaffected.
-  - **Validation:** with Python 3.12.10: `workflow.tests.test_workflow` 52
-    passed, `test_validate_preparation` 25 passed, `test_approval_review` 28
-    passed (1 skip), pyflakes clean on the changed workflow modules. Live
-    Codex 0.163.0 E2E runs completed: translation of 《刺秦》 with DOCX
-    formatting (all automated checks passed), and literary editing of the
-    translated text with developmental skipped and DOCX formatting (all
-    automated checks passed; no edits were proposed, so the apply path was not
-    exercised live). Human-only evidence checks and literary quality were not
-    reviewed.
-  - **Human review:** the owner answered the M1 and M4 design questions in
-    the 2026-10-27 session and marked M1 done. No separate line-by-line code
-    review is recorded.
-  - **Notes:** local, gitignored E2E cases and fixtures
-    (`workflow/tests/cases/*-ciqing-001/`, `workflow/tests/fixtures/`) were
-    updated or added and are not committed.
-  - **Blockers:** none.
-  - **Next step:** define the remaining M4 details (developmental stage,
-    completed-chapter restarts, linking an edited translation to its source
-    work) and exercise the apply path in a live editing run.
