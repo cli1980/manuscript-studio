@@ -47,8 +47,9 @@ export function RunView({ runId }: { runId: string }) {
       {run.superseded_by && <div className="banner">Restarted as <a href={`#/runs/${run.superseded_by}`}>{run.superseded_by.slice(0, 8)}</a>.</div>}
       <div className="facts">
         <div><span>Status</span><Status value={run.status} />{live && <span className="tag busy">agent working</span>}{run.worker.paused && <span className="tag">paused</span>}</div>
-        <div><span>Stage</span>{run.stage}{run.chapter_id ? ` · ${run.chapter_id}` : ""}</div>
+        <div><span>Stage</span>{run.stage}{run.chapter_id ? ` · ${run.chapter_id === "_whole" ? "whole-book review" : run.chapter_id}` : ""}</div>
         <div><span>Progress</span>{run.progress ? `${run.progress.completed}/${run.progress.total} chapters` : "—"}</div>
+        {run.whole_book_status && <div><span>Whole book</span>{run.whole_book_status.replaceAll("_", " ")}</div>}
         <div><span>Stages</span>{run.stages.map((s) => <span key={s} className={`tag ${s === run.stage ? "busy" : ""}`}>{s}</span>)}</div>
         {!!run.passes?.length && <div><span>Passes</span>{run.passes.map((p) => (
           <span key={p.number} className={`tag ${p.accepted ? "" : "busy"}`}>
@@ -102,10 +103,18 @@ function Controls({ run, actions, perform }: { run: RunDetail; actions: Record<s
         onClick={() => perform(() => api.action(run.id, "retry", { refresh_gate: true }))}>Refresh review</button>
       <button disabled={disabled("restart_chapter")} title={title("restart_chapter")}
         onClick={() => {
-          const chapter = window.prompt("Chapter ID to restart", run.chapter_id ?? "");
+          const chapter = window.prompt("Chapter ID to restart", run.chapter_id === "_whole" ? "" : run.chapter_id ?? "");
           const reason = chapter && window.prompt("Reason for restarting this chapter");
           if (chapter && reason && confirmed("restart_chapter")) perform(() => api.action(run.id, "restart-chapter", { chapter_id: chapter, reason }));
         }}>Restart chapter</button>
+      {run.workflow === "literary-translation" && run.whole_book_status && run.whole_book_status !== "pending" && (
+        <button disabled={disabled("restart_chapter")} onClick={() => {
+          const reason = window.prompt("Reason for restarting whole-book consistency");
+          if (reason && window.confirm("Restart whole-book consistency? Completed chapter outputs are kept.")) {
+            perform(() => api.action(run.id, "restart-chapter", { chapter_id: "_whole", reason }));
+          }
+        }}>Restart consistency</button>
+      )}
       <button disabled={disabled("restart_stage")} title={title("restart_stage")}
         onClick={() => {
           const stage = window.prompt(`Stage to restart (${run.stages.join(", ")})`, run.stage);

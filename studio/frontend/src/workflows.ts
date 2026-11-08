@@ -14,6 +14,8 @@ export interface Pane {
   badge?: string;           // e.g. "awaiting your approval"
   meta?: string;            // e.g. attempt and hash
   awaiting?: boolean;
+  // The exact bound text shown for this decision; other panels may link here instead of repeating it.
+  reviewTarget?: string;
   // Inline comments can be drafted on this pane; they are sent as feedback on the pending decision.
   commentKey?: string;
   commentLabel?: string;    // how the feedback names the text, e.g. "the translation"
@@ -23,6 +25,7 @@ export interface Pane {
 export interface DecisionCopy {
   heading: string;
   intro?: string;
+  message?: string;
   commandLabels?: Record<string, string>;
 }
 
@@ -121,12 +124,17 @@ export class TranslationWorkflowUI extends ChapterViewerWorkflowUI {
   override stageVerb(stage: string) { return stage === "translate" ? "translating" : super.stageVerb(stage); }
 
   override decisionCopy(gate: Gate): DecisionCopy {
+    if (gate.kind === "translation_consistency") return {
+      heading: "Whole-book consistency review",
+      intro: "All chapters are translated. Review objective inconsistencies across the book. After closure, approved fixes "
+        + "are applied and checked against the source before final acceptance.",
+      commandLabels: { "confirm consistency": "Confirm no inconsistencies" },
+    };
     if (gate.kind !== "chapter_sanity") return super.decisionCopy(gate);
     return {
       heading: `Approve ${gate.chapter_id}`,
-      intro: gate.sheet ? "The final check proposes edits. Decide each one; the chapter is approved at closure."
-        : "Read the translation beside the original, then approve it, or select text in the translation to comment on "
-          + "it and send your comments (comments are feedback and do not approve the chapter).",
+      intro: gate.sheet ? "The final check proposes edits. Decide each one; the chapter is approved at closure." : undefined,
+      message: gate.sheet ? undefined : "No textual changes proposed. The chapter is ready for review. Approve it or send feedback.",
       commandLabels: { "approve chapter": "Approve chapter" },
     };
   }
@@ -136,15 +144,19 @@ export class TranslationWorkflowUI extends ChapterViewerWorkflowUI {
   override afterReply(gate: Gate, text: string) {
     // Only the approval command or the edit sheet's closure approves the chapter; item decisions do not.
     const approved = gate.kind === "chapter_sanity" && (gate.commands.includes(text) || text === gate.sheet?.submission.closure_command);
-    return approved ? `${gate.chapter_id} is approved. Translation continues with the next chapter; you will be brought back `
-      + "here when it is ready." : null;
+    return approved ? `${gate.chapter_id} is approved. The workflow continues automatically; after all chapters are saved, `
+      + "the whole-book consistency review starts here." : null;
   }
 
   override panes(chapter: ChapterDetail, gate: Gate | null): Pane[] {
     const source: Pane = { key: "source", title: "Original", text: chapter.prepared_text };
-    if (gate?.kind === "chapter_sanity" && gate.binding_text != null) {
-      return [source, { key: "draft", title: "Translation", text: gate.binding_text, badge: "awaiting your approval",
-        awaiting: true, commentKey: gate.sheet ? undefined : `comments:${gate.id}:draft`, commentLabel: "the translation" }];
+    if (gate && ["chapter_sanity", "translation_issue"].includes(gate.kind) && gate.binding_text != null) {
+      const chapterApproval = gate.kind === "chapter_sanity";
+      return [source, { key: "draft", title: chapterApproval ? "Translation" : "Translation under review",
+        text: gate.binding_text, badge: chapterApproval ? "awaiting your approval" : "provisional text",
+        awaiting: true, reviewTarget: "reviewed-translation",
+        commentKey: chapterApproval && !gate.sheet ? `comments:${gate.id}:draft` : undefined,
+        commentLabel: "the translation" }];
     }
     const done = chapter.outputs.map((o) => ({ key: o.stage, title: "Translation", text: o.text, meta: sizeOf(o) }));
     return [source, ...(done.length ? done : [{ key: "translation", title: "Translation", text: null, note: "Not translated yet." }])];

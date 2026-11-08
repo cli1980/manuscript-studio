@@ -11,6 +11,7 @@ export interface Action {
 export interface SheetDecision { id: string; command: string; label: string; requires_note: boolean; effect: string }
 export interface SheetItem {
   id: string;
+  chapter_id?: string;
   summary: string;
   details: { label: string; value: string }[];
   status: string;
@@ -74,6 +75,7 @@ export interface RunSummary {
   attempts: number;
   error: string | null;
   progress: { completed: number; total: number } | null;
+  whole_book_status?: string | null;
   passes?: Pass[];
   finalized: boolean;
   engine_current: boolean;
@@ -146,11 +148,13 @@ export interface ChapterIndex {
 export interface ChapterDetail {
   chapter: { chapter_id: string; order: number; title: string | null; role: string };
   prepared_text: string;
-  outputs: { stage: string; title?: string; attempt: number | null; sha256: string; text: string }[];
+  outputs: { stage: string; title?: string; attempt: number | null; sha256: string; text: string;
+    consistency_changes?: { id: string; before: string; after: string; reason: string; receipt_id: string }[] }[];
   passage_map: { passages: { id: string; first_paragraph: number; last_paragraph: number }[];
     exceptions: { id: string; kind: string; first_paragraph: number; last_paragraph: number; reason: string }[] } | null;
   // Completed front-matter reviews: the shared metadata and each workflow's own (e.g. translation brief).
   reviews: { kind: string; record_revision?: number; created_at?: string; decision_source: string;
+    current_documents?: { path: string; sha256: string; text: string }[];
     documents: { path: string; sha256: string; text: string }[] }[];
 }
 

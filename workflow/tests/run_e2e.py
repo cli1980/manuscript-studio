@@ -424,8 +424,23 @@ def write_report(engine, case):
                     require(maps and min(maps) < max(sanity),
                             f"Passage-map exceptions for {chapter_id} lack a closure before chapter approval.")
                     reviewed += 1
+            whole = next((item for item in state["iterations"] if item["chapter_id"] == "_whole"), None)
+            if state["status"] in ("WAITING_FOR_ACCEPTANCE", "COMPLETED") or state.get("acceptance"):
+                require(whole and whole["status"] == "completed" and whole.get("verification"),
+                        "Final acceptance requires completed, verified whole-book consistency.")
+                review = whole.get("review") or {}
+                closure = next((r for r in state["receipts"] if r["id"] == review.get("receipt_id")), None)
+                require(closure and closure["gate"]["kind"] == "translation_consistency"
+                        and closure["parsed"]["type"] == "final-closure",
+                        "Missing separate closure of whole-book consistency.")
+                for output in state["outputs"]:
+                    for change in output.get("consistency_changes", []):
+                        require(any(r["id"] == change["receipt_id"] and r["gate"]["kind"] == "translation_consistency"
+                                    and r["parsed"]["type"] == "final-closure" for r in state["receipts"]),
+                                f"Consistency fix {change['id']} lacks its closure receipt.")
             return (f"Every completed chapter has a bound chapter approval; {reviewed} chapter(s) with passage-map "
-                    "exceptions closed them first. Drafting behavior needs domain review.")
+                    "exceptions closed them first. Final acceptance includes whole-book consistency closure. "
+                    "Drafting behavior needs domain review.")
 
         check("closure-receipts", receipts, ready=bool(state["outputs"]))
 

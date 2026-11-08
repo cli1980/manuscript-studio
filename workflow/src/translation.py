@@ -6,8 +6,8 @@ import json
 import re
 import sys
 
-from .prepared import PreparedManuscriptEngine
-from .storage import digest, read_bytes
+from .prepared import WHOLE, PreparedManuscriptEngine
+from .storage import digest, now, read_bytes
 
 CJK = ("zh", "ja", "ko")
 UNIT_NAMES = {"cjk_chars": "characters", "words": "words"}
@@ -68,6 +68,19 @@ PROMPT = (
     "Domain state remains authoritative; user_receipt is a validated user response, not "
     "permission to change unrelated content. Apply it once, record it, and resume from "
     "saved checkpoints, even if this is a replacement thread.\n\n"
+    "WHOLE-BOOK CONSISTENCY (whole_book=true): all chapters have been approved and saved. "
+    "Read references/whole-book-consistency.md in the literary-translation skill. Review all supplied chapters "
+    "against their sources, glossary, and voice. Do not run passage drafting or chapter sanity gates. "
+    "The consistency context gives the frozen chapter versions, candidate paths, plan_path, and report_path. "
+    "Keep every existing output and continuity file unchanged. Save the complete JSON plan and one approval "
+    "sheet, then request translation_consistency with binding_path=plan_path and review_path=the sheet. "
+    "With no findings, save an empty changes list, state 'No inconsistencies found', and request the same gate "
+    "without a sheet for explicit 'confirm consistency'. Resolve all proposed items in one submission; "
+    "then present a new sheet revision with receipt-backed dispositions for separate closure. "
+    "Only consistency.review authorizes application: write candidate copies containing exactly the approved "
+    "replacements, re-verify affected chapters against their sources, and save report_path. Return completed "
+    "with state_path=the saved review narrative and output_path=null. The engine verifies and promotes candidates "
+    "and only then offers final acceptance. Questions or failed verification never authorize extra edits.\n\n"
     "RETURN CONTRACT: final message is JSON matching the supplied schema; use null for "
     "unused fields. All paths are workspace-relative with forward slashes. state_path is "
     "the saved domain review/state Markdown. needs_human_input must name a gate: "
@@ -96,7 +109,7 @@ PROMPT = (
     "For empty chapter diff, save 'No textual changes proposed' in the sanity review and "
     "request explicit chapter approval. message must contain the full human-facing "
     "translation/review/question required by the skill, not merely a file link. "
-    "completed for translation requires approved map and chapter sanity review, finalized "
+    "completed for an individual chapter (whole_book=false) requires approved map and chapter sanity review, finalized "
     "passages, verified assembly, and output_path for the durable English chapter. "
     "Do not claim completion for unresolved choices. Shared summaries do not replace "
     "these records. The orchestrator handles final artifact acceptance/export.\n\n"
@@ -143,7 +156,8 @@ class TranslationEngine(PreparedManuscriptEngine):
     def stage_prompt(self, state, stage):
         agent = state["definition"]["agents"][stage["agent"]]
         item = self.current_iteration(state) if stage.get("iterate") else None
-        chapter = next(c for c in state["chapters"] if c["chapter_id"] == item["chapter_id"]) if item else None
+        whole = bool(item and item["chapter_id"] == WHOLE)
+        chapter = next(c for c in state["chapters"] if c["chapter_id"] == item["chapter_id"]) if item and not whole else None
         context = {
             "stage": stage["id"], "source": str(self.root / "input" / state["source_name"]),
             "manuscript_language": state["manuscript_language"], "target_language": state["target_language"],
@@ -152,6 +166,8 @@ class TranslationEngine(PreparedManuscriptEngine):
             "work_record": state["prepared"]["work_record"] if state["prepared"] else None,
             "chapter": chapter, "chapter_attempt": item["attempt"] if item else None,
             "chapter_workdir": self.chapter_workdir(state, item)[0] if item else None,
+            "whole_book": whole,
+            "consistency": self.consistency_context(state, item) if whole else None,
             "passage_limit": self.passage_limit(state),
             "domain_state": state["domain_state"],
             "map_exceptions_approval": state["approvals"].get("map_exceptions"),
@@ -224,6 +240,12 @@ class TranslationEngine(PreparedManuscriptEngine):
             raise ValueError("The approved passage map changed.")
 
     def on_waiting(self, state, stage, result):
+        whole = self.current_iteration(state) if stage.get("iterate") else None
+        if whole and whole["chapter_id"] == WHOLE:
+            if result["gate"] not in ("translation_consistency", "question"):
+                raise ValueError("The whole-book job requires a consistency review, not a chapter gate.")
+        elif result["gate"] == "translation_consistency":
+            raise ValueError("Consistency review starts only after all chapters are completed.")
         if result["gate"] == "translation_brief" and "brief_samples" not in state["approvals"]:
             raise ValueError("Collect the user's sample choices through a brief_samples sheet before presenting "
                              "the translation brief.")
@@ -233,6 +255,35 @@ class TranslationEngine(PreparedManuscriptEngine):
             self.require_map(state)
 
     def on_gate(self, state, gate, result):
+        if gate["kind"] == "translation_consistency":
+            plan = self.consistency_plan(state, gate["binding"])
+            if not plan["changes"]:
+                if gate["sheet"] or "no inconsistencies found" not in gate["message"].casefold():
+                    raise ValueError("An empty consistency review must state 'No inconsistencies found' without a sheet.")
+                self.current_iteration(state).pop("review", None)
+                return
+            if not gate["sheet"]:
+                raise ValueError("Proposed consistency fixes require an approval sheet.")
+            sheet = json.loads(self.store.content(gate["sheet"]))
+            changes = {change["id"]: change for change in plan["changes"]}
+            if {item["id"] for item in sheet["items"]} != set(changes):
+                raise ValueError("The consistency sheet must present every planned fix exactly once.")
+            decisions = {d["id"]: d for d in sheet["decisions"]}
+            for name in ("approve", "reject"):
+                if name not in decisions or decisions[name]["effect"] != "resolve" or decisions[name]["command"] != name:
+                    raise ValueError("Consistency reviews require explicit approve and reject decisions.")
+            if any(d["effect"] == "resolve" and d["id"] not in ("approve", "reject") for d in sheet["decisions"]):
+                raise ValueError("Only approve and reject can resolve a consistency fix.")
+            for entry in sheet["items"]:
+                change = changes[entry["id"]]
+                rows = {row["label"]: row["value"] for row in entry["details"]}
+                required = {"Chapter": change["chapter_id"], "Original": change["source_quote"],
+                            "Before": change["before"], "After": change["after"], "Reason": change["reason"]}
+                if any(rows.get(key) != value for key, value in required.items()) or not {
+                    "approve", "reject"
+                }.issubset(entry["allowed_decisions"]):
+                    raise ValueError(f"Consistency item {entry['id']} must show its exact chapter, source, fix, and reason.")
+            self.current_iteration(state).pop("review", None)
         if gate["kind"] == "brief_samples":
             # The studio's sample poll shows each original beside its variants, so the sheet must name them.
             sheet = json.loads(self.store.content(gate["sheet"]))
@@ -290,3 +341,160 @@ class TranslationEngine(PreparedManuscriptEngine):
     def output_language(self, state):
         return state["target_language"]
 
+    # The concluding job reviews immutable chapter snapshots. It writes separate candidates;
+    # only a successful, approved verification promotes them into the run's output list.
+    def consistency_context(self, state, item):
+        workdir = self.chapter_workdir(state, item)[0].rstrip("/")
+        folder = f"translation/translated_english/consistency-{state['stage_epochs'].get(state['stage'], 1)}-{item['attempt']}"
+        chapters = {c["chapter_id"]: c for c in state["chapters"]}
+        return {
+            "plan_path": f"{workdir}/plan.json", "report_path": f"{workdir}/verification.json",
+            "chapters": [{"chapter_id": chapter_id, "source_path": chapters[chapter_id]["path"],
+                          "source_sha256": chapters[chapter_id]["sha256"], "translation": artifact,
+                          "candidate_path": f"{folder}/{chapter_id}.md"}
+                         for chapter_id, artifact in item["baseline"].items()],
+            "review": item.get("review"),
+        }
+
+    def before_turn(self, state):
+        super().before_turn(state)
+        item = self.current_iteration(state) if self.stage_def(state).get("iterate") else None
+        if item and item["chapter_id"] == WHOLE and "baseline" not in item:
+            if len(state["outputs"]) != len(state["chapters"]):
+                raise ValueError("Consistency requires completed outputs for every chapter.")
+            item["baseline"] = {output["chapter_id"]: dict(output) for output in state["outputs"]}
+
+    def verify_extra(self, state):
+        super().verify_extra(state)
+        item = self.current_iteration(state) if self._stage_or_empty(state).get("iterate") else None
+        if item and item["chapter_id"] == WHOLE and item.get("baseline"):
+            for path, snapshot in (item.get("continuity_before") or {}).items():
+                if snapshot and digest(read_bytes(self.file(path))) != snapshot["sha256"]:
+                    raise ValueError("Continuity files are frozen during whole-book consistency review.")
+
+    def consistency_plan(self, state, binding):
+        item = self.current_iteration(state)
+        context = self.consistency_context(state, item)
+        if binding["path"] != context["plan_path"]:
+            raise ValueError("Save the consistency plan at the supplied plan_path.")
+        plan = json.loads(self.store.content(binding))
+        baseline = item["baseline"]
+        if not isinstance(plan, dict) or not isinstance(plan.get("chapters"), dict) \
+                or set(plan["chapters"]) != set(baseline) or not isinstance(plan.get("changes"), list):
+            raise ValueError("The consistency plan must cover every chapter and list its changes.")
+        chapters = {c["chapter_id"]: c for c in state["chapters"]}
+        for chapter_id, artifact in baseline.items():
+            row = plan["chapters"][chapter_id]
+            if not isinstance(row, dict) or row.get("translation_sha256") != artifact["sha256"] \
+                    or row.get("source_sha256") != chapters[chapter_id]["sha256"] \
+                    or not isinstance(row.get("evidence"), str) or not row["evidence"].strip():
+                raise ValueError(f"Consistency coverage for {chapter_id} needs matching hashes and review evidence.")
+        seen, spans = set(), {}
+        for change in plan["changes"]:
+            keys = ("id", "chapter_id", "source_quote", "before", "after", "reason")
+            if not isinstance(change, dict) or any(not isinstance(change.get(k), str) or not change[k].strip() for k in keys):
+                raise ValueError("Each consistency fix needs an ID, chapter, source quote, before/after text, and reason.")
+            chapter_id, change_id = change["chapter_id"], change["id"]
+            if not re.fullmatch(r"C\d{3,}", change_id) or change_id in seen or chapter_id not in baseline:
+                raise ValueError("Consistency fix IDs must be unique C### IDs on known chapters.")
+            seen.add(change_id)
+            source = self.store.content(state["prepared"]["files"][chapters[chapter_id]["path"]]).decode("utf-8")
+            text = self.store.content(baseline[chapter_id]).decode("utf-8")
+            if change["source_quote"] not in source or text.count(change["before"]) != 1 or change["before"] == change["after"]:
+                raise ValueError(f"Fix {change_id} needs an exact source quote and a unique, changed English span.")
+            start = text.index(change["before"])
+            end = start + len(change["before"])
+            if any(start < old_end and end > old_start for old_start, old_end in spans.get(chapter_id, [])):
+                raise ValueError("Consistency fixes cannot overlap; combine them into one proposal.")
+            spans.setdefault(chapter_id, []).append((start, end))
+        return plan
+
+    def on_closure(self, state, gate, receipt):
+        super().on_closure(state, gate, receipt)
+        if gate["kind"] == "translation_consistency":
+            items = json.loads(self.store.content(gate["sheet"]))["items"] if gate["sheet"] else []
+            self.current_iteration(state)["review"] = {
+                "plan": gate["binding"], "sheet": gate["sheet"], "receipt_id": receipt["id"],
+                "approved_ids": [item["id"] for item in items if item["response"]["decision"] == "approve"],
+            }
+
+    def on_completed(self, state, stage, result):
+        item = self.current_iteration(state) if stage.get("iterate") else None
+        if not item or item["chapter_id"] != WHOLE:
+            return super().on_completed(state, stage, result)
+        review = item.get("review")
+        if not review or "translation_consistency" not in state["approvals"]:
+            raise ValueError("Whole-book consistency cannot complete before separate review closure.")
+        if result["output_path"] is not None:
+            raise ValueError("A whole-book job returns output_path=null.")
+        plan = self.consistency_plan(state, review["plan"])
+        context = self.consistency_context(state, item)
+        changes = [change for change in plan["changes"] if change["id"] in review["approved_ids"]]
+        report = self.checkpoint(context["report_path"], "consistency_verification")
+        verified = json.loads(self.store.content(report)).get("chapters")
+        changed_ids = {change["chapter_id"] for change in changes}
+        if not isinstance(verified, dict) or set(verified) != changed_ids:
+            raise ValueError("Re-verification must cover exactly the chapters with approved consistency fixes.")
+        promoted = {}
+        for chapter in context["chapters"]:
+            chapter_id = chapter["chapter_id"]
+            if chapter_id not in changed_ids:
+                continue
+            baseline = item["baseline"][chapter_id]
+            before = self.store.content(baseline).decode("utf-8")
+            fixes = [change for change in changes if change["chapter_id"] == chapter_id]
+            expected = before
+            for fix in sorted(fixes, key=lambda fix: before.index(fix["before"]), reverse=True):
+                start = before.index(fix["before"])
+                expected = expected[:start] + fix["after"] + expected[start + len(fix["before"]):]
+            candidate = self.checkpoint(chapter["candidate_path"], "translation")
+            if self.store.content(candidate) != expected.encode("utf-8"):
+                raise ValueError(f"Consistency candidate {chapter_id} differs from the exact approved fixes.")
+            evidence = verified[chapter_id]
+            if not isinstance(evidence, dict) or evidence.get("source_sha256") != chapter["source_sha256"] \
+                    or evidence.get("output_sha256") != candidate["sha256"] \
+                    or not isinstance(evidence.get("evidence"), str) or not evidence["evidence"].strip():
+                raise ValueError(f"Re-verification of {chapter_id} needs matching hashes and source comparison evidence.")
+            promoted[chapter_id] = {
+                **baseline, **candidate,
+                "consistency_changes": baseline.get("consistency_changes", []) + [
+                    {**fix, "receipt_id": review["receipt_id"], "before_sha256": baseline["sha256"],
+                     "after_sha256": candidate["sha256"], "verification_sha256": report["sha256"]}
+                    for fix in fixes],
+            }
+        for chapter_item in state["iterations"]:
+            if chapter_item["chapter_id"] in promoted:
+                chapter_item["output"] = promoted[chapter_item["chapter_id"]]
+        item.update(status="completed", completed_at=now(), output=None, verification=report,
+                    continuity_after=self.carry_snapshot(state, stage))
+        self._refresh_outputs(state)
+        state.update(thread_id=None, domain_state=None, approvals={})
+        self._advance_stage(state)
+
+    def on_restart_chapter(self, state, item):
+        whole = next(i for i in state["iterations"] if i["chapter_id"] == WHOLE)
+        previous = {key: whole[key] for key in ("baseline", "review", "verification", "completed_at") if key in whole}
+        history = whole["restarts"]
+        if previous:
+            history.append({"consistency": previous, "superseded_at": now(), "chapter_id": item["chapter_id"]})
+        attempt = whole["attempt"]
+        if item is not whole:
+            if whole["status"] != "pending":
+                archive = self._new_archive(f"consistency-{attempt}")
+                for path in self.chapter_workdir(state, whole):
+                    self._archive(path, archive)
+            attempt += 1
+        whole.clear()
+        whole.update(self._new_iteration({"chapter_id": WHOLE, "order": len(state["chapters"]) + 1},
+                                        attempt, self.iterating_stage(state)["id"]), restarts=history)
+        state.update(thread_id=None, domain_state=None, approvals={}, next_input=None, gate=None)
+
+    def run_record(self, state, version):
+        record = super().run_record(state, version)
+        outputs = {output["chapter_id"]: output for output in state["outputs"]}
+        for chapter in record["chapters"]:
+            chapter["consistency_changes"] = outputs[chapter["chapter_id"]].get("consistency_changes", [])
+        whole = next(item for item in state["iterations"] if item["chapter_id"] == WHOLE)
+        record["consistency"] = {"attempt": whole["attempt"], "review": whole.get("review"),
+                                 "verification": whole.get("verification"), "completed_at": whole["completed_at"]}
+        return record

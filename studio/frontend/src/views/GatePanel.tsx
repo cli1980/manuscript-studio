@@ -7,6 +7,7 @@ import { clearComments, CommentSummary, composeComments, loadComments, type Inli
 import { MetadataTable } from "./Metadata";
 import { AgentFeedback } from "./AgentFeedback";
 import { SamplePoll } from "./SamplePoll";
+import type { ReviewedText } from "../reviewText";
 
 type Perform = (op: () => Promise<RunDetail>) => void;
 // Sends an exact reply; `sent` runs only after the server accepted it (e.g. to clear drafted comments).
@@ -14,7 +15,7 @@ type Reply = (text: string, sent?: () => void) => void;
 
 // The decision panel for every workflow: one frame (heading and explanation from the run's WorkflowUI), with a
 // body by the decision's shape. Bodies only compose the exact reply; the server validates it.
-export function GatePanel({ run, perform, inViewer = false, comments, commentLabel, onSent }: {
+export function GatePanel({ run, perform, inViewer = false, comments, commentLabel, onSent, reviewedText }: {
   run: RunDetail;
   perform: Perform;
   inViewer?: boolean;
@@ -22,6 +23,7 @@ export function GatePanel({ run, perform, inViewer = false, comments, commentLab
   comments?: InlineComment[];
   commentLabel?: string;
   onSent?: (gate: Gate, text: string) => void;
+  reviewedText?: ReviewedText;
 }) {
   const ui = workflowUI(run.workflow);
   // The workflow decides where its decisions are made; elsewhere the panel only links there.
@@ -57,8 +59,9 @@ export function GatePanel({ run, perform, inViewer = false, comments, commentLab
         : gate.sheet && gate.kind === "brief_samples"
         ? <SamplePoll key={gate.id} sheet={gate.sheet} onSubmit={reply} />
         // Every other exchange with the agent, in any workflow, uses the same feedback widget.
-        : <AgentFeedback gate={gate} agent={ui.agentName} onReply={reply} commandLabels={copy.commandLabels}
-            comments={comments} commentLabel={commentLabel} />}
+        : <AgentFeedback key={gate.id} gate={gate} agent={ui.agentName} onReply={reply} commandLabels={copy.commandLabels}
+            message={reviewedText ? copy.message : undefined}
+            comments={comments} commentLabel={commentLabel} runId={run.id} reviewedText={reviewedText} />}
     </div>
   );
 }

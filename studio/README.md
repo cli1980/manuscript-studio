@@ -21,7 +21,14 @@ when given with `--allow-origin` (for a local preview proxy).
   revision-bound confirmation, and final acceptance behind an explicit
   finalization notice. Every reply is validated by the same parser as the CLI.
 - **Chapters** (inside a run) shows each prepared chapter once preparation is
-  complete, beside every stage's completed output for that chapter.
+  complete, beside every stage's completed output for that chapter. Translation
+  decisions and final acceptance take place here. After the last chapter is
+  saved, whole-book consistency starts automatically. Its approval sheet stays
+  available while browsing chapters, with a source/translation link on each
+  finding. Decide every fix, then confirm separate closure; a clean review asks
+  for explicit confirmation that no inconsistencies were found. Approved fixes
+  are verified before final acceptance, and each chapter lists its applied
+  consistency fixes. Whole-book progress is separate from the chapter count.
 
 Run commands from the repository root. `npm run dev` (in `studio/frontend`) serves the frontend on port 5173 and proxies `/api` to the server.
 
@@ -50,6 +57,17 @@ repository's shared `fixtures/` folder.
 ```text
 .venv-workflow/Scripts/python.exe -m unittest studio.tests.test_cases -v
 ```
+
+The feedback-isolation browser check uses mocked API responses and no model.
+Build the frontend and install `studio/requirements-e2e.txt` and Playwright's
+Chromium browser, then run:
+
+```text
+STUDIO_BROWSER=1 .venv-workflow/Scripts/python.exe -m unittest studio.tests.test_cases.StudioCaseTests.test_feedback_stays_with_its_review -v
+```
+
+It checks that comments and general feedback do not carry into the next review
+without a page reload, and that failed submissions preserve the current draft.
 
 ### Live cases
 

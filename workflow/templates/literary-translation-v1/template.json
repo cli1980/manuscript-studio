@@ -26,6 +26,8 @@
     "map_exceptions": {"sheet": "required", "binding": "required", "closure": "implied"},
     "translation_issue": {"sheet": "required", "binding": "required", "closure": "implied"},
     "chapter_sanity": {"sheet": "optional", "binding": "required", "closure": "required", "item_binding": true},
+    "translation_consistency": {"sheet": "optional", "binding": "required", "closure": "required", "item_binding": true,
+                                "empty_command": "confirm consistency"},
     "brief_samples": {"sheet": "required", "binding": "required", "closure": "implied"},
     "translation_brief": {"documents": ["translation/glossary.md", "translation/voice.md", "translation/brief-samples.md"],
                           "command": "approve brief"},
@@ -39,12 +41,13 @@
     {"id": "brief", "kind": "agent", "agent": "translate", "front_matter": true,
      "gates": ["brief_samples", "translation_brief", "question"]},
     {"id": "translate", "kind": "agent", "agent": "translate", "iterate": "chapters",
-     "gates": ["map_exceptions", "translation_issue", "chapter_sanity", "continuation", "question"],
+     "gates": ["map_exceptions", "translation_issue", "chapter_sanity", "continuation", "question", "translation_consistency"],
      "owns": ["translation/"],
      "iteration": {
        "owns": ["translation/.literary-translation-work/{work_id}/{chapter_id}/"],
        "carry_forward": ["translation/glossary.md", "translation/voice.md", "translation/brief-samples.md"],
-       "restartable": true
+       "restartable": true,
+       "conclude": true
      }},
     {"id": "accept", "kind": "acceptance"},
     {"id": "export", "kind": "export"}

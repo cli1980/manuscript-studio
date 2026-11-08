@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Sheet, SheetItem } from "../api";
+import { repeatsReviewedText, type ReviewedText } from "../reviewText";
 
 // Reusable item-by-item review for every approval sheet (used by the shared AgentFeedback widget).
 // Decisions stay in the browser (per sheet revision) until one complete submission of every open item.
 
 type Draft = { decision: string; note: string };
 
-export function SheetReview({ sheet, onSubmit, busy = false }: {
+export function SheetReview({ sheet, onSubmit, busy = false, runId, reviewedText }: {
   sheet: Sheet;
   onSubmit: (text: string) => void;
   busy?: boolean;
+  runId?: string;
+  reviewedText?: ReviewedText;
 }) {
-  const key = `sheet-review:${sheet.sheet_id}:${sheet.revision}`;
+  const key = `sheet-review:${runId ?? "local"}:${sheet.sheet_id}:${sheet.revision}`;
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() => {
     try { return JSON.parse(localStorage.getItem(key) ?? "{}"); } catch { return {}; }
   });
@@ -73,8 +76,11 @@ export function SheetReview({ sheet, onSubmit, busy = false }: {
         <div className="review-card">
           <h3>{item.id} <span className="tag">{item.status_label ?? item.status}</span></h3>
           <p className="review-title">{item.summary}</p>
+          {runId && item.chapter_id && <p><a href={`#/runs/${runId}/chapters/${encodeURIComponent(item.chapter_id)}`}>
+            Read {item.chapter_id} beside its source</a></p>}
           <dl className="review-details">
-            {item.details.map((row, i) => <div key={i}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}
+            {item.details.filter((row) => !repeatsReviewedText(row.value, reviewedText))
+              .map((row, i) => <div key={i}><dt>{row.label}</dt><dd>{row.value}</dd></div>)}
           </dl>
           {item.status !== "resolved" ? (
             <>

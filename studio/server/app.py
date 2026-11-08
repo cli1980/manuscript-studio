@@ -154,6 +154,16 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         return [{"path": item["path"], "sha256": item["sha256"], "text": engine.store.content(item).decode("utf-8")}
                 for item in snapshots or []]
 
+    def current_documents(engine, state, approved):
+        """Working documents can evolve after approval; finalized runs use their accepted snapshots."""
+        accepted = {item["path"]: item for item in state.get("continuity", {}).values()}
+        result = []
+        for item in approved:
+            content = (engine.store.content(accepted.get(item["path"], item)) if engine.finalized(state)
+                       else engine.file(item["path"]).read_bytes())
+            result.append({"path": item["path"], "sha256": digest(content), "text": content.decode("utf-8")})
+        return result
+
     def run_detail(svc, run_id):
         detail = svc.get_run(run_id)
         detail["worker"] = workers.status(run_id)
@@ -167,6 +177,11 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
             if gate:
                 view = detail["gate"]
                 view["sheet"] = json.loads(engine.store.content(gate["sheet"])) if gate.get("sheet") else None
+                if gate["kind"] == "translation_consistency" and view["sheet"]:
+                    plan = json.loads(engine.store.content(gate["binding"]))
+                    locations = {change["id"]: change["chapter_id"] for change in plan["changes"]}
+                    for item in view["sheet"]["items"]:
+                        item["chapter_id"] = locations[item["id"]]
                 view["commands"] = engine.gate_commands(state, gate)
                 # When this request follows the reviewer's feedback, the gate message is the answer to it.
                 previous = next((r for r in reversed(state["receipts"]) if r["gate"]["kind"] == gate["kind"]
@@ -365,7 +380,8 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                     item = next((i for i in items if i["chapter_id"] == chapter_id), None)
                     if item and item["status"] == "completed" and item.get("output"):
                         outputs.append({"stage": stage, "attempt": item["attempt"], "sha256": item["output"]["sha256"],
-                                        "text": engine.store.content(item["output"]).decode("utf-8")})
+                                        "text": engine.store.content(item["output"]).decode("utf-8"),
+                                        "consistency_changes": item["output"].get("consistency_changes", [])})
             map_path = engine.workspace / "translation" / "maps" / f"{chapter_id}.json"
             passage_map = json.loads(map_path.read_text(encoding="utf-8")) if map_path.is_file() else None
             # Completed front-matter reviews: the shared metadata and each workflow's own (e.g. translation brief).
@@ -377,6 +393,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                 for kind, approval in (state.get("front_matter_approvals") or {}).items():
                     reviews.append({"kind": kind, "created_at": approval["created_at"],
                                     "decision_source": approval["decision_source"],
+                                    "current_documents": current_documents(engine, state, approval["documents"]),
                                     "documents": documents(engine, approval["documents"])})
             return {"chapter": {k: record.get(k) for k in ("chapter_id", "order", "title", "role", "sha256")},
                     "prepared_text": prepared, "outputs": outputs, "passage_map": passage_map, "reviews": reviews}

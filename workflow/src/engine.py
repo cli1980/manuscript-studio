@@ -979,6 +979,9 @@ class Engine:
             "handed_off_work")}
         result["chapter_id"] = iteration["chapter_id"] if iteration else None
         iterations = state.get("iterations") or []
+        whole = next((item for item in iterations if item["chapter_id"] == "_whole"), None)
+        result["whole_book_status"] = whole["status"] if whole else None
+        iterations = [item for item in iterations if item["chapter_id"] != "_whole"]
         result["progress"] = {"completed": sum(item["status"] == "completed" for item in iterations),
                               "total": len(iterations)} if iterations else None
         result["passes"] = [{"number": p["number"], "stage": p["stage"], "completed": bool(p["completed_at"]),

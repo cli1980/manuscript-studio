@@ -4,7 +4,7 @@ A local CLI over the generalized workflow engine (M1, see
 [docs/m1-design.md](docs/m1-design.md)). The literary translation template is:
 
 ```text
-prepare → metadata review → translate (per chapter, passage human gates) → accept → Markdown export
+prepare → metadata review → translation brief → translate (per chapter, passage human gates) → whole-book consistency → accept → Markdown export
                                                                                   ↓ optional derived run
                                                                          format → verified DOCX
 ```
@@ -237,9 +237,30 @@ approve them, or send corrections. The approved files become the chapter stage's
 starting point, also after a chapter-stage restart; the samples guide tone and
 voice and do not bind later passages.
 
+### Whole-book translation consistency
+
+After every chapter is approved and saved, the translation stage automatically
+runs a concluding whole-book job. It checks all source and English chapters
+against the glossary and voice records, and proposes only objective
+inconsistencies. The `translation_consistency` gate presents one approval sheet:
+decide every item, then close the resolved sheet separately. If there are no
+findings, explicitly reply `confirm consistency`.
+
+Approved fixes are written to separate candidate files. The engine checks that
+each candidate contains exactly the approved replacements and that the saved
+source-comparison report matches its source and output hashes before promoting
+any candidate. Rejected fixes leave the chapter unchanged. Each applied fix and
+its closure receipt are recorded with the chapter and in the accepted version's
+`run.json`. See the skill's
+[whole-book contract](../plugins/manuscript-studio/skills/literary-translation/references/whole-book-consistency.md).
+
+Retry resumes the consistency job. `restart-chapter --chapter _whole` restarts
+only that job; restarting any actual chapter invalidates its consistency review
+and schedules a new whole-book attempt after all chapters complete again.
+
 ### Final acceptance
 
-Once all chapters finish, `review` displays the immutable English outputs beside
+Once all chapters and the whole-book consistency pass finish, `review` displays the immutable English outputs beside
 their original prepared chapters, an acceptance ID, and the finalization notice.
 **Acceptance is irreversible:** it publishes the accepted chapters, glossary,
 voice, and accepted-output manifest to the work library and makes literary

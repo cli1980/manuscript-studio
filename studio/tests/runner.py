@@ -218,6 +218,8 @@ class CaseRunner:
             page.get_by_role("button", name="Accept and finalize").click()
         elif gate["kind"] == "chapter_sanity" and not sheet:
             page.get_by_role("button", name="Approve chapter").click()
+        elif gate["kind"] == "translation_consistency" and not sheet:
+            page.get_by_role("button", name="Confirm no inconsistencies").click()
         elif gate["kind"] == "metadata_review":
             page.get_by_role("button", name=re.compile(r"^Confirm metadata")).click()
         elif gate.get("options"):

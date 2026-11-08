@@ -10,20 +10,26 @@ import { clearComments, type InlineComment } from "./CommentableText";
 // panes, and the decision slots; the run's WorkflowUI decides what differs (the panes, decision wording, statuses).
 export function Chapters({ runId, chapterId }: { runId: string; chapterId?: string }) {
   const index = useLoad(() => api.chapters(runId), [runId], 4000);
-  const detail = useLoad(() => (chapterId ? api.chapter(runId, chapterId) : Promise.resolve(null)), [runId, chapterId]);
+  const isFrontMatter = index.data?.chapters.find((chapter) => chapter.chapter_id === chapterId)?.role === "front_matter";
+  const detail = useLoad(() => (chapterId ? api.chapter(runId, chapterId) : Promise.resolve(null)), [runId, chapterId],
+    isFrontMatter ? 4000 : undefined);
   const run = useLoad(() => api.run(runId), [runId], 4000);
   const ui = workflowUI(run.data?.workflow);
   const [notice, setNotice] = useState<string | null>(null);
-  const [comments, setComments] = useState<InlineComment[]>([]);
+  // Annotation callbacks can arrive after navigation; keep each draft under its own review key.
+  const [commentsByKey, setCommentsByKey] = useState<Record<string, InlineComment[]>>({});
   const [exchangeError, setExchangeError] = useState<string | null>(null);
-  // A decision on a chapter is made beside that chapter's text; the rest (preparation questions, pass choices,
-  // whole-book passes) at the top.
+  // Chapter decisions and translation consistency follow the reading panes; preparation questions and
+  // other unattached decisions stay at the top.
   const waiting = run.data?.status === "WAITING_FOR_HUMAN" && run.data.gate ? run.data.gate : null;
   const pending = waiting?.chapter_id && waiting.chapter_id !== WHOLE_BOOK ? waiting : null;
   const unattached = !!waiting && !pending;
+  const bottomReview = unattached && waiting?.kind === "translation_consistency";
   const here = pending && pending.chapter_id === chapterId ? pending : null;
   const panes = detail.data ? ui.panes(detail.data, here) : [];
   const commentable = panes.find((pane) => pane.commentKey);
+  const comments = commentable?.commentKey ? commentsByKey[commentable.commentKey] ?? [] : [];
+  const reviewed = panes.find((pane) => pane.reviewTarget && pane.text != null);
   const data = index.data;
   const stageTitle = (stage: string) => data?.stage_info?.[stage]?.title ?? stage;
   const stageKind = (stage: string) => data?.stage_info?.[stage]?.stage ?? stage;
@@ -63,9 +69,15 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
   const decision = (beside: boolean) => run.data && (
     <>
       <GatePanel run={run.data} inViewer perform={(operation) => void performExchange(operation)}
+        reviewedText={beside && reviewed?.reviewTarget && reviewed.text != null
+          ? { text: reviewed.text } : undefined}
         comments={beside && commentable ? comments : undefined} commentLabel={commentable?.commentLabel}
         onSent={(gate, text) => {
-          if (beside && commentable?.commentKey) clearComments(commentable.commentKey);
+          if (beside && commentable?.commentKey) {
+            const key = commentable.commentKey;
+            clearComments(key);
+            setCommentsByKey((old) => ({ ...old, [key]: [] }));
+          }
           setNotice(ui.afterReply(gate, text));
         }} />
       <ErrorBox error={exchangeError} />
@@ -83,7 +95,7 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
       <h1>Chapters</h1>
       {run.data && <RunStatusBar run={run.data} />}
       <ErrorBox error={index.error} />
-      {unattached && decision(false)}
+      {unattached && !bottomReview && decision(false)}
       {data && !data.prepared && !unattached && <p className="muted">The agent is preparing the manuscript; chapters appear here
         once preparation completes, and you are brought to each decision as it comes up.</p>}
       {data && data.prepared && (
@@ -98,11 +110,11 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
               </li>
             ))}
             {Object.entries(data.whole_book).filter(([, status]) => status).map(([stage, status]) => (
-              <li key={stage} className="muted">Whole book, {stageTitle(stage)}: {status?.replaceAll("_", " ")}</li>
+              <li key={stage} className="muted">{run.data?.workflow === "literary-translation"
+                ? "Whole-book consistency" : `Whole book, ${stageTitle(stage)}`}: {status?.replaceAll("_", " ")}</li>
             ))}
           </ol>
           <div>
-            {run.data?.status === "WAITING_FOR_ACCEPTANCE" && run.data.acceptance && decision(false)}
             {!chapterId && pending && <p><a className="button" href={`#/runs/${runId}/chapters/${encodeURIComponent(pending.chapter_id ?? "")}`}>
               Open {pending.chapter_id} for your decision</a></p>}
             {notice && <div className="banner final">{notice}</div>}
@@ -123,22 +135,49 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
                 {detail.data.reviews?.length > 0 && (
                   <div className="panel reviews">
                     {detail.data.reviews.map((review) => (
-                      <details key={review.kind}>
-                        <summary><span className="tag ready">{review.kind === "metadata_review"
-                          ? `metadata confirmed (revision ${review.record_revision})`
-                          : `${reviewName(review.kind)} approved`}</span>{" "}
-                          <span className="muted">{review.decision_source !== "human" ? review.decision_source : ""} {when(review.created_at)}</span></summary>
-                        {review.kind === "metadata_review"
-                          ? <p className="muted">The metadata is kept on the <a href={`#/works/${encodeURIComponent(run.data?.work_id ?? "")}`}>work page</a>.</p>
-                          : <Documents documents={review.documents} />}
-                      </details>
+                      <div key={review.kind}>
+                        {!!review.current_documents?.length && (
+                          <div className="current-documents">
+                            <h3>{run.data?.finalized ? "Final" : "Current"} {reviewName(review.kind)}</h3>
+                            <p className="muted">{run.data?.finalized
+                              ? "Documents saved with the accepted output."
+                              : "Latest saved documents, including corrections and additions made during translation."}</p>
+                            <Documents documents={review.current_documents} />
+                          </div>
+                        )}
+                        <details>
+                          <summary><span className="tag ready">{review.kind === "metadata_review"
+                            ? `metadata confirmed (revision ${review.record_revision})`
+                            : `Approved ${reviewName(review.kind)} — snapshot`}</span>{" "}
+                            <span className="muted">{review.decision_source !== "human" ? review.decision_source : ""} {when(review.created_at)}</span></summary>
+                          {review.kind === "metadata_review"
+                            ? <p className="muted">The metadata is kept on the <a href={`#/works/${encodeURIComponent(run.data?.work_id ?? "")}`}>work page</a>.</p>
+                            : <Documents documents={review.documents} />}
+                        </details>
+                      </div>
                     ))}
                   </div>
                 )}
-                <ChapterPanes panes={panes} onComments={setComments} />
+                <ChapterPanes panes={panes}
+                  onComments={(key, comments) => setCommentsByKey((old) => ({ ...old, [key]: comments }))} />
+                {detail.data.outputs.flatMap((output) => output.consistency_changes ?? []).length > 0 && (
+                  <details className="panel">
+                    <summary>Applied consistency fixes</summary>
+                    {detail.data.outputs.flatMap((output) => output.consistency_changes ?? []).map((fix) => (
+                      <div key={`${fix.receipt_id}:${fix.id}`}>
+                        <h3>{fix.id}</h3><p>{fix.reason}</p>
+                        <dl><dt>Before</dt><dd>{fix.before}</dd><dt>After</dt><dd>{fix.after}</dd></dl>
+                      </div>
+                    ))}
+                  </details>
+                )}
                 {/* The decision sits under the text, after the reviewer has read it. */}
                 {here && <div ref={decisionRef} className="decision-anchor">{decision(true)}</div>}
               </>
+            )}
+            {bottomReview && <div className="decision-anchor">{decision(false)}</div>}
+            {run.data?.status === "WAITING_FOR_ACCEPTANCE" && run.data.acceptance && (
+              <div className="decision-anchor">{decision(false)}</div>
             )}
           </div>
         </div>
@@ -167,6 +206,16 @@ function RunStatusBar({ run }: { run: RunDetail }) {
         <Status value={run.status} />
         {state && <span className={`tag ${working ? "busy" : "awaiting-tag"}`}>{state}</span>}
       </div>
+      {run.workflow === "literary-translation" && run.whole_book_status && run.progress?.completed === run.progress?.total && (
+        <div className="banner">
+          All chapters translated. {run.whole_book_status === "completed" ? "Whole-book consistency complete."
+            : run.status === "FAILED" || run.status === "BLOCKED" ? "Whole-book consistency needs recovery."
+            : run.worker.paused ? "Whole-book consistency is paused."
+            : run.gate?.kind === "translation_consistency" ? "Whole-book consistency needs your review."
+            : run.whole_book_status === "in_progress" ? "Checking whole-book consistency."
+            : "Whole-book consistency is next."}
+        </div>
+      )}
       {problem && <div className="banner warn">{problem} <a href={`#/runs/${run.id}`}>Open run management</a> to retry, resume, or restart.</div>}
     </>
   );

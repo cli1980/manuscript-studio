@@ -264,6 +264,18 @@ Reread the saved durable file, verify that it matches the assembled chapter, the
 
 If the user asked to translate the full work or to continue, select the next untranslated chapter in source order and return to **Establish Chapter Context**. Carry forward `glossary.md`, `voice.md`, relevant decisions, prior completed English chapters, and any benchmark translation. Otherwise, stop after delivering the completed chapter.
 
+## Complete the Whole Work
+
+When every chapter of a whole-work translation has been approved and saved, run
+one whole-book consistency pass before final acceptance. Read
+[references/whole-book-consistency.md](references/whole-book-consistency.md) in
+full. This is a separate review of the complete saved translation against its
+sources and continuity records. Propose only objective inconsistencies, collect
+all item decisions and separate closure, then apply exactly the approved fixes
+and re-verify affected chapters. A clean result still requires explicit closure.
+In the workflow engine this pass starts automatically after the last unfinished
+chapter completes; its decisions appear in the chapter viewer.
+
 ## Operating Rules
 
 - Keep uncertainty uncertain and implication implicit when the source does.

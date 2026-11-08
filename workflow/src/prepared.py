@@ -120,7 +120,7 @@ class PreparedManuscriptEngine(Engine):
         previous = {item["chapter_id"]: item["attempt"] for item in state.get("iterations", [])
                     if item.get("stage", stage["id"]) == stage["id"]}
         units = list(state["chapters"])
-        if stage.get("iteration", {}).get("conclude"):
+        if units and stage.get("iteration", {}).get("conclude"):
             # One whole-manuscript instance after the chapters, e.g. a synthesis or consistency pass.
             units.append({"chapter_id": WHOLE, "order": len(units) + 1})
         return [self._new_iteration(unit, previous.get(unit["chapter_id"], 0) + 1, stage["id"]) for unit in units]
@@ -273,6 +273,9 @@ class PreparedManuscriptEngine(Engine):
             return dict(self.latest_continuity(state))
         return {}
 
+    def on_restart_chapter(self, state, item):
+        """Invalidate template-specific work that depends on a restarted chapter."""
+
     def restart_chapter(self, chapter_id, *, reason):
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("A restart reason is required.")
@@ -296,7 +299,7 @@ class PreparedManuscriptEngine(Engine):
                 raise ValueError(f"Unknown chapter: {chapter_id}")
             current = self.current_iteration(state)
             if item["status"] == "completed":
-                if current and current["status"] == "in_progress":
+                if current and current["status"] == "in_progress" and current["chapter_id"] != WHOLE:
                     raise ValueError(f"Finish or restart chapter {current['chapter_id']} first.")
             elif item["status"] != "in_progress":
                 raise ValueError(f"Chapter {chapter_id} has not started; there is nothing to restart.")
@@ -314,11 +317,13 @@ class PreparedManuscriptEngine(Engine):
                 self._restore(state, item["continuity_before"] or self.latest_continuity(state), archive)
                 state.update(thread_id=None, domain_state=None, approvals={}, gate=None, next_input=None)
             else:
-                self._archive(item["output"]["path"], archive)
+                if item["output"]:
+                    self._archive(item["output"]["path"], archive)
                 item["restarts"].append({"output": item["output"], "superseded_at": now(), "reason": reason})
                 record["superseded_output"] = item["output"]
             item.update(status="pending", attempt=item["attempt"] + 1, output=None, continuity_before=None,
                         continuity_after=None, started_at=None, completed_at=None)
+            self.on_restart_chapter(state, item)
             self._refresh_outputs(state)
             state.pop("acceptance_id", None)
             if self.select_of(state, stage["id"]):

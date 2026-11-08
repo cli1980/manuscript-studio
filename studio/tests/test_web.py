@@ -135,8 +135,45 @@ def translate(request):
         if receipt.get("parsed", {}).get("type") == "feedback":
             write(cwd, "translation/glossary.md", "| 故事 | Tale | title | provisional |\n")
         return result("needs_human_input", gate="translation_brief", message="Proposed glossary, voice, and samples.")
+    if ctx["whole_book"]:
+        consistency = ctx["consistency"]
+        folder = consistency["plan_path"].rsplit("/", 1)[0]
+        change = {"id": "C001", "chapter_id": "story", "source_quote": "他回来了。",
+                  "before": "He came back.", "after": "He returned.", "reason": "Synthetic consistency correction."}
+        if not consistency["review"]:
+            plan = {"chapters": {
+                chapter["chapter_id"]: {"source_sha256": chapter["source_sha256"],
+                                         "translation_sha256": chapter["translation"]["sha256"],
+                                         "evidence": "Synthetic full-book comparison."}
+                for chapter in consistency["chapters"]}, "changes": [change]}
+            resolved = receipt.get("parsed", {}).get("type") == "dispositions"
+            review = sheet("2" if resolved else "1", resolved)
+            review.update(sheet_id="whole-book", title="Whole-book consistency")
+            review["decisions"].append({"id": "reject", "command": "reject", "label": "Reject",
+                                        "requires_note": False, "effect": "resolve"})
+            review["items"] = [{
+                "id": "C001", "summary": change["reason"], "status": "resolved" if resolved else "pending",
+                "status_label": "Reviewed" if resolved else "Pending",
+                "details": [{"label": label, "value": change[key]} for label, key in (
+                    ("Chapter", "chapter_id"), ("Original", "source_quote"), ("Before", "before"),
+                    ("After", "after"), ("Reason", "reason"))],
+                "allowed_decisions": ["approve", "reject", "revise"], "dependencies": [],
+                "response": {"decision": "approve", "note": "", "date": now()} if resolved else None}]
+            return result("needs_human_input", gate="translation_consistency", message="Review whole-book consistency.",
+                          state_path=write(cwd, folder + "/review.md", "Synthetic coverage."),
+                          binding_path=write(cwd, consistency["plan_path"], plan),
+                          review_path=write(cwd, folder + "/sheet.json", review))
+        chapter = next(c for c in consistency["chapters"] if c["chapter_id"] == "story")
+        write(cwd, chapter["candidate_path"], "He returned.\n")
+        write(cwd, consistency["report_path"], {"chapters": {"story": {
+            "source_sha256": chapter["source_sha256"], "output_sha256": digest(b"He returned.\n"),
+            "evidence": "Synthetic source comparison confirms the approved fix."}}})
+        return result(state_path=write(cwd, folder + "/review.md", "Applied and verified."))
     if ctx["chapter"]["chapter_id"] == "front-matter":
         # The front matter: an internal map without exceptions, then chapter approval.
+        if receipt.get("parsed", {}).get("type") == "feedback":
+            write(cwd, "translation/glossary.md", "| 故事 | Fable | title | user correction |\n")
+            write(cwd, "translation/voice.md", "Warmer narration, per the user's correction.\n")
         write(cwd, "translation/maps/front-matter.json", {
             "chapter_id": "front-matter", "passages": [{"id": "P1", "first_paragraph": 1, "last_paragraph": 1}],
             "exceptions": []})
@@ -249,6 +286,16 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual([r["kind"] for r in front["reviews"]], ["metadata_review", "translation_brief"])
         self.assertIn("Tale", front["reviews"][1]["documents"][0]["text"])
         self.assertEqual((run["gate"]["kind"], run["gate"]["chapter_id"]), ("chapter_sanity", "front-matter"))
+        # A correction after brief approval updates working documents, while approval history keeps the old version.
+        self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"],
+                                              "text": "Use Fable for 故事 and warmer narration."})
+        run = self.settle(run_id)
+        front = self.client.get(f"/api/runs/{run_id}/chapters/front-matter").json()
+        brief = front["reviews"][1]
+        self.assertIn("Fable", brief["current_documents"][0]["text"])
+        self.assertIn("Warmer narration", brief["current_documents"][1]["text"])
+        self.assertIn("Tale", brief["documents"][0]["text"])
+        self.assertNotEqual(brief["documents"][0]["sha256"], brief["current_documents"][0]["sha256"])
         self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"], "text": "approve chapter"})
         run = self.settle(run_id)
         self.assertEqual(run["gate"]["kind"], "map_exceptions")
@@ -270,7 +317,17 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual((run["status"], run["worker"]["paused"]), ("READY", True))
         self.post(f"/api/runs/{run_id}/resume")
         run = self.settle(run_id)
+        self.assertEqual((run["gate"]["kind"], run["gate"]["chapter_id"]), ("translation_consistency", "_whole"))
+        self.assertEqual(run["progress"], {"completed": 2, "total": 2})
+        self.assertEqual(run["gate"]["sheet"]["items"][0]["chapter_id"], "story")
+        self.assertFalse(next(a for a in run["available_actions"] if a["action"] == "accept")["enabled"])
+        self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"], "text": "C001 approve"})
+        run = self.settle(run_id)
+        self.assertEqual(run["gate"]["sheet"]["items"][0]["status"], "resolved")
+        self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"], "text": "confirm final closure"})
+        run = self.settle(run_id)
         self.assertEqual(run["status"], "WAITING_FOR_ACCEPTANCE")
+        self.assertEqual(run["whole_book_status"], "completed")
         accept = next(a for a in run["available_actions"] if a["action"] == "accept")
         self.assertTrue(accept["irreversible"])
         refused = self.post(f"/api/runs/{run_id}/accept", {"acceptance_id": run["acceptance"]["acceptance_id"]})
@@ -279,13 +336,25 @@ class WebApiTests(unittest.TestCase):
                                                  "confirm_final": True})
         run = self.settle(run_id)
         self.assertEqual((run["status"], run["finalized"]), ("COMPLETED", True))
+        final_brief = self.client.get(f"/api/runs/{run_id}/chapters/front-matter").json()["reviews"][1]
+        # Final views are bound to accepted continuity snapshots, even if a workspace file later changes.
+        from workflow.src.service import WorkflowService
+        svc = WorkflowService(Path(self.temp.name) / "server")
+        try:
+            with svc.open_run(run_id) as engine:
+                engine.file("translation/glossary.md").write_text("Unpublished workspace edit", encoding="utf-8")
+        finally:
+            svc.close()
+        self.assertEqual(self.client.get(f"/api/runs/{run_id}/chapters/front-matter").json()["reviews"][1],
+                         final_brief)
 
         chapters = self.client.get(f"/api/runs/{run_id}/chapters").json()
         self.assertTrue(chapters["prepared"])
         self.assertEqual(chapters["chapters"][0]["outputs"]["translate"]["ready"], True)
         chapter = self.client.get(f"/api/runs/{run_id}/chapters/story").json()
         self.assertEqual((chapter["prepared_text"], chapter["outputs"][0]["text"]), ("# 故事\n\n他回来了。\n",
-                                                                                   "He came back.\n"))
+                                                                                   "He returned.\n"))
+        self.assertEqual(chapter["outputs"][0]["consistency_changes"][0]["id"], "C001")
         events = self.client.get(f"/api/runs/{run_id}/events").json()["events"]
         self.assertTrue(events and not any(e["kind"] == "test.turn" for e in events))
 
@@ -296,7 +365,7 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(work["metadata"]["metadata"]["title"], "Story")
         text = self.client.get(f"/api/works/{work['id']}/artifact",
                                params={"path": "literary-translation/v001/chapters/0002.md"})
-        self.assertEqual(text.text, "He came back.\n")
+        self.assertEqual(text.text, "He returned.\n")
         source = next(a for a in work["heads"] if a.startswith("sources/"))
         self.assertEqual(self.client.get(f"/api/works/{work['id']}/artifact", params={"path": source}).text,
                          self.source.read_text(encoding="utf-8"))

@@ -445,11 +445,79 @@ class WorkflowTests(unittest.TestCase):
         return result(state_path=self.write("translation/state.md", "Chapter finalized.\n"),
                       output_path=self.write(f"translation/translated_english/{chapter_id}.md", english))
 
-    def translate_chapter(self):
+    def translate_chapter(self, *, consistency=True):
         self.approve_map()
         self.engine.advance(ScriptedRuntime(self.sanity_gate))
         self.engine.reply(self.engine.state()["gate"]["id"], "approve chapter")
-        return self.engine.advance(ScriptedRuntime(self.translation))
+        state = self.engine.advance(ScriptedRuntime(self.translation))
+        if consistency:
+            self.finish_consistency()
+        return self.engine.state()
+
+    def consistency_gate(self, request=None, *, changes=None, revision="1", dispositions=None):
+        state = self.engine.state()
+        item = self.engine.current_iteration(state)
+        context = self.engine.consistency_context(state, item)
+        plan = {"chapters": {
+            chapter["chapter_id"]: {"source_sha256": chapter["source_sha256"],
+                                     "translation_sha256": chapter["translation"]["sha256"],
+                                     "evidence": "Synthetic fixture: compared names, voice, and references."}
+            for chapter in context["chapters"]}, "changes": changes or []}
+        sheet = None
+        if changes:
+            sheet = self.sheet(revision)
+            sheet.update(sheet_id="whole-book-consistency", title="Whole-book consistency", items=[])
+            sheet["decisions"].append({"id": "reject", "command": "reject", "label": "Reject",
+                                       "requires_note": False, "effect": "resolve"})
+            for change in changes:
+                response = (dispositions or {}).get(change["id"])
+                sheet["items"].append({
+                    "id": change["id"], "summary": change["reason"],
+                    "details": [{"label": label, "value": change[key]} for label, key in (
+                        ("Chapter", "chapter_id"), ("Original", "source_quote"), ("Before", "before"),
+                        ("After", "after"), ("Reason", "reason"))],
+                    "status": "resolved" if response else "pending", "status_label": "Reviewed" if response else "Pending",
+                    "allowed_decisions": ["approve", "reject", "revise"], "dependencies": [],
+                    "response": {"decision": response, "note": "", "date": now()} if response else None,
+                })
+        folder = context["plan_path"].rsplit("/", 1)[0]
+        return result("needs_human_input", gate="translation_consistency",
+                      message="Review whole-book fixes." if changes else "No inconsistencies found.",
+                      state_path=self.write(folder + "/review.md", "Synthetic whole-book coverage.\n"),
+                      binding_path=self.write(context["plan_path"], plan),
+                      review_path=self.write(folder + "/sheet.json", sheet) if sheet else None)
+
+    def consistency_apply(self, request=None):
+        state = self.engine.state()
+        item = self.engine.current_iteration(state)
+        context = self.engine.consistency_context(state, item)
+        review = context["review"]
+        plan = json.loads(self.engine.store.content(review["plan"]))
+        report = {"chapters": {}}
+        for chapter in context["chapters"]:
+            changes = [change for change in plan["changes"] if change["id"] in review["approved_ids"]
+                       and change["chapter_id"] == chapter["chapter_id"]]
+            if not changes:
+                continue
+            before = self.engine.store.content(chapter["translation"]).decode("utf-8")
+            text = before
+            for change in sorted(changes, key=lambda change: before.index(change["before"]), reverse=True):
+                start = before.index(change["before"])
+                text = text[:start] + change["after"] + text[start + len(change["before"]):]
+            self.write(chapter["candidate_path"], text)
+            report["chapters"][chapter["chapter_id"]] = {
+                "source_sha256": chapter["source_sha256"], "output_sha256": digest(text.encode()),
+                "evidence": "Synthetic fixture: source comparison confirms only the approved replacement."}
+        self.write(context["report_path"], report)
+        return result(state_path=self.write(context["plan_path"].rsplit("/", 1)[0] + "/review.md",
+                                            "Approved fixes applied and re-verified.\n"))
+
+    def finish_consistency(self):
+        item = self.engine.current_iteration(self.engine.state())
+        if item and item["chapter_id"] == "_whole":
+            self.engine.advance(ScriptedRuntime(self.consistency_gate))
+            self.engine.reply(self.engine.state()["gate"]["id"], "confirm consistency")
+            self.engine.advance(ScriptedRuntime(self.consistency_apply))
 
     def complete_translation(self):
         """Prepare (including the front matter), then translate the story chapter."""
@@ -460,6 +528,173 @@ class WorkflowTests(unittest.TestCase):
         self.complete_translation()
         self.engine.accept(self.engine.state()["acceptance_id"], confirm_final=True)
         return self.engine.advance(None)
+
+    def test_consistency_is_required_even_without_findings(self):
+        self.prepare()
+        self.translate_chapter(consistency=False)
+        state = self.engine.state()
+        self.assertEqual((state["stage"], state["status"]), ("translate", "READY"))
+        self.assertEqual(self.engine.current_iteration(state)["chapter_id"], "_whole")
+        summary = self.engine.summary(state)
+        self.assertEqual(summary["progress"], {"completed": 2, "total": 2})
+        self.assertFalse(next(a for a in self.engine.available_actions(state) if a["action"] == "accept")["enabled"])
+        with self.assertRaisesRegex(ValueError, "separate review closure"):
+            self.engine.advance(ScriptedRuntime(lambda r: result(state_path=self.write("translation/unreviewed.md", "Done"))))
+        self.engine.retry()
+        self.engine.advance(ScriptedRuntime(self.consistency_gate))
+        gate = self.engine.state()["gate"]
+        self.assertEqual((gate["kind"], gate["chapter_id"]), ("translation_consistency", "_whole"))
+        self.assertEqual(self.engine.gate_commands(self.engine.state(), gate), ["confirm consistency"])
+        self.engine.reply(gate["id"], "Please check recurring names again.")
+        self.assertNotIn("translation_consistency", self.engine.state()["approvals"])
+        self.engine.advance(ScriptedRuntime(self.consistency_gate))
+        self.engine.reply(self.engine.state()["gate"]["id"], "confirm consistency")
+        self.reopen()
+        self.engine.advance(ScriptedRuntime(self.consistency_apply))
+        self.assertEqual(self.engine.state()["status"], "WAITING_FOR_ACCEPTANCE")
+        self.assertEqual(self.engine.summary(self.engine.state())["whole_book_status"], "completed")
+
+    def consistency_fixes(self):
+        return [
+            {"id": "C001", "chapter_id": "story", "source_quote": "他回来了。",
+             "before": "He came back.", "after": "He returned.", "reason": "Synthetic terminology correction."},
+            {"id": "C002", "chapter_id": "front-matter", "source_quote": "故事",
+             "before": "Story", "after": "Tale", "reason": "Synthetic title correction."},
+        ]
+
+    def test_consistency_promotes_only_approved_fixes_after_bound_reverification(self):
+        self.prepare()
+        self.translate_chapter(consistency=False)
+        original_outputs = self.engine.state()["outputs"]
+        fixes = self.consistency_fixes()
+        self.engine.advance(ScriptedRuntime(lambda r: self.consistency_gate(r, changes=fixes)))
+        gate = self.engine.state()["gate"]
+        with self.assertRaisesRegex(ValueError, "missing: C002"):
+            self.engine.reply(gate["id"], "C001 approve")
+        with self.assertRaisesRegex(ValueError, "unresolved"):
+            self.engine.reply(gate["id"], "confirm final closure")
+        self.engine.reply(gate["id"], "C001 approve\nC002 reject")
+        self.assertEqual(self.engine.state()["outputs"], original_outputs)
+        self.engine.advance(ScriptedRuntime(lambda r: self.consistency_gate(
+            r, changes=fixes, revision="2", dispositions={"C001": "approve", "C002": "reject"})))
+        self.engine.reply(self.engine.state()["gate"]["id"], "confirm final closure")
+        self.reopen()
+
+        def extra_edit(request):
+            response = self.consistency_apply(request)
+            context = self.engine.consistency_context(self.engine.state(), self.engine.current_iteration(self.engine.state()))
+            story = next(c for c in context["chapters"] if c["chapter_id"] == "story")
+            self.write(story["candidate_path"], "He returned, smiling.\n")
+            return response
+
+        with self.assertRaisesRegex(ValueError, "exact approved fixes"):
+            self.engine.advance(ScriptedRuntime(extra_edit))
+        self.assertEqual(self.engine.state()["outputs"], original_outputs)
+        self.engine.retry()
+
+        def wrong_verification(request):
+            response = self.consistency_apply(request)
+            context = self.engine.consistency_context(self.engine.state(), self.engine.current_iteration(self.engine.state()))
+            self.write(context["report_path"], {"chapters": {"story": {"source_sha256": "stale", "output_sha256": "stale"}}})
+            return response
+
+        with self.assertRaisesRegex(ValueError, "matching hashes"):
+            self.engine.advance(ScriptedRuntime(wrong_verification))
+        self.engine.retry()
+        self.engine.advance(ScriptedRuntime(self.consistency_apply))
+        state = self.engine.state()
+        self.assertEqual(state["outputs"][0], original_outputs[0])  # Rejection leaves the title untouched.
+        self.assertEqual(self.engine.store.content(state["outputs"][1]), b"He returned.\n")
+        self.assertEqual(self.engine.file(original_outputs[1]["path"]).read_bytes(), b"He came back.\n")
+        self.assertEqual([c["id"] for c in state["outputs"][1]["consistency_changes"]], ["C001"])
+        self.engine.accept(state["acceptance_id"], confirm_final=True)
+        self.engine.advance(None)
+        self.assertEqual((self.engine.root / "export/0002.md").read_bytes(), b"He returned.\n")
+        library = self.service.library(self.work_id)
+        record = json.loads(library.read(library.head("literary-translation/v001/run.json")))
+        fix = record["chapters"][1]["consistency_changes"][0]
+        self.assertEqual((fix["before"], fix["after"]), ("He came back.", "He returned."))
+        self.assertEqual(fix["receipt_id"], record["consistency"]["review"]["receipt_id"])
+
+    def test_consistency_rejects_stale_coverage_and_unreviewed_proposals(self):
+        self.prepare()
+        self.translate_chapter(consistency=False)
+        for bad, error in (("coverage", "matching hashes"), ("overlap", "overlap"), ("receipt", "no matching human")):
+            with self.subTest(bad=bad):
+                def invalid(request):
+                    fixes = self.consistency_fixes()
+                    if bad == "overlap":
+                        fixes.append({**fixes[0], "id": "C003", "before": "came back", "after": "returned"})
+                    response = self.consistency_gate(
+                        request, changes=fixes, dispositions={"C001": "approve", "C002": "reject"} if bad == "receipt" else None)
+                    if bad == "coverage":
+                        plan = json.loads(self.engine.file(response["binding_path"]).read_text(encoding="utf-8"))
+                        plan["chapters"]["story"]["translation_sha256"] = "stale"
+                        self.write(response["binding_path"], plan)
+                    return response
+                with self.assertRaisesRegex(ValueError, error):
+                    self.engine.advance(ScriptedRuntime(invalid))
+                self.engine.retry()
+
+    def test_consistency_promotes_multiple_chapters_together_and_preserves_other_bytes(self):
+        self.english = {"story": "He came back.\r\n", "front-matter": "Story\r\n"}
+        self.prepare()
+        self.translate_chapter(consistency=False)
+        original = self.engine.state()["outputs"]
+        fixes = self.consistency_fixes()
+        fixes[0].update(before="came back", after="returned")
+        fixes.append({**fixes[0], "id": "C003", "before": "He", "after": "The narrator"})
+        self.engine.advance(ScriptedRuntime(lambda r: self.consistency_gate(r, changes=fixes)))
+        self.engine.reply(self.engine.state()["gate"]["id"], "C001 approve\nC002 approve\nC003 approve")
+        self.engine.advance(ScriptedRuntime(lambda r: self.consistency_gate(
+            r, changes=fixes, revision="2", dispositions={fix["id"]: "approve" for fix in fixes})))
+        self.engine.reply(self.engine.state()["gate"]["id"], "confirm final closure")
+
+        def incomplete(request):
+            response = self.consistency_apply(request)
+            state = self.engine.state()
+            context = self.engine.consistency_context(state, self.engine.current_iteration(state))
+            story = next(c for c in context["chapters"] if c["chapter_id"] == "story")
+            self.write(story["candidate_path"], "Incomplete")
+            return response
+
+        with self.assertRaisesRegex(ValueError, "exact approved fixes"):
+            self.engine.advance(ScriptedRuntime(incomplete))
+        self.assertEqual(self.engine.state()["outputs"], original)  # No partial promotion of the title.
+        self.engine.retry()
+        self.engine.advance(ScriptedRuntime(self.consistency_apply))
+        outputs = self.engine.state()["outputs"]
+        self.assertEqual([self.engine.store.content(output) for output in outputs],
+                         [b"Tale\r\n", b"The narrator returned.\r\n"])
+        self.engine.restart_chapter("_whole", reason="Check corrected versions again")
+        self.finish_consistency()
+        self.assertEqual(self.engine.state()["outputs"], outputs)
+        self.engine.verify(self.engine.state())
+
+    def test_chapter_restart_invalidates_pending_and_completed_consistency(self):
+        self.prepare()
+        self.translate_chapter(consistency=False)
+        self.engine.advance(ScriptedRuntime(self.consistency_gate))
+        old_gate = self.engine.state()["gate"]["id"]
+        self.engine.restart_chapter("story", reason="Revise before closing book review")
+        self.assertEqual(self.engine.state()["iterations"][-1]["attempt"], 2)
+        self.translate_chapter()
+        old_acceptance = self.engine.state()["acceptance_id"]
+        with self.assertRaisesRegex(ValueError, "Stale"):
+            self.engine.reply(old_gate, "confirm consistency")
+        self.engine.restart_chapter("story", reason="New terminology after the book review")
+        whole = self.engine.state()["iterations"][-1]
+        self.assertEqual((whole["status"], whole["attempt"]), ("pending", 3))
+        self.assertNotIn("review", whole)
+        self.assertNotIn("acceptance_id", self.engine.state())
+        self.translate_chapter()
+        self.assertNotEqual(old_acceptance, self.engine.state()["acceptance_id"])
+        # Restart the whole-book job itself without discarding or retranslating any chapter.
+        outputs = self.engine.state()["outputs"]
+        self.engine.restart_chapter("_whole", reason="Repeat consistency check")
+        self.assertEqual(self.engine.state()["outputs"], outputs)
+        self.finish_consistency()
+        self.assertEqual(self.engine.state()["status"], "WAITING_FOR_ACCEPTANCE")
 
     def test_restart_gates_acceptance_and_export_preserve_original(self):
         original = self.source.read_bytes()
@@ -480,6 +715,7 @@ class WorkflowTests(unittest.TestCase):
         self.engine.advance(ScriptedRuntime(self.sanity_gate))
         self.engine.reply(self.engine.state()["gate"]["id"], "approve chapter")
         self.engine.advance(ScriptedRuntime(self.translation))
+        self.finish_consistency()
         self.assertEqual(self.engine.state()["status"], "WAITING_FOR_ACCEPTANCE")
         with self.assertRaisesRegex(ValueError, "Stale"):
             self.engine.accept("incorrect-acceptance", confirm_final=True)
@@ -597,7 +833,7 @@ class WorkflowTests(unittest.TestCase):
         self.complete_translation()
         state = self.engine.state()
         self.assertEqual(state["status"], "READY")
-        self.assertEqual([i["status"] for i in state["iterations"]], ["completed", "completed", "pending"])
+        self.assertEqual([i["status"] for i in state["iterations"]], ["completed", "completed", "pending", "pending"])
         self.assertEqual(self.engine.current_iteration(state)["chapter_id"], "chapter-2")
         self.assertIsNone(state["thread_id"])
         self.assertEqual(state["approvals"], {})
@@ -783,6 +1019,7 @@ class WorkflowTests(unittest.TestCase):
         actions = iter([
             self.preparation, self.samples_gate, self.brief_gate,
             *[lambda r: self.map_gate(), lambda r: self.map_gate("2", True), self.sanity_gate, self.translation] * 2,
+            self.consistency_gate, self.consistency_apply,
         ])
         prompts = []
 
@@ -791,7 +1028,8 @@ class WorkflowTests(unittest.TestCase):
             return next(actions)(request)
 
         chapter = ["PM001 approve", ".", "confirm final closure", ".", "approve chapter", "."]
-        replies = iter(["confirm metadata", ".", "S1 choose A", ".", "approve brief", ".", *chapter * 2, "accept", "skip", "skip", "skip", "skip"])
+        replies = iter(["confirm metadata", ".", "S1 choose A", ".", "approve brief", ".", *chapter * 2,
+                        "confirm consistency", ".", "accept", "skip", "skip", "skip", "skip"])
         runtime = run_e2e.CaseRuntime(ScriptedRuntime(action), case["task"])
         with contextlib.redirect_stdout(io.StringIO()):
             code = run_e2e.drive(self.engine, case, runtime, input_fn=lambda _: next(replies))
@@ -806,7 +1044,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(checks["domain-gates"]["status"], "not-checked")
         self.assertEqual(report["literary_quality"]["status"], "not-checked")
         self.assertEqual((self.engine.root / "candidate.en.txt").read_text(), "Story\n\nHe came back.\n")
-        self.assertEqual(len(self.engine.state()["receipts"]), 9)  # Metadata, samples, brief, then three per unit.
+        self.assertEqual(len(self.engine.state()["receipts"]), 10)  # Includes whole-book closure.
         self.assertEqual(report["automated_checks"]["closure-receipts"]["status"], "passed")
         self.assertEqual(report["automated_checks"]["stage-order"]["evidence"],
                          ["prepare", "metadata", "brief", "translate", "accept", "export"])
@@ -868,6 +1106,8 @@ class WorkflowTests(unittest.TestCase):
               (lambda r: self.map_gate("2", True), "accept", "confirm final closure"),
               (self.sanity_gate, "accept", "approve chapter"),
               (self.translation, "accept", "accept")] * 2,
+            (self.consistency_gate, "accept", "confirm consistency"),
+            (self.consistency_apply, "accept", "accept"),
         ])
 
         def action(request):
@@ -888,7 +1128,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["acceptance"]["decision_source"], "delegated-automation")
         report = json.loads((self.engine.root / "e2e-report.json").read_text(encoding="utf-8"))
         self.assertEqual(report["e2e_status"], "needs-review")
-        self.assertEqual(report["delegated_decisions"], 9)
+        self.assertEqual(report["delegated_decisions"], 10)
         self.assertEqual(state["metadata_approval"]["decision_source"], "delegated-automation")
         self.assertEqual(report["literary_quality"]["status"], "not-checked")
 

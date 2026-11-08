@@ -106,7 +106,7 @@
       "expect": [
         {
           "path": "workflows.literary-translation.status",
-          "value": "read_only"
+          "value": "completed"
         },
         {
           "path": "metadata.metadata.title",
