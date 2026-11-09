@@ -639,6 +639,58 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   concrete adapter interfaces, profile storage and selection UI, and the
   capability matrix. No implementation schedule has been selected.
 
+### Deterministic DOCX formatting in the studio
+
+- **Status:** `planned` (requested by the owner on 2026-11-08 after a
+  feasibility review)
+- **Owner:** `cli1980`
+- **Priority and milestone assignment:** not yet decided.
+- **Outcome:** Formatting an accepted version in the studio needs no agent.
+  The user sets the design in a form, the host builds and renders the DOCX, and
+  the user approves the rendered pages before publication and hand-off.
+- **Starting point:** the built-in path is already mostly deterministic.
+  [workflow/src/document_adapters.py](workflow/src/document_adapters.py)
+  validates the settings, checks fonts, builds the DOCX, renders it with Word or
+  LibreOffice, converges TOC page numbers, and rasterizes every page;
+  [workflow/src/formatting.py](workflow/src/formatting.py) audits text, order,
+  and heading styles, then publishes and hands off. The agent only proposes the
+  settings as an approval sheet, records receipts, and attests a visual review
+  of every page.
+- **Scope:**
+  - A native settings gate replaces the agent's design proposal: profile
+    presets (submission, editorial-review, reader-facing) with defaults from
+    the work's metadata, fonts available to the selected renderer, and the
+    existing settings validation. The receipt binds the exact settings.
+  - The build runs as a worker job, one renderer instance at a time; revised
+    settings rebuild into a new build directory.
+  - A page-review gate replaces the agent attestation: the user inspects the
+    rendered pages, then approves (publish, export, hand off) or revises the
+    settings. QA records the human receipt.
+  - Automated checks support that review: fonts in the rendered PDF match the
+    settings, no blank pages, no stranded headings, and the page count.
+  - Studio: a grouped settings form with presets and a rendered-page gallery
+    in the shared decision panel.
+  - Remove the agent stage, its prompts, and the attestation checks from the
+    built-in path; edition identity no longer depends on a model or skill hash.
+    The `format-manuscript` skill remains for plugin use outside the studio.
+- **Acceptance criteria:**
+  - An accepted version is formatted entirely in the browser without an agent
+    turn; identical settings and renderer produce identical text, structure,
+    and pagination checks.
+  - No DOCX is published without a receipt-bound settings approval and a
+    page-review approval of that exact build.
+  - Existing content, heading, TOC, and page-number checks still pass; the new
+    automated checks fail clearly.
+  - Formatter tests run with a stand-in renderer, without Word or LibreOffice.
+- **Known limits (existing in both paths):** English output only (the Contents
+  label is hard-coded); scene-break rules (`***`, `---`), lists, images, code,
+  and special forms such as poetry are refused; Word rendering requires a
+  Windows server, otherwise LibreOffice, whose pagination can differ.
+- **Open decisions:** whether an optional agent "suggest settings" action
+  remains; whether review happens in the chapter viewer (UX enhancement
+  Phase 3) or on the run page; whether scene-break and non-English support are
+  part of this feature; whether the external Documents-skill path is kept.
+
 ### Later (unordered)
 
 - DOCX formatting from the web application
