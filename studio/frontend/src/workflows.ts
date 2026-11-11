@@ -29,7 +29,7 @@ export interface DecisionCopy {
   commandLabels?: Record<string, string>;
 }
 
-/** The engine's ID for a whole-book job (e.g. a consistency pass); its decisions show at the top of the viewer. */
+/** The engine's ID for a whole-book job (e.g. a consistency pass); its decisions show at the end of the viewer. */
 export const WHOLE_BOOK = "_whole";
 
 const viewer = (runId: string, chapterId?: string | null) =>
@@ -171,7 +171,7 @@ export class FormattingWorkflowUI extends WorkflowUI {
 const EDITING_VERBS: Record<string, string> = { developmental: "developmental review", line: "line editing", copy: "copyediting" };
 
 /** Literary editing: one pane, the text being edited (the original until a pass changes the chapter). The user
- *  chooses passes one at a time; pass choices and whole-book decisions show at the top of the viewer. */
+ *  chooses passes one at a time; pass choices and whole-book decisions show at the end of the viewer. */
 export class EditingWorkflowUI extends ChapterViewerWorkflowUI {
   override get agentName() { return "editor"; }
 

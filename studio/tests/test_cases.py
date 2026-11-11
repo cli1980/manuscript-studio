@@ -115,6 +115,60 @@ class StudioCaseTests(unittest.TestCase):
             self.run_in_browser({}, Path(temporary) / "server",
                                 lambda: self.fail("The browser fixture must not run an agent."), check=check)
 
+    @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build the frontend and set STUDIO_BROWSER=1.")
+    def test_whole_book_decision_follows_reading_area(self):
+        """A decision not tied to one chapter (e.g. the developmental verdict) sits after the reading area."""
+        from urllib.parse import urlsplit
+        from playwright.sync_api import expect
+
+        def check(page, origin):
+            run_id = "placement-check"
+            run = {
+                "id": run_id, "workflow": "literary-editing", "template_id": "literary-editing-v1",
+                "work_id": "test-work", "status": "WAITING_FOR_HUMAN", "stage": "developmental", "chapter_id": "_whole",
+                "worker": {"active": False, "paused": False}, "progress": {"completed": 1, "total": 1},
+                "finalized": False, "engine_current": True, "error": None, "attempts": 1,
+                "available_actions": [], "stage_titles": {"developmental": "Developmental edit"},
+                "gate": {"id": "verdict", "kind": "editorial_review", "chapter_id": "_whole", "stage": "developmental",
+                         "binding_text": None, "message": "Whole-book verdict: ready.", "commands": ["approve review"],
+                         "documents": [], "sheet": None, "answer_to": None},
+            }
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def serve(route):
+                path = urlsplit(route.request.url).path
+                prefix = f"/api/runs/{run_id}"
+                if path == "/api/runs":
+                    body = [run]
+                elif path == prefix:
+                    body = run
+                elif path == prefix + "/chapters":
+                    body = {"prepared": True, "stages": ["developmental"], "whole_book": {"developmental": "in_progress"},
+                            "chapters": [{"chapter_id": "one", "order": 1, "title": "One", "role": "chapter",
+                                          "outputs": {"developmental": {"status": "completed", "ready": True}}}]}
+                elif path == prefix + "/chapters/one":
+                    body = {"chapter": {"chapter_id": "one", "order": 1, "title": "One", "role": "chapter"},
+                            "prepared_text": "Chapter text.", "outputs": [], "reviews": [], "passage_map": None}
+                else:
+                    self.fail(f"Unexpected browser request: {path}")
+                route.fulfill(json=body)
+
+            page.route("**/api/**", serve)
+            follows = "(panel, before) => !!(before.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING)"
+            for chapter, before in (("/one", ".columns"), ("", "text=Select a chapter to read it.")):
+                page.goto(f"{origin}/#/runs/{run_id}/chapters{chapter}")
+                panel = page.locator(".panel.gate")
+                expect(panel).to_have_count(1)
+                expect(panel).to_contain_text("Whole-book verdict: ready.")
+                page.locator(before).wait_for()
+                self.assertTrue(panel.evaluate(follows, page.locator(before).element_handle()))
+            self.assertEqual(errors, [])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            self.run_in_browser({}, Path(temporary) / "server",
+                                lambda: self.fail("The browser fixture must not run an agent."), check=check)
+
     def run_case(self, case):
         from fastapi.testclient import TestClient
         from studio.server.app import create_app

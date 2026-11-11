@@ -453,7 +453,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     every decision in the chapter viewer, and starting a run opens it; formatting keeps its decisions on
     the run page and has no chapter link. Literary editing (owner decision, 2026-11-05; uncommitted) follows
     translation through a shared `ChapterViewerWorkflowUI` base: starting a run and every decision open the
-    viewer; pass choices and whole-book decisions show at its top.
+    viewer; pass choices and whole-book decisions show at the end of its content column.
   - Viewer and decision design (owner review, 2026-11-05; uncommitted): the chapter viewer, decision panel,
     and agent feedback widget are generic and hold no workflow-specific text or gate kinds. Each workflow's
     `WorkflowUI` defines what differs: the reading panes (`panes()`: translation shows two, the original and
@@ -461,6 +461,12 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     edited), decision wording (`decisionCopy()`: heading, explanation, button labels), chapter statuses
     (`awaitingLabel()`, `stageVerb()`), the notice after a reply (`afterReply()`), and the agent's name.
     The translation-only chapter approval component is replaced by the shared decision slot.
+  - One decision placement rule (owner request, 2026-11-08; implemented): every decision follows the reading
+    area regardless of its gate kind. A chapter's decision sits under that chapter's text; decisions not tied
+    to one chapter (whole-book jobs such as the developmental verdict and consistency reviews, pass choices,
+    final acceptance) sit at the end of the content column and are scrolled into view once. Only before
+    chapters exist is the decision the page's sole content. This replaces the earlier top placement and its
+    translation-consistency exception.
   - Phase 1 (implemented and committed locally, 2026-11-04): starting a run opens the
     viewer; the viewer shows a run status bar with problem banners linking to
     run management, preparation questions before chapters exist, and final
@@ -480,9 +486,27 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - Phase 2 (planned): a "Whole book" entry in the viewer for decisions not
     tied to one chapter, such as literary editing's developmental verdict and
     consistency passes. Needs a small web-API addition, because the chapter
-    endpoint does not serve the internal whole-book ID; today these decisions
-    have no working page. Needed before the editing workflow is used in the
-    studio.
+    endpoint does not serve the internal whole-book ID (`_whole`); today these
+    decisions have no reading page of their own. Needed before the editing
+    workflow is used in the studio.
+    - The chapter list gains a "Whole book" item after the last chapter,
+      selectable and routed like a chapter.
+    - The chapter endpoint serves `_whole` with the whole-book job's reading
+      material (for example the developmental report, or the consistency
+      findings with links to their chapters) and its status per stage.
+    - The `WorkflowUI` defines the whole-book panes (`wholeBookPanes()`), so
+      the job's material is the reading area and its decision follows it
+      through the same placement rule as any chapter.
+  - Phase 2b (planned): remove the remaining workflow-specific code from the
+    generic chapter viewer (`studio/frontend/src/views/Chapters.tsx`), as the
+    viewer and decision design requires. Today it still contains the
+    whole-book label check for literary translation, the translation-only
+    whole-book consistency banner in the run status bar, and the "Applied
+    consistency fixes" panel. Move them into `WorkflowUI` overrides, for
+    example `wholeBookLabel()`, `statusNotice(run)`, and
+    `extraPanels(chapter)`, with neutral base defaults. Acceptance: the viewer
+    references no workflow IDs or gate kinds, and translation and editing runs
+    render as before.
   - Phase 3 (planned): formatting decisions (settings sheet, visual check) stay
     on the run page until a formatted-document preview exists, then move into
     the viewer as a "Formatted document" entry that reuses the decision panel.

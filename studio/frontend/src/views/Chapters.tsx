@@ -19,13 +19,14 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
   // Annotation callbacks can arrive after navigation; keep each draft under its own review key.
   const [commentsByKey, setCommentsByKey] = useState<Record<string, InlineComment[]>>({});
   const [exchangeError, setExchangeError] = useState<string | null>(null);
-  // Chapter decisions and translation consistency follow the reading panes; preparation questions and
-  // other unattached decisions stay at the top.
+  // Every decision follows the reading area, whatever its kind: a chapter's decision under that chapter's text,
+  // and decisions not tied to one chapter (whole-book jobs, pass choices, final acceptance) at the end of the
+  // content column. Before chapters exist, the decision is the page's only content.
   const waiting = run.data?.status === "WAITING_FOR_HUMAN" && run.data.gate ? run.data.gate : null;
   const pending = waiting?.chapter_id && waiting.chapter_id !== WHOLE_BOOK ? waiting : null;
   const unattached = !!waiting && !pending;
-  const bottomReview = unattached && waiting?.kind === "translation_consistency";
   const here = pending && pending.chapter_id === chapterId ? pending : null;
+  const active = here ?? (unattached && index.data?.prepared ? waiting : null);
   const panes = detail.data ? ui.panes(detail.data, here) : [];
   const commentable = panes.find((pane) => pane.commentKey);
   const comments = commentable?.commentKey ? commentsByKey[commentable.commentKey] ?? [] : [];
@@ -45,15 +46,15 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
     window.location.hash = `#/runs/${runId}/chapters/${encodeURIComponent(pending.chapter_id ?? "")}`;
   }, [pending?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Bring a chapter's pending decision into view once per decision (on arrival, and when the agent answers
-  // feedback with a new request), so the reviewer lands on the form instead of the top of the page.
+  // Bring a pending decision into view once per decision (on arrival, and when the agent answers feedback with a
+  // new request), so the reviewer lands on the form instead of the top of the page.
   const decisionRef = useRef<HTMLDivElement>(null);
   const shown = useRef<string | null>(null);
   useEffect(() => {
-    if (!here || !detail.data || shown.current === here.id) return;
-    shown.current = here.id;
+    if (!active || (chapterId && !detail.data) || shown.current === active.id) return;
+    shown.current = active.id;
     requestAnimationFrame(() => decisionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  }, [here?.id, detail.data]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active?.id, detail.data]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function performExchange(operation: () => Promise<RunDetail>) {
     try {
@@ -65,7 +66,7 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
     void run.reload(); void index.reload(); void detail.reload();
   }
 
-  // One decision slot, used at the top, beside a chapter's text (with its inline comments), and for final acceptance.
+  // One decision slot, used under a chapter's text (with its inline comments) and at the end of the content column.
   const decision = (beside: boolean) => run.data && (
     <>
       <GatePanel run={run.data} inViewer perform={(operation) => void performExchange(operation)}
@@ -95,7 +96,7 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
       <h1>Chapters</h1>
       {run.data && <RunStatusBar run={run.data} />}
       <ErrorBox error={index.error} />
-      {unattached && !bottomReview && decision(false)}
+      {unattached && data && !data.prepared && decision(false)}
       {data && !data.prepared && !unattached && <p className="muted">The agent is preparing the manuscript; chapters appear here
         once preparation completes, and you are brought to each decision as it comes up.</p>}
       {data && data.prepared && (
@@ -175,7 +176,7 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
                 {here && <div ref={decisionRef} className="decision-anchor">{decision(true)}</div>}
               </>
             )}
-            {bottomReview && <div className="decision-anchor">{decision(false)}</div>}
+            {unattached && <div ref={decisionRef} className="decision-anchor">{decision(false)}</div>}
             {run.data?.status === "WAITING_FOR_ACCEPTANCE" && run.data.acceptance && (
               <div className="decision-anchor">{decision(false)}</div>
             )}

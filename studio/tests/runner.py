@@ -202,7 +202,7 @@ class CaseRunner:
         gate = run.get("gate") or {}
         if run.get("workflow") in ("literary-translation", "literary-editing"):
             # Every decision of these runs is made in the review viewer (see studio/frontend/src/workflows.ts);
-            # whole-book and pass decisions show at its top.
+            # whole-book and pass decisions show at the end of its content column.
             chapter = (f"/{gate['chapter_id']}" if run["status"] == "WAITING_FOR_HUMAN" and gate.get("chapter_id")
                        and gate["chapter_id"] != "_whole" else "")
             page.goto(f"{self.origin}/#/runs/{run_id}/chapters{chapter}")
