@@ -146,7 +146,9 @@ export interface ChapterIndex {
 }
 
 export interface ChapterDetail {
-  chapter: { chapter_id: string; order: number; title: string | null; role: string };
+  chapter: { chapter_id: string; order: number; title: string | null; role: string;
+    // Set when the source has no title: the front matter's title heading came from other evidence.
+    supplied_title?: { text: string; basis: "metadata" | "document_properties" | "source_name"; evidence: string } | null };
   prepared_text: string;
   outputs: { stage: string; title?: string; attempt: number | null; sha256: string; text: string;
     consistency_changes?: { id: string; before: string; after: string; reason: string; receipt_id: string }[] }[];

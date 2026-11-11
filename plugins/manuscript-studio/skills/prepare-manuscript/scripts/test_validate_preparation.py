@@ -230,6 +230,34 @@ class PreparationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "escape"):
             self.validate()
 
+    def test_untitled_source_gets_a_supplied_front_matter_title(self):
+        front = self.manifest["chapters"][0]
+        path = self.revision / "chapters/0001.md"
+
+        def heading(text, spans=(), **supplied):
+            path.write_bytes(text.encode("utf-8"))
+            front.update(sha256=validator.digest(path), source_spans=list(spans),
+                         supplied_title={"text": "Example work", "basis": "metadata", "evidence": "metadata.title"} | supplied)
+
+        heading("# Example work\n")
+        self.assertEqual(self.validate(check_sources=True)["preparation_status"], "ready")
+        heading("# Example work\n\n原文第一段。\n", front["source_spans"] or
+                [{"source_id": "original", "locator": "Paragraph 1"}])
+        self.validate()
+        for text, spans, message in (("# Another title\n", (), "opening heading"),
+                                     ("Example work\n", (), "opening heading"),
+                                     ("# Example work\n\nUnsourced epigraph.\n", (), "needs source spans")):
+            heading(text, spans)
+            with self.subTest(text=text), self.assertRaisesRegex(ValueError, message):
+                self.validate()
+        heading("# Example work\n")
+        self.manifest["chapters"][1]["supplied_title"] = front["supplied_title"]
+        with self.assertRaisesRegex(ValueError, "Only the front matter"):
+            self.validate()
+        del self.manifest["chapters"][1]["supplied_title"], front["supplied_title"]
+        with self.assertRaisesRegex(ValueError, "source_spans"):
+            self.validate()
+
     def test_cli_works_from_another_directory(self):
         result = subprocess.run(
             [sys.executable, "-B", str(Path(validator.__file__).resolve()), str(self.root / "work.json"), "--check-sources"],

@@ -573,6 +573,11 @@ class PreparedManuscriptEngine(Engine):
             f"'{METADATA_CONFIRMATION}' to continue with these values.",
             "Locked for this run: " + ", ".join(self.locked_metadata(state)) + ".", "",
         ]
+        supplied = next(c for c in state["chapters"] if c["role"] == "front_matter").get("supplied_title")
+        if supplied:
+            lines[2:2] = [f"The source has no title, so the front matter's title heading "
+                          f"{json.dumps(supplied['text'], ensure_ascii=False)} was supplied from {supplied['basis']} "
+                          f"({supplied['evidence']}). If it is wrong, correct /title and restart preparation."]
         helper = self.metadata_helper()
         provenance = work.get("metadata_provenance", {})
         unknown, stale = [], []

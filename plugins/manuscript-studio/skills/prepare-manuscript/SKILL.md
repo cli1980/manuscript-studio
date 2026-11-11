@@ -69,7 +69,10 @@ standard layout without re-extracting them.
 Find real chapter or section boundaries from the source. Do not split by token,
 page, or word limits. A verified self-contained work without chapters is one
 `standalone` unit. Front and back matter must be included as explicitly typed
-units when preparing the whole work. Follow the Markdown preservation rules in
+units when preparing the whole work. Every revision starts with one front-matter
+unit holding at least the title heading; a source without a title is not a
+blocker: supply the title from the best available evidence and record it as
+`supplied_title`, as the contract specifies. Follow the Markdown preservation rules in
 the contract, including notes, poetry lineation, tables, and non-text anchors.
 
 Preserve wording, punctuation, paragraphing, order, intentional irregularities,

@@ -132,10 +132,23 @@ Every prepared revision starts with exactly one `front_matter` unit. It holds
 the source material before the first chapter or standalone body (title page,
 dedication, epigraph, and similar), split verbatim from the source, and at least
 the work's title heading; for a standalone work, move the title heading out of the
-body into the front matter. Never write front matter that the source does not
-contain. When the source has no title or opening material at all, do not mark
-preparation ready: stop and ask the user to supply or confirm the opening
-material. Workflows attach the shared metadata review to this unit.
+body into the front matter. Apart from that title heading, never write front
+matter that the source does not contain.
+
+A missing title is not a blocker. When the source has no title, use every
+available source of one, in this order: the work record's `metadata.title`
+(supplied or edited by the user, or recorded earlier), a title stored in the
+source document's own properties (for example DOCX core properties or PDF
+document information), and the source file name without its extension. Write
+the first usable title as the front matter's opening Markdown heading, followed
+by any opening material the source does contain, and record it on the unit as
+`supplied_title`: the exact heading text, its `basis` (`metadata`,
+`document_properties`, or `source_name`), and the `evidence` (the field, property,
+or file name it came from). The unit's `source_spans` cover only its source
+material, so a front matter holding only a supplied title has none. A supplied
+title is not evidence for metadata inference. Workflows attach the shared
+metadata review to this unit, so the user approves the supplied title there; a
+corrected title takes effect when preparation runs again.
 A partial excerpt from a larger chapter is `incomplete`, not a standalone work.
 Do not manufacture chapters to fit processing limits.
 

@@ -220,6 +220,24 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual((head["run_id"], head["stage"], head["receipts"]), (state["id"], "metadata", [approval["receipt_id"]]))
         self.assertEqual(state["library_heads"]["work.json"], head["id"])
 
+    def test_untitled_source_is_prepared_with_a_supplied_title_for_review(self):
+        def untitled(request):
+            response = self.preparation(request)
+            revision = self.workspace / f"prepared/{self.work_id}/revisions/r0001"
+            manifest = json.loads((revision / "manifest.json").read_text(encoding="utf-8"))
+            front = manifest["chapters"][0]
+            self.write(f"prepared/{self.work_id}/revisions/r0001/{front['file']}", "# Story\n")
+            front.update(sha256=digest("# Story\n".encode()), source_spans=[],
+                         supplied_title={"text": "Story", "basis": "metadata", "evidence": "metadata.title"})
+            self.write(f"prepared/{self.work_id}/revisions/r0001/manifest.json", manifest)
+            return response
+
+        self.assertIn("a missing title does not", self.prompt(self.engine.state()))
+        state = self.engine.advance(ScriptedRuntime(untitled))
+        self.assertEqual((state["stage"], state["status"]), ("metadata", "WAITING_FOR_HUMAN"))
+        self.assertEqual(state["chapters"][0]["supplied_title"]["basis"], "metadata")
+        self.assertIn('title heading "Story" was supplied from metadata (metadata.title)', state["gate"]["message"])
+
     def prompt(self, state):
         return self.engine.stage_prompt(state, self.engine.stage_def(state))
 

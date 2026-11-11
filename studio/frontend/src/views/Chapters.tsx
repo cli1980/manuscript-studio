@@ -126,6 +126,11 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
                 <h2>{detail.data.chapter.title ?? detail.data.chapter.chapter_id} <span className="muted">({detail.data.chapter.role})</span>{" "}
                   {statusTags(data.chapters.find((c) => c.chapter_id === chapterId)?.outputs, chapterId ?? "", "tag status")}
                 </h2>
+                {detail.data.chapter.supplied_title && (
+                  <div className="banner warn">The source has no title. The heading “{detail.data.chapter.supplied_title.text}” was
+                    supplied from {SUPPLIED_BASIS[detail.data.chapter.supplied_title.basis]} ({detail.data.chapter.supplied_title.evidence}).
+                    {" "}If it is wrong, correct the title in the metadata and restart preparation from <a href={`#/runs/${runId}`}>run management</a>.</div>
+                )}
                 {detail.data.passage_map && (
                   <details className="panel"><summary>Passage map (internal): {detail.data.passage_map.passages.length} passages,
                     {" "}{detail.data.passage_map.exceptions.length} exceptions</summary>
@@ -186,6 +191,9 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
     </section>
   );
 }
+
+const SUPPLIED_BASIS = { metadata: "the work's metadata", document_properties: "the document's properties",
+  source_name: "the file name" } as const;
 
 // Where the run stands, so the viewer is enough to follow it; problems link to run management.
 function RunStatusBar({ run }: { run: RunDetail }) {

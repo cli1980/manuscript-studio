@@ -395,7 +395,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                                     "decision_source": approval["decision_source"],
                                     "current_documents": current_documents(engine, state, approval["documents"]),
                                     "documents": documents(engine, approval["documents"])})
-            return {"chapter": {k: record.get(k) for k in ("chapter_id", "order", "title", "role", "sha256")},
+            return {"chapter": {k: record.get(k) for k in ("chapter_id", "order", "title", "role", "sha256", "supplied_title")},
                     "prepared_text": prepared, "outputs": outputs, "passage_map": passage_map, "reviews": reviews}
 
     # ----- frontend ------------------------------------------------------------------------

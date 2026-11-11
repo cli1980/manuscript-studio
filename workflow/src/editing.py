@@ -13,7 +13,8 @@ PREPARATION = (
     "and the standard revision/chapter package from the designated source using available adapters. Never "
     "claim readiness without source comparison, evidence-bound inference of missing metadata under the shared "
     "metadata contract, and successful existing validation. Return completed with work_record only when ready; "
-    "unavailable adapters or incomplete extraction return blocked. The orchestrator presents the shared "
+    "unavailable adapters or incomplete extraction return blocked; a missing title does not: supply it as the "
+    "contract's supplied_title from the best available evidence. The orchestrator presents the shared "
     "metadata at its own metadata_review gate; do not request metadata confirmation yourself."
 )
 EDITING = (

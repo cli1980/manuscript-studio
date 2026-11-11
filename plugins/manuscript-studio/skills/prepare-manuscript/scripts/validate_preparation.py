@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import stat
 import sys
 from pathlib import Path
@@ -130,6 +131,15 @@ def validate(work_path, *, check_sources=False):
             require(digest(path) == chapter["sha256"], "A prepared chapter hash does not match.")
             require(all(span["source_id"] in sources for span in chapter["source_spans"]),
                     "Chapter source spans refer to an unknown source.")
+            supplied = chapter.get("supplied_title")
+            if supplied:
+                require(chapter["role"] == "front_matter", "Only the front matter can carry a supplied title.")
+                lines = [line for line in raw.decode("utf-8").splitlines() if line.strip()]
+                heading = re.fullmatch(r"#{1,6}\s+(.*\S)\s*", lines[0])
+                require(heading and heading.group(1) == supplied["text"],
+                        "A supplied title must be the front matter's opening heading.")
+                require(chapter["source_spans"] or len(lines) == 1,
+                        "Front matter beyond a supplied title needs source spans.")
         chapter_dir = plain_path(directory / "chapters")
         require({p.name for p in chapter_dir.iterdir()} == expected_files,
                 "The chapter directory contains missing or unlisted files.")

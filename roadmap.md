@@ -403,8 +403,16 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     special case.
   - Applies to the translation and editing templates; unfinished runs need a
     workflow restart when it lands.
-  - Decided: when the source has no title or opening material, preparation
-    stops and asks the user.
+  - A missing title is not a blocker (owner decision, 2026-11-10, replacing
+    the earlier "stop and ask the user"; implemented and committed locally). Preparation
+    uses every available source of a title, in order: the work's metadata
+    title, the source document's own title property, then the file name. It
+    writes the title as the front matter's opening heading and records it as
+    `supplied_title` (text, basis, evidence). The validator checks that the
+    heading matches the record. The metadata review on the front matter, and
+    the front-matter page in the chapter viewer, show that the title was
+    supplied, so the user approves it there. A corrected title takes effect
+    when preparation is restarted.
 - **Extensible front-matter reviews; translation brief** (owner decision,
   2026-11-03; implemented and committed locally on 2026-11-03; a live
   end-to-end run on 《房客》 exercised the brief with delegated approval only):

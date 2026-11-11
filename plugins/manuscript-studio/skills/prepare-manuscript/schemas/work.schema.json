@@ -119,9 +119,21 @@
         "role": {"enum": ["chapter", "front_matter", "back_matter", "standalone"]},
         "file": {"type": "string", "pattern": "^chapters/[0-9]{4}\\.md$"},
         "sha256": {"$ref": "#/$defs/hash"},
-        "source_spans": {"type": "array", "items": {"$ref": "#/$defs/sourceSpan"}, "minItems": 1},
-        "status": {"enum": ["verified", "needs_review", "incomplete"]}
-      }
+        "source_spans": {"type": "array", "items": {"$ref": "#/$defs/sourceSpan"}},
+        "status": {"enum": ["verified", "needs_review", "incomplete"]},
+        "supplied_title": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text", "basis", "evidence"],
+          "properties": {
+            "text": {"type": "string", "minLength": 1},
+            "basis": {"enum": ["metadata", "document_properties", "source_name"]},
+            "evidence": {"type": "string", "minLength": 1}
+          }
+        }
+      },
+      "if": {"not": {"required": ["supplied_title"]}},
+      "then": {"properties": {"source_spans": {"minItems": 1}}}
     },
     "asset": {
       "type": "object",
