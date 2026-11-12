@@ -7,12 +7,14 @@ import base64
 import binascii
 import contextlib
 import json
+import mimetypes
 import re
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 
 from workflow.src.engine import WorkflowError, finalization_notice
 from workflow.src.prepared import WHOLE
@@ -157,6 +159,17 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         if not path.endswith(TEXT_SUFFIXES) or head["bytes"] > MAX_TEXT:
             raise HTTPException(415, "Only text artifacts up to 4 MiB can be viewed.")
         return PlainTextResponse(library.read(head).decode("utf-8"))
+
+    @app.get("/api/works/{work_id}/source")
+    def source(work_id: str, svc: WorkflowService = Depends(service)):
+        """Download the original upload under its uploaded name, from the checksum-verified library object."""
+        library = svc.library(work_id)
+        _, record = library.source()
+        name = record.get("source_name") or Path(record["artifact"]).name
+        fallback = re.sub(r'[^\w.\- ]', "_", name.encode("ascii", "replace").decode("ascii"))
+        return Response(library.read(record), media_type=mimetypes.guess_type(name)[0] or "application/octet-stream",
+                        headers={"Content-Disposition": f"attachment; filename=\"{fallback}\"; "
+                                                        f"filename*=UTF-8''{quote(name)}"})
 
     # ----- runs ----------------------------------------------------------------------------
 

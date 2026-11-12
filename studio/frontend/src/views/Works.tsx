@@ -112,7 +112,8 @@ export function WorkView({ workId }: { workId: string }) {
     <section>
       <p><a href="#/works">← Works</a></p>
       <h1>{data.title}</h1>
-      <p className="muted mono">{data.id} · {data.manuscript_language} · source {data.source_name} · owner {data.owner}</p>
+      <p className="muted mono">{data.id} · {data.manuscript_language} · source <a href={api.sourceUrl(data.id)} download
+        title="Download the original upload">{data.source_name}</a> · owner {data.owner}</p>
       {data.origin && (
         <p>Created from the formatted <a href={`#/runs/${data.origin.run_id}`}>{data.origin.source_version}</a> output of work{" "}
           <a href={`#/works/${encodeURIComponent(data.origin.work_id)}`}>{data.origin.work_id}</a>.</p>
@@ -175,7 +176,10 @@ export function WorkView({ workId }: { workId: string }) {
         <ul className="list">
           {Object.entries(data.heads).sort(([a], [b]) => a.localeCompare(b)).map(([path, head]) => (
             <li key={path}>
-              <button className="link" onClick={() => void open(path)}>{path}</button>
+              {/* The original upload is downloaded, not viewed; its verified text is in each run's chapter viewer. */}
+              {path.startsWith("sources/")
+                ? <a href={api.sourceUrl(workId)} download>{path}</a>
+                : <button className="link" onClick={() => void open(path)}>{path}</button>}
               <span className="muted"> v{head.version} · {head.status}{head.review_status === "unreviewed" ? " (unreviewed)" : ""}</span>
             </li>
           ))}

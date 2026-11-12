@@ -1,4 +1,4 @@
-# Manuscript Studio web application (M3, in progress)
+# Manuscript Studio web application
 
 ```text
 .venv-workflow/Scripts/python.exe -m pip install -r studio/requirements.txt

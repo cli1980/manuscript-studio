@@ -377,6 +377,16 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual((busy.status_code, busy.json()["code"]), (409, "work_busy"))  # One unfinished run per work.
         self.settle(again.json()["id"])
 
+    def test_original_upload_downloads_under_its_name(self):
+        data = self.source.read_bytes()
+        upload = {"name": "洞 (draft).md", "data": base64.b64encode(data).decode()}
+        work = self.post("/api/works", {"upload": upload, "manuscript_language": "zh"}).json()
+        response = self.client.get(f"/api/works/{work['id']}/source")
+        self.assertEqual((response.status_code, response.content), (200, data))
+        self.assertEqual(response.headers["content-disposition"],
+                         "attachment; filename=\"_ _draft_.md\"; filename*=UTF-8''%E6%B4%9E%20%28draft%29.md")
+        self.assertEqual(self.client.get("/api/works/no-such-work/source").status_code, 404)
+
     def test_change_feed_reports_only_real_changes(self):
         from workflow.src.storage import Store
         live = self.app.state.live

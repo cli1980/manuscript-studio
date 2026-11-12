@@ -41,8 +41,10 @@ Agreed in the 2026-10-26 planning session:
 - **DOCX first.** DOCX and Markdown/text intake come first; PDF comes later.
 - **Generalize before expanding.** The engine must be generalized before any
   workflow other than literary translation is added.
-- **Users.** Support a single user while keeping the architecture compatible with
-  multiple users (fewer than 10).
+- **Users.** Support a single user initially while keeping the architecture
+  compatible with multiple users (fewer than 10). Remote deployment,
+  multi-user management, and role-based access are a standalone milestone
+  (owner decision, 2026-11-12), not part of M3.
 
 Agreed in the 2026-10-26 M1 design review (details in
 [workflow/docs/m1-design.md](workflow/docs/m1-design.md)):
@@ -166,9 +168,10 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 ### M3 — Web MVP for literary translation
 
-- **Status:** `in_progress` (started 2026-10-27 at the owner's direction, before M2)
+- **Status:** `done` (closed by the owner on 2026-11-12; started 2026-10-27
+  at the owner's direction, before M2)
 - **Owner:** `cli1980`
-- **Progress (2026-11-10, committed locally):**
+- **Progress (2026-11-12, committed locally):**
   - Built:
     - A FastAPI backend (`studio/server/`) over the M1 service. It is
       localhost-only, with an explicit loopback preview-origin option.
@@ -184,15 +187,22 @@ status, owner, and relevant issue or implementation links. Use these statuses:
       - The in-run chapter viewer, where translation decisions are made.
   - Live change feed (owner request, 2026-11-10): pages follow server-sent
     change fingerprints instead of polling, with a snapshot fallback.
-  - Remaining:
-    - Login and a configured HTTPS origin for remote mode.
-    - A Markdown export download; the run page shows only the export path.
-    - Viewing the original upload. Only text artifacts can be viewed, so a
-      DOCX source cannot.
-    - The live-model and human quality review of whole-book consistency.
-  - No acceptance criterion is recorded as met yet. Translation run
-    `dcc6b1e2` was completed and finalized in the studio on 2026-11-07; the
-    owner has not yet reviewed it as evidence.
+  - Download of the original upload from the work page (owner decision,
+    2026-11-10), under its uploaded name.
+  - Remote deployment, login, and the unauthenticated-access acceptance
+    criterion moved to the standalone remote-mode milestone with multi-user
+    and role support (owner decision, 2026-11-12). M3 is localhost-only.
+  - Closure: the owner directed M3 to be closed on 2026-11-12 after the scope
+    changes and acceptance-evidence discussion. Translation run `dcc6b1e2`
+    completed and finalized on 2026-11-07 with 26 human-attributed gate
+    receipts, human final acceptance, a completed live-model whole-book
+    consistency pass, and an export.
+  - Verification limits retained at closure: the run history does not
+    independently distinguish browser decisions from CLI decisions. The live
+    consistency review was confirmed clean and proposed no fixes; applying
+    approved consistency fixes is covered by deterministic tests, not that
+    live run. Closure does not claim additional human quality review or
+    testing beyond the recorded evidence.
 - **Depends on:** M1, M2
 - **Outcome:** A user can run a complete literary-translation workflow from the
   browser.
@@ -222,15 +232,19 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     and makes the workflow read-only on the work, with explicit confirmation;
     a persistent banner on finalized runs; and a notice listing runs that must
     be restarted after an engine update.
-  - Read-only views of the original upload, prepared chapters, and workflow
-    outputs.
+  - Download of the original upload, and read-only views of prepared chapters
+    and workflow outputs. A download replaces viewing the original upload
+    (owner decision, 2026-11-10): the chapter viewer already shows its
+    verified prepared text, and the file itself opens faithfully in Word.
   - Metadata editing with version history.
   - All translation gates as native forms driven by the approval-sheet JSON and
     submitted through the existing validator and parser; final acceptance with
-    source and English side by side; Markdown export download.
+    source and English side by side. The Markdown export download was removed
+    from M3 (owner decision, 2026-11-10); downloads of accepted versions are
+    planned in the UX enhancement's works explorer.
   - Whole-book translation consistency (added by the owner on 2026-10-28;
-    implemented locally on 2026-11-06; live model and human quality review
-    pending). Chapters carry continuity through shared files
+    implemented locally on 2026-11-06; closed with M3 on 2026-11-12, subject
+    to the verification limits recorded above). Chapters carry continuity through shared files
     (`glossary.md`, `voice.md`, completed English chapters, and the chapter
     brief). After the last
     chapter and before final acceptance, the translation workflow runs one
@@ -252,9 +266,9 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     - A retry resumes the job; restarting any chapter invalidates its review.
       Applied fixes are recorded per chapter and in the accepted version's
       `run.json`; restarting consistency preserves completed chapter outputs.
-  - Localhost by default. A documented remote deployment requires login and a
-    configured HTTPS origin when not bound to loopback. Codex credentials are
-    configured server-wide.
+  - Localhost-only deployment, with the explicit loopback preview-origin option.
+    Codex credentials are configured server-wide. Remote deployment and login
+    belong to the standalone remote-mode milestone.
 - **Acceptance criteria:**
   - A DOCX manuscript can be taken from upload through every translation gate to
     acceptance and export entirely in the browser.
@@ -280,10 +294,9 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   tests; unfinished runs need a workflow restart.
   - Manuscript text cannot be modified from the GUI outside workflow gates.
   - Metadata edits are versioned and visible in history.
-  - Remote mode refuses unauthenticated access.
 - **Out of scope:** DOCX formatting in the web application, PDF intake, user
-  management, real-time collaboration, non-English targets, and manual
-  manuscript text editing.
+  management and roles, remote deployment, real-time collaboration, non-English
+  targets, and manual manuscript text editing.
 
 ### M4 — Literary Edit workflow
 
@@ -354,6 +367,54 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   the deterministic test covers it. During the run the launcher's delegated-mode
   prompt was fixed: completed editing turns lacked guidance for the required
   recommendation field, which made the model stall until the turn timeout.
+
+### Remote mode — multi-user and role support
+
+- **Status:** `planned` (requested by the owner on 2026-11-12)
+- **Owner:** `cli1980`
+- **Priority and implementation order:** not yet decided.
+- **Depends on:** M3 studio and the shared engine service layer.
+- **Outcome:** A small team (fewer than 10 users) can use a remotely deployed
+  studio with individual identities and role-based access to works, runs, and
+  human decisions.
+- **Scope:**
+  - Document and configure a remote deployment with login and a configured
+    HTTPS origin when not bound to loopback. Preserve localhost-only use.
+  - Manage individual users, account deactivation, login/logout, and session
+    revocation. Select the authentication mechanism during design.
+  - Define roles and their permission matrix for administration, browsing and
+    downloads, manuscript intake, metadata editing, workflow controls, gate
+    decisions, and irreversible final acceptance. Decide whether access is
+    shared across the team or assigned per work before implementation.
+  - Enforce permissions server-side for every API, artifact download, and live
+    event stream; hide or explain unavailable actions in the GUI. Role checks
+    must not bypass the existing gate validation or finalization rules.
+  - Attribute uploads, metadata changes, workflow controls, and human decisions
+    to the authenticated user in durable history. Define trusted local CLI
+    access explicitly so it cannot impersonate remote users.
+  - Handle concurrent users safely: stale or duplicate decisions cannot apply
+    twice, and concurrent requests cannot start conflicting runs on one work.
+  - Keep runtime credentials server-side and unavailable to unauthorized users.
+    Decide whether execution credentials remain shared or are user-specific.
+- **Acceptance criteria:**
+  - Remote mode refuses unauthenticated access to manuscript data, run state,
+    downloads, live streams, and mutations; invalid remote configuration fails
+    clearly rather than starting an exposed unauthenticated service.
+  - Tests cover the agreed permission matrix, including direct API requests
+    denied despite bypassing the GUI, and no unauthorized data in live events.
+  - Account deactivation and session revocation remove access, including active
+    streams; users cannot grant themselves additional permissions.
+  - Two users can work on authorized works concurrently without losing history,
+    duplicating a decision, or bypassing a human gate or finalization.
+  - Recorded human actions identify their authenticated actor; neither history
+    nor client responses expose runtime credentials.
+  - A documented HTTPS deployment is verified with separate user accounts and
+    different roles; localhost-only operation remains usable.
+- **Open design choices:** authentication provider, exact roles and permission
+  matrix, work ownership/sharing, initial administrator setup, session policy,
+  CLI authorization, and shared versus per-user execution credentials.
+- **Out of scope:** simultaneous manuscript text editing and real-time
+  collaborative editing.
 
 ### UX enhancement — studio interface structure
 
@@ -745,7 +806,6 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 - DOCX formatting from the web application
 - PDF manuscript intake
 - Additional workflows, such as literary-agent querying
-- User management for multiple users
 - Immediate pause by interrupting the current agent turn (removed from M3 on
   2026-11-10). Worth revisiting if turns get much longer. App Server's
   `turn/interrupt` and the engine's existing `PAUSED` handling for an

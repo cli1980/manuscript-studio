@@ -191,6 +191,7 @@ export const api = {
   works: () => request<WorkSummary[]>("/api/works"),
   work: (id: string) => request<WorkDetail>(`/api/works/${encodeURIComponent(id)}`),
   artifact: (id: string, path: string) => request<string>(`/api/works/${encodeURIComponent(id)}/artifact?path=${encodeURIComponent(path)}`),
+  sourceUrl: (id: string) => `/api/works/${encodeURIComponent(id)}/source`,  // A download link, not a fetch.
   runs: () => request<RunSummary[]>("/api/runs"),
   run: (id: string) => request<RunDetail>(`/api/runs/${id}`),
   events: (id: string, after: number) => request<{ events: WorkflowEvent[]; last_id: number }>(`/api/runs/${id}/events?after=${after}`),
