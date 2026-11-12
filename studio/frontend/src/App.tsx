@@ -3,9 +3,10 @@ import { Works, WorkView } from "./views/Works";
 import { Runs } from "./views/Runs";
 import { RunView } from "./views/RunView";
 import { Chapters } from "./views/Chapters";
-import { api, type RunSummary } from "./api";
-import { reviewName } from "./views/common";
+import { api } from "./api";
+import { reviewName, useLoad } from "./views/common";
 import { workflowUI } from "./workflows";
+import { allRuns, useLive } from "./live";
 
 function useHash() {
   const [hash, setHash] = useState(() => window.location.hash || "#/runs");
@@ -44,15 +45,9 @@ export function App() {
 
 // On every page: chapters waiting for approval, linking straight to the chapter viewer.
 function ApprovalNotice() {
-  const [waiting, setWaiting] = useState<RunSummary[]>([]);
-  useEffect(() => {
-    const poll = () => api.runs().then((runs) => setWaiting(runs.filter(
-      (r) => r.status === "WAITING_FOR_HUMAN" && !!r.gate_chapter_id && !!r.gate_kind && r.engine_current)))
-      .catch(() => undefined);
-    void poll();
-    const timer = window.setInterval(poll, 8000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const runs = useLoad(api.runs, [], useLive(allRuns));
+  const waiting = (runs.data ?? []).filter(
+    (r) => r.status === "WAITING_FOR_HUMAN" && !!r.gate_chapter_id && !!r.gate_kind && r.engine_current);
   if (!waiting.length) return null;
   return (
     <div className="approval-notice">

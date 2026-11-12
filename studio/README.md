@@ -30,6 +30,12 @@ when given with `--allow-origin` (for a local preview proxy).
   are verified before final acceptance, and each chapter lists its applied
   consistency fixes. Whole-book progress is separate from the chapter count.
 
+Pages stay current without polling. One server thread fingerprints every run (state revision, last visible
+event, worker status) and every work (publication log) once a second, and `GET /api/live/stream` pushes the
+fingerprints as server-sent events whenever they change, with a ping every 15 seconds. Each page refetches only
+the data whose fingerprint moved; the timeline fetches only new events. If the stream stays silent, for example
+behind a buffering proxy, the page falls back to polling the small `GET /api/live` snapshot.
+
 Run commands from the repository root. `npm run dev` (in `studio/frontend`) serves the frontend on port 5173 and proxies `/api` to the server.
 
 Layout: `server/` holds the FastAPI app and the background worker, `frontend/` the

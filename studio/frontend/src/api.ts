@@ -162,6 +162,13 @@ export interface ChapterDetail {
 
 export interface WorkflowEvent { id: number; created_at: string; kind: string; payload: Record<string, unknown> }
 
+/** The server's change fingerprints: per run its state revision, last visible event, and worker; per work its log. */
+export interface LiveSnapshot {
+  version: number;
+  runs: Record<string, { revision: number; event: number; worker: Record<string, unknown> }>;
+  works: Record<string, string>;
+}
+
 export class ApiError extends Error {
   constructor(message: string, public status: number, public code?: string) { super(message); }
 }
@@ -187,6 +194,7 @@ export const api = {
   runs: () => request<RunSummary[]>("/api/runs"),
   run: (id: string) => request<RunDetail>(`/api/runs/${id}`),
   events: (id: string, after: number) => request<{ events: WorkflowEvent[]; last_id: number }>(`/api/runs/${id}/events?after=${after}`),
+  live: () => request<LiveSnapshot>("/api/live"),
   chapters: (id: string) => request<ChapterIndex>(`/api/runs/${id}/chapters`),
   chapter: (id: string, chapter: string) => request<ChapterDetail>(`/api/runs/${id}/chapters/${encodeURIComponent(chapter)}`),
   create: (payload: unknown) => post<RunDetail>("/api/runs", payload),

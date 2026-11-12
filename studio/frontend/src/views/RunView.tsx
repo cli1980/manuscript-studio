@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type Action, type RunDetail, type WorkflowEvent } from "../api";
 import { ErrorBox, Status, useLoad, when } from "./common";
 import { GatePanel } from "./GatePanel";
 import { workflowUI } from "../workflows";
+import { runEvents, runState, useLive } from "../live";
 
 export function RunView({ runId }: { runId: string }) {
-  const { data: run, error, reload, setData } = useLoad(() => api.run(runId), [runId], 3000);
+  const { data: run, error, reload, setData } = useLoad(() => api.run(runId), [runId], useLive(runState(runId)));
   // When the workflow makes its decisions elsewhere (translation: the chapter viewer), go there once per decision.
   const ui = workflowUI(run?.workflow);
   const page = run ? ui.decisionPage(run) : null;
@@ -79,7 +80,7 @@ export function RunView({ runId }: { runId: string }) {
       <Controls run={run} actions={actions} perform={perform} />
       <ErrorBox error={actionError} />
       <GatePanel run={run} perform={perform} />
-      <Timeline runId={runId} live={live} />
+      <Timeline runId={runId} />
     </section>
   );
 }
@@ -132,24 +133,21 @@ function Controls({ run, actions, perform }: { run: RunDetail; actions: Record<s
   );
 }
 
-function Timeline({ runId, live }: { runId: string; live: boolean }) {
+// The run's events, fetched incrementally whenever the live feed reports a new visible one.
+function Timeline({ runId }: { runId: string }) {
   const [events, setEvents] = useState<WorkflowEvent[]>([]);
-  const [last, setLast] = useState(0);
-  useEffect(() => { setEvents([]); setLast(0); }, [runId]);
+  const last = useRef(0);
+  const changed = useLive(runEvents(runId));
+  useEffect(() => { setEvents([]); last.current = 0; }, [runId]);
   useEffect(() => {
     let cancelled = false;
-    const poll = async () => {
-      try {
-        const page = await api.events(runId, last);
-        if (cancelled) return;
-        if (page.events.length) setEvents((old) => [...old, ...page.events].slice(-400));
-        if (page.last_id !== last) setLast(page.last_id);
-      } catch { /* The run view shows load errors. */ }
-    };
-    void poll();
-    const timer = window.setInterval(() => void poll(), live ? 3000 : 10000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [runId, last, live]);
+    api.events(runId, last.current).then((page) => {
+      if (cancelled) return;
+      if (page.events.length) setEvents((old) => [...old, ...page.events].slice(-400));
+      last.current = page.last_id;
+    }, () => undefined);  // The run view shows load errors.
+    return () => { cancelled = true; };
+  }, [runId, changed]);
   return (
     <details className="panel">
       <summary><h2>Timeline</h2></summary>

@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
+import contextlib
 import json
 import re
 import uuid
 from pathlib import Path
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
 
 from workflow.src.engine import WorkflowError, finalization_notice
 from workflow.src.prepared import WHOLE
 from workflow.src.runtime import CodexRuntime
 from workflow.src.service import WorkflowService
 from workflow.src.storage import digest, plain
+from .live import Watcher, visible
 from .worker import Workers
 
 MAX_BODY = 48 * 1024 * 1024
@@ -32,7 +35,7 @@ HEADERS = {
                                 "img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; "
                                 "form-action 'self'"),
 }
-QUIET_PREFIXES = ("item/", "thread/", "account/", "mcpServer/", "remoteControl/", "codex/", "test.")
+KEEPALIVE = 15  # Seconds between stream pings, so a client can tell a quiet feed from a dead one.
 
 
 def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", timeout=900, owner=None,
@@ -49,8 +52,16 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         hosts.add(origin.removeprefix("http://"))
     workers = Workers(server_root, runtime_factory or (lambda: CodexRuntime([codex, "app-server"], timeout)),
                       owner=owner)
-    app = FastAPI(title="Manuscript Studio", docs_url=None, redoc_url=None, openapi_url=None)
+    live = Watcher(server_root, workers)
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app):
+        yield
+        live.stop()
+
+    app = FastAPI(title="Manuscript Studio", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.workers = workers
+    app.state.live = live
 
     @app.middleware("http")
     async def boundary(request: Request, call_next):
@@ -242,9 +253,45 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         rows = svc.events(run_id, after)
         last = rows[-1]["id"] if rows else after
         if not verbose:
-            rows = [e for e in rows if not e["kind"].startswith(QUIET_PREFIXES)
-                    or e["kind"] in ("turn/started", "turn/completed")]
+            rows = [e for e in rows if visible(e["kind"])]
         return {"events": rows[-500:], "last_id": last}
+
+    # ----- change feed ---------------------------------------------------------------------
+
+    def live_payload():
+        version, snapshot = live.current()
+        return {"version": version, **(snapshot or {"runs": {}, "works": {}})}
+
+    @app.get("/api/live")
+    async def live_snapshot():
+        """The current fingerprints, for clients that cannot keep a stream open."""
+        live.start()
+        for _ in range(50):  # The first scan runs on the watcher thread.
+            if live.current()[0]:
+                break
+            await asyncio.sleep(0.1)
+        return live_payload()
+
+    @app.get("/api/live/stream")
+    async def live_stream(request: Request):
+        """Server-sent events: the fingerprints whenever they change, and a ping while nothing does."""
+        live.start()
+
+        async def feed():
+            sent, quiet = 0, 0.0
+            yield "retry: 3000\n\n"
+            while not await request.is_disconnected():
+                version = live.current()[0]
+                if version != sent:
+                    sent, quiet = version, 0.0
+                    yield f"data: {json.dumps(live_payload(), ensure_ascii=False)}\n\n"
+                elif quiet >= KEEPALIVE:
+                    quiet = 0.0
+                    yield "event: ping\ndata: {}\n\n"
+                await asyncio.sleep(0.5)
+                quiet += 0.5
+
+        return StreamingResponse(feed(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no"})
 
     def act(svc, run_id, operation, resume=True):
         operation()

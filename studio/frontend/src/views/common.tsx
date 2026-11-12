@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { CommentableText, type InlineComment } from "./CommentableText";
 
-export function useLoad<T>(load: () => Promise<T>, deps: unknown[], intervalMs?: number) {
+/** Load data when `deps` change, and again whenever `refresh` (a change key from the live feed) moves. */
+export function useLoad<T>(load: () => Promise<T>, deps: unknown[], refresh?: string | null) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const loadRef = useRef(load);
@@ -15,13 +16,15 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[], intervalMs?:
       setError(exc instanceof Error ? exc.message : String(exc));
     }
   }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void reload(); }, deps);
+  const seen = useRef(refresh);
   useEffect(() => {
+    // The first key also reloads: something may have changed between the initial load and the first snapshot.
+    if (refresh == null || refresh === seen.current) return;
+    seen.current = refresh;
     void reload();
-    if (!intervalMs) return;
-    const timer = window.setInterval(() => void reload(), intervalMs);
-    return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, intervalMs]);
+  }, [refresh, reload]);
   return { data, error, reload, setData };
 }
 

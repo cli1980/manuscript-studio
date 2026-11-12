@@ -377,6 +377,43 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual((busy.status_code, busy.json()["code"]), (409, "work_busy"))  # One unfinished run per work.
         self.settle(again.json()["id"])
 
+    def test_change_feed_reports_only_real_changes(self):
+        from workflow.src.storage import Store
+        live = self.app.state.live
+        self.addCleanup(live.stop)  # Its read-only connections must close before the temporary folder is removed.
+        upload = {"name": "original.md", "data": base64.b64encode(self.source.read_bytes()).decode()}
+        work = self.post("/api/works", {"upload": upload, "manuscript_language": "zh"}).json()
+        run_id = self.post("/api/runs", {"template_id": "literary-translation-v1", "work_id": work["id"],
+                                         "start": False}).json()["id"]
+        version = live.scan()
+        snapshot = live.current()[1]
+        self.assertEqual(set(snapshot["works"]), {work["id"]})
+        before = snapshot["runs"][run_id]
+        self.assertEqual(before["worker"]["active"], False)
+        self.client.get(f"/api/runs/{run_id}")
+        self.client.get(f"/api/works/{work['id']}")
+        self.assertEqual(live.scan(), version)  # Reading never counts as a change.
+        store = Store(Path(self.client.get(f"/api/runs/{run_id}").json()["path"]))
+        store.event("item/agentMessage/delta", {})  # Agent streaming that the timeline hides.
+        self.assertEqual(live.scan(), version)
+        store.event("turn/started", {})
+        store.close()
+        self.assertEqual(live.scan(), version + 1)
+        self.assertGreater(live.current()[1]["runs"][run_id]["event"], before["event"])
+        self.post(f"/api/runs/{run_id}/resume")  # Runs preparation up to the metadata review.
+        run = self.settle(run_id)
+        live.scan()
+        after = live.current()[1]["runs"][run_id]
+        self.assertEqual(run["gate"]["kind"], "metadata_review")
+        self.assertGreater(after["revision"], before["revision"])
+        self.assertEqual(after["worker"]["stopped"], "WAITING_FOR_HUMAN")
+        # The same fingerprints over HTTP: a snapshot, and a stream whose first message is the current snapshot.
+        self.assertEqual(self.client.get("/api/live").json()["runs"][run_id], after)
+        with self.client.stream("GET", "/api/live/stream") as response:
+            self.assertEqual(response.headers["content-type"].split(";")[0], "text/event-stream")
+            first = next(line for line in response.iter_lines() if line.startswith("data:"))
+        self.assertEqual(json.loads(first.removeprefix("data:"))["runs"][run_id], after)
+
     def test_localhost_boundary(self):
         self.assertEqual(self.client.get("/api/works", headers={"Host": "evil.example:8765"}).status_code, 421)
         self.assertEqual(self.client.post("/api/runs", json={}).status_code, 403)

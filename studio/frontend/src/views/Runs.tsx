@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import { ErrorBox, reviewName, Status, useLoad, when } from "./common";
 import { workflowUI } from "../workflows";
+import { allRuns, useLive } from "../live";
 
 const PENDING: Record<string, string> = {
   WAITING_FOR_HUMAN: "Your review", WAITING_FOR_ACCEPTANCE: "Final acceptance", BLOCKED: "Resolve blocker",
@@ -10,7 +11,7 @@ const PENDING: Record<string, string> = {
 
 // Workflow dashboard: every run with what it is doing and what it needs from the user.
 export function Runs({ initialWork }: { initialWork?: string }) {
-  const { data, error } = useLoad(api.runs, [], 5000);
+  const { data, error } = useLoad(api.runs, [], useLive(allRuns));
   return (
     <section>
       <h1>Workflows</h1>

@@ -4,10 +4,11 @@ import { ErrorBox, Status, TextBlock, useLoad, when } from "./common";
 import { Markdown } from "./Markdown";
 import { workflowUI } from "../workflows";
 import { AuthorForm, MetadataTable } from "./Metadata";
+import { allRuns, allWorks, useLive } from "../live";
 
 // Works: manuscript intake and workflow outcomes. Every work and its library is viewable without a run.
 export function Works() {
-  const { data, error } = useLoad(api.works, [], 15000);
+  const { data, error } = useLoad(api.works, [], useLive(allWorks));
   return (
     <section>
       <h1>Works</h1>
@@ -78,7 +79,9 @@ function AddManuscript({ onAdded }: { onAdded: (workId: string) => void }) {
 }
 
 export function WorkView({ workId }: { workId: string }) {
-  const { data, error, reload } = useLoad(() => api.work(workId), [workId], 15000);
+  // The work's library and log, and the state of runs (the page lists this work's runs).
+  const { data, error, reload } = useLoad(() => api.work(workId), [workId],
+    useLive((live) => `${live.works[workId] ?? ""}|${allRuns(live)}`));
   const [viewing, setViewing] = useState<{ path: string; text: string } | null>(null);
   const [viewError, setViewError] = useState<string | null>(null);
   const [formatError, setFormatError] = useState<string | null>(null);

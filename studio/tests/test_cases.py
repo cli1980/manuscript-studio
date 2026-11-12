@@ -1,6 +1,7 @@
 """Run every case under studio/tests/cases: python -m unittest studio.tests.test_cases -v."""
 
 import importlib.util
+import json
 import os
 import re
 import tempfile
@@ -10,6 +11,18 @@ from pathlib import Path
 from .runner import FIXTURES, CaseRunner, load_cases
 
 HAS_WEB = importlib.util.find_spec("fastapi") and importlib.util.find_spec("httpx")
+
+
+def live_feed(route, path, runs, revision=None):
+    """Answer the studio's change feed for mocked runs. A run's fingerprint is `revision`, else its gate, so a new
+    review counts as a change. The mocked stream ends after one snapshot; the browser reconnects shortly."""
+    snapshot = {"version": 1, "works": {}, "runs": {run["id"]: {
+        "revision": revision if revision is not None else (run.get("gate") or {}).get("id"),
+        "event": 0, "worker": run["worker"]} for run in runs}}
+    if path == "/api/live/stream":
+        route.fulfill(content_type="text/event-stream", body=f"retry: 300\ndata: {json.dumps(snapshot)}\n\n")
+    else:
+        route.fulfill(json=snapshot)
 
 
 @unittest.skipUnless(HAS_WEB, "Install studio/requirements.txt for studio case tests.")
@@ -59,6 +72,8 @@ class StudioCaseTests(unittest.TestCase):
                     else:
                         current = review("two", "revised-review", replies[-1]["text"])
                     body = current
+                elif path.startswith("/api/live"):
+                    return live_feed(route, path, [current])
                 elif path == "/api/runs":
                     body = [current]
                 elif path == prefix:
@@ -139,6 +154,8 @@ class StudioCaseTests(unittest.TestCase):
             def serve(route):
                 path = urlsplit(route.request.url).path
                 prefix = f"/api/runs/{run_id}"
+                if path.startswith("/api/live"):
+                    return live_feed(route, path, [run])
                 if path == "/api/runs":
                     body = [run]
                 elif path == prefix:
@@ -163,6 +180,61 @@ class StudioCaseTests(unittest.TestCase):
                 expect(panel).to_contain_text("Whole-book verdict: ready.")
                 page.locator(before).wait_for()
                 self.assertTrue(panel.evaluate(follows, page.locator(before).element_handle()))
+            self.assertEqual(errors, [])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            self.run_in_browser({}, Path(temporary) / "server",
+                                lambda: self.fail("The browser fixture must not run an agent."), check=check)
+
+    @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build the frontend and set STUDIO_BROWSER=1.")
+    def test_run_page_follows_the_change_feed_instead_of_polling(self):
+        """While the feed reports no change, the run page fetches nothing; a change refreshes it without a reload."""
+        from collections import Counter
+        from urllib.parse import urlsplit
+        from playwright.sync_api import expect
+
+        def check(page, origin):
+            run_id = "feed-check"
+            run = {
+                "id": run_id, "workflow": "literary-editing", "template_id": "literary-editing-v1",
+                "template_title": "Literary editing", "work_id": "test-work", "status": "RUNNING", "stage": "line",
+                "chapter_id": "two", "worker": {"active": True, "paused": False}, "progress": {"completed": 1, "total": 3},
+                "finalized": False, "engine_current": True, "error": None, "attempts": 3, "available_actions": [],
+                "stages": ["prepare", "line"], "stage_titles": {}, "passes": [], "manuscript_language": "zh",
+                "settings": {}, "gate": None,
+            }
+            state = {"revision": 1}
+            requests = Counter()
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+
+            def serve(route):
+                path = urlsplit(route.request.url).path
+                requests[path] += 1
+                if path.startswith("/api/live"):
+                    return live_feed(route, path, [run], state["revision"])
+                if path == "/api/runs":
+                    body = [run]
+                elif path == f"/api/runs/{run_id}":
+                    body = run
+                elif path == f"/api/runs/{run_id}/events":
+                    body = {"events": [], "last_id": 0}
+                else:
+                    self.fail(f"Unexpected browser request: {path}")
+                route.fulfill(json=body)
+
+            page.route("**/api/**", serve)
+            page.goto(f"{origin}/#/runs/{run_id}")
+            expect(page.locator(".facts")).to_contain_text("1/3 chapters")
+            page.wait_for_timeout(1500)  # The initial load and the first snapshot settle.
+            settled = requests[f"/api/runs/{run_id}"]
+            page.wait_for_timeout(4000)  # Longer than any old polling interval; the feed reconnects meanwhile.
+            self.assertGreater(requests["/api/live/stream"], 2)
+            self.assertEqual(requests[f"/api/runs/{run_id}"], settled)
+            run["progress"] = {"completed": 2, "total": 3}
+            state["revision"] = 2
+            expect(page.locator(".facts")).to_contain_text("2/3 chapters")
+            self.assertEqual(requests[f"/api/runs/{run_id}"], settled + 1)
             self.assertEqual(errors, [])
 
         with tempfile.TemporaryDirectory() as temporary:

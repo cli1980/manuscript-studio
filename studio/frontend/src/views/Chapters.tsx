@@ -5,15 +5,17 @@ import { WHOLE_BOOK, workflowUI } from "../workflows";
 import { GatePanel } from "./GatePanel";
 import { ChapterPanes } from "./ChapterPanes";
 import { clearComments, type InlineComment } from "./CommentableText";
+import { runState, useLive } from "../live";
 
 // The chapter viewer: a run's review page, generic across workflows. It lays out the chapter list, the reading
 // panes, and the decision slots; the run's WorkflowUI decides what differs (the panes, decision wording, statuses).
 export function Chapters({ runId, chapterId }: { runId: string; chapterId?: string }) {
-  const index = useLoad(() => api.chapters(runId), [runId], 4000);
-  const isFrontMatter = index.data?.chapters.find((chapter) => chapter.chapter_id === chapterId)?.role === "front_matter";
+  // The chapter list, text, and status follow the run as it moves: all three reload when its state changes.
+  const changed = useLive(runState(runId));
+  const index = useLoad(() => api.chapters(runId), [runId], changed);
   const detail = useLoad(() => (chapterId ? api.chapter(runId, chapterId) : Promise.resolve(null)), [runId, chapterId],
-    isFrontMatter ? 4000 : undefined);
-  const run = useLoad(() => api.run(runId), [runId], 4000);
+    changed);
+  const run = useLoad(() => api.run(runId), [runId], changed);
   const ui = workflowUI(run.data?.workflow);
   const [notice, setNotice] = useState<string | null>(null);
   // Annotation callbacks can arrive after navigation; keep each draft under its own review key.
@@ -34,9 +36,6 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
   const data = index.data;
   const stageTitle = (stage: string) => data?.stage_info?.[stage]?.title ?? stage;
   const stageKind = (stage: string) => data?.stage_info?.[stage]?.stage ?? stage;
-  // Keep the chapter list, text, and status in step with the run as it moves.
-  const progressKey = `${run.data?.status}|${run.data?.gate?.id ?? ""}|${run.data?.progress?.completed ?? ""}|${run.data?.chapter_id ?? ""}`;
-  useEffect(() => { void index.reload(); void detail.reload(); }, [progressKey]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     // A new decision on another chapter: switch to that chapter once, so its form is in view.
     if (!pending || pending.chapter_id === chapterId) return;
