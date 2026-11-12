@@ -168,17 +168,31 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 - **Status:** `in_progress` (started 2026-10-27 at the owner's direction, before M2)
 - **Owner:** `cli1980`
-- **Progress (2026-10-27, local and uncommitted):** FastAPI backend
-  (`studio/server/`, localhost-only with an explicit loopback preview-origin
-  option) over the M1 service, a background worker that runs turns until a human
-  is needed with pause-after-turn and resume, and a React/TypeScript (Vite)
-  frontend (`studio/frontend/`) with three views: Works (manuscript intake, work list, library,
-  metadata, publication log, derived formatting), Workflows (dashboard, start a
-  workflow on a work, run view with `available_actions` controls, native gate
-  forms for approval sheets, exact commands, metadata, and irreversible final
-  acceptance, plus a timeline), and an in-run chapter browser (prepared chapters
-  beside each stage's completed output). Immediate pause by interruption, login
-  for remote mode, and a live event stream (the UI polls) remain.
+- **Progress (2026-11-10, committed locally):**
+  - Built:
+    - A FastAPI backend (`studio/server/`) over the M1 service. It is
+      localhost-only, with an explicit loopback preview-origin option.
+    - A background worker that runs turns until a human is needed, with
+      pause-after-turn and resume.
+    - A React/TypeScript (Vite) frontend (`studio/frontend/`) with three
+      views:
+      - Works: manuscript intake, the work list, library, metadata,
+        publication log, and derived formatting.
+      - Workflows: the dashboard, starting a workflow on a work, and the
+        run view with `available_actions` controls, native gate forms,
+        irreversible final acceptance, and a timeline.
+      - The in-run chapter viewer, where translation decisions are made.
+  - Live change feed (owner request, 2026-11-10): pages follow server-sent
+    change fingerprints instead of polling, with a snapshot fallback.
+  - Remaining:
+    - Login and a configured HTTPS origin for remote mode.
+    - A Markdown export download; the run page shows only the export path.
+    - Viewing the original upload. Only text artifacts can be viewed, so a
+      DOCX source cannot.
+    - The live-model and human quality review of whole-book consistency.
+  - No acceptance criterion is recorded as met yet. Translation run
+    `dcc6b1e2` was completed and finalized in the studio on 2026-11-07; the
+    owner has not yet reviewed it as evidence.
 - **Depends on:** M1, M2
 - **Outcome:** A user can run a complete literary-translation workflow from the
   browser.
@@ -192,8 +206,11 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     state, current stage and chapter, progress, the pending human action, the
     reason for any blocker or failure, and a timeline with a live event stream.
   - Workflow controls with clear availability and confirmation:
-    - **Pause:** stop automatic execution, either after the current agent turn or
-      immediately by interrupting it, preserving saved state.
+    - **Pause:** stop automatic execution after the current agent turn,
+      preserving saved state. Immediate pause by interrupting the turn was
+      removed from M3 (owner decision, 2026-11-10): across 121 measured turns
+      the median was 1.4–1.9 minutes and the longest 7, so waiting for the turn
+      costs little, while interrupting discards its work. See Later.
     - **Resume:** continue automatic execution from the saved state.
     - **Retry:** retry the current step from saved state with a fresh agent
       thread after a failure, block, or pause.
@@ -729,3 +746,8 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 - PDF manuscript intake
 - Additional workflows, such as literary-agent querying
 - User management for multiple users
+- Immediate pause by interrupting the current agent turn (removed from M3 on
+  2026-11-10). Worth revisiting if turns get much longer. App Server's
+  `turn/interrupt` and the engine's existing `PAUSED` handling for an
+  interrupted turn cover most of it; the runtime needs a cancel signal and the
+  worker a handle on each run's current turn.
