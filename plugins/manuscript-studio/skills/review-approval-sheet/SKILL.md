@@ -85,6 +85,12 @@ After the originating skill saves every item as resolved in a new revision, rend
 
 Use a text fallback only when the inline visualization surface is unavailable or the inline directive fails. Present a readable table or copyable lines using the same IDs, decisions, notes, identity, and revision. A link to a local HTML file by itself is not a fallback because it does not expose the interaction in conversation. Run the same parser on the response. Interface limitations never weaken the gate.
 
+Probe the active host: the `::codex-inline-vis` surface is not guaranteed in
+browser chat, desktop apps, or every Codex client. Python and script/file access
+are also prerequisites for machine validation. If those are missing, show only
+a non-authoritative proposal, state that parsing/persistence is blocked, and
+do not invent validated receipts or authorize source changes.
+
 ## Validation
 
 After changing the schema, renderer, parser, or template, run:

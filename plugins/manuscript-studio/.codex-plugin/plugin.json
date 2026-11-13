@@ -1,6 +1,6 @@
 {
   "name": "manuscript-studio",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Shared manuscript preparation and literary workflows for editing, translation, formatting, querying, and approval.",
   "author": {
     "name": "Lin Shaw",
@@ -22,21 +22,23 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Manuscript Studio",
-    "shortDescription": "Prepare, edit, translate, format, query, and review manuscripts.",
-    "longDescription": "Location-scoped manuscript preparation with verified chapter Markdown and shared work metadata, followed by professional literary editing, Chinese-English translation, reusable edition formatting, agent querying, and revision-bound interactive approvals.",
+    "shortDescription": "Literary manuscript workflows",
+    "longDescription": "Prepare verified chapter Markdown, assess and edit literary manuscripts, translate Chinese-English prose, and develop literary-agent query materials with author-controlled approvals. Formatting requires an available Documents skill, rendering tools, and page inspection; otherwise generation is blocked and the formatting specification is retained. Interactive reviews require a Codex-compatible inline visualization surface; other environments use revision-bound text decisions. File access, Python, dependencies, and web research depend on the host. See the runtime support guide linked from the project website.",
     "developerName": "Lin Shaw",
     "category": "Productivity",
     "capabilities": [
       "Write"
     ],
     "websiteURL": "https://github.com/cli1980/manuscript-studio",
+    "supportURL": "https://github.com/cli1980/manuscript-studio/issues",
+    "privacyPolicyURL": "https://github.com/cli1980/manuscript-studio/blob/main/plugins/manuscript-studio/PRIVACY.md",
+    "logo": "./assets/logo.svg",
+    "composerIcon": "./assets/composer-icon.svg",
+    "brandColor": "#214E48",
     "defaultPrompt": [
-      "Prepare manuscripts from a specified location as verified chapter Markdown with shared work metadata.",
-      "Assess and edit my literary manuscript.",
-      "Translate this literary manuscript.",
-      "Format my manuscript as a polished Word edition with a table of contents.",
-      "Build a literary-agent query package.",
-      "Review an approval sheet interactively."
+      "Assess my manuscript and propose edits for my approval.",
+      "Translate my literary manuscript while preserving its voice.",
+      "Format my manuscript as a Word edition with a table of contents."
     ]
   }
 }

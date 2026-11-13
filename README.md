@@ -20,6 +20,13 @@ Start a new conversation after installation. Local/Git marketplace availability
 varies by product and workspace; adding this marketplace does not by itself
 publish the plugin to the public directory or install it in ChatGPT web.
 
+Before use, read the plugin's [privacy policy](plugins/manuscript-studio/PRIVACY.md),
+[support contact](plugins/manuscript-studio/SUPPORT.md), and
+[runtime support and fallback examples](plugins/manuscript-studio/RUNTIME-SUPPORT.md).
+DOCX production requires an external Documents skill and rendering tools;
+interactive reviews depend on the host's inline visualization support, with
+revision-bound text fallback when it is unavailable.
+
 Existing installations do not automatically migrate because the marketplace
 and plugin IDs changed. Uninstall `quillholic-literary-suite`, add the renamed
 marketplace if necessary, and install `manuscript-studio`.
@@ -207,6 +214,7 @@ Run the existing dependency-free Python regression suites from the repository ro
 
 ```text
 python -B scripts/test_install_skills.py
+python -B scripts/test_plugin_listing.py
 python -B plugins/manuscript-studio/skills/literary-agent-querying/scripts/test_sample_boundary.py
 python -B plugins/manuscript-studio/skills/literary-agent-querying/scripts/test_validate_on_demand.py
 python -B plugins/manuscript-studio/skills/review-approval-sheet/scripts/test_approval_review.py

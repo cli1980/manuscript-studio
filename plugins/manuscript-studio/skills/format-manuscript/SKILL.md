@@ -7,6 +7,16 @@ description: Design and produce professionally formatted book manuscripts by ins
 
 Turn an unchanged manuscript into a deliberately designed publication artifact. Own format analysis, specification, approval, and cross-format consistency; let the appropriate format skill own file construction and technical verification.
 
+## Runtime prerequisites
+
+An external Documents skill and its construction, rendering, and page-inspection
+tools are required for verified DOCX production; this skill does not install
+them. Check the active environment, not merely the product name. If unavailable,
+retain a reviewable format specification, mark generation `blocked-adapter`,
+and do not claim a finished or visually verified DOCX. For shared review, use
+the inline visualization only when supported; otherwise preserve the same
+revision-bound text decisions and approval gates.
+
 ## Governing Contract
 
 1. Preserve manuscript wording, order, and section identity. Formatting authority is not editorial authority.

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Manuscript Studio open book and pen</title>
+  <rect width="512" height="512" rx="96" fill="#214E48"/>
+  <path d="M88 156c65-22 118-12 168 22 50-34 103-44 168-22v212c-64-22-116-12-168 22-52-34-104-44-168-22Z" fill="#FFF5DE"/>
+  <path d="M256 178v212M122 204c35-7 64-2 96 14m-96 30c35-7 64-2 96 14m-96 30c35-7 64-2 96 14" fill="none" stroke="#214E48" stroke-width="12" stroke-linecap="round"/>
+  <path d="m290 310 22-78 94-102 38 35-94 102Z" fill="#E9A85C"/>
+  <path d="m290 310 60-43-38-35Z" fill="#214E48"/>
+  <path d="m312 287 93-101" fill="none" stroke="#FFF5DE" stroke-width="8" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Manuscript Studio</title>
+  <rect width="64" height="64" rx="14" fill="#FFF5DE"/>
+  <path d="M10 20c8-3 15-2 22 3 7-5 14-6 22-3v28c-8-3-15-2-22 3-7-5-14-6-22-3Z" fill="#214E48"/>
+  <path d="M32 23v28M16 28l9 3m-9 6 9 3" stroke="#FFF5DE" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="m37 40 3-11 13-14 5 5-13 14Z" fill="#E9A85C"/>
+</svg>

@@ -11,9 +11,15 @@ An installable skills-only plugin for ChatGPT Work and Codex.
 - Format Manuscript
 - Review Approval Sheet
 
-The plugin does not include an MCP server or request access to external
-services. Each skill operates on files, attachments, project workspaces, or
-Codex artifacts made available by the active product surface.
+The plugin does not include an MCP server or its own service connection.
+Skills use files and host tools made available by the active product surface;
+query research may use that host's browser/search tools.
+
+See [runtime support and fallback examples](RUNTIME-SUPPORT.md), the
+[privacy policy](PRIVACY.md), and [support contact](SUPPORT.md) before use.
+Formatting requires an external Documents skill and rendering/inspection tools.
+Interactive approval sheets require the particular Codex inline visualization
+surface; other hosts use validated, revision-bound text decisions.
 
 All manuscript workflows reuse the
 [shared metadata contract](skills/prepare-manuscript/references/manuscript-metadata.md).

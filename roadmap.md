@@ -73,6 +73,30 @@ Agreed in the 2026-10-26 M1 design review (details in
 
 ## Milestones
 
+### Plugin listing readiness fix
+
+- **Status:** `in_progress`; local changes prepared on `fix/plugin-listing-metadata`.
+- Shorten the subtitle to 29 characters, retain three focused starter prompts
+  for editing, translation, and formatting, and package square SVG logo/composer
+  assets with manifest references.
+- Add privacy and support documentation and explicit listing URLs. Support uses
+  the existing public GitHub issue tracker; no private mailbox is invented.
+- Document capability-dependent environments, blocked formatting without the
+  Documents skill/rendering/inspection tools, and revision-bound text approvals
+  when the specific inline visualization surface is absent.
+- **Publication boundary:** the privacy file's main-branch URL must be publicly
+  reachable before submission. Local files do not constitute publication.
+  Publication/merge has not been performed; local main is ahead of its remote,
+  so unrelated existing commits must not be pushed implicitly.
+- **Local verification:** 3 listing/asset checks passed; installer suite ran
+  30 tests with 3 platform-dependent skips; all 28 approval tests passed,
+  including text dispositions, stale revisions, required notes, separate
+  closure, and generated JavaScript syntax. SVG branding was rendered and
+  visually inspected. The declared public privacy URL currently returns 404:
+  publication remains blocked until the policy is merged and published.
+  Formatting fallback is documented; no new Documents/rendering execution is
+  claimed by this metadata fix.
+
 When adding milestones, record their intended outcomes, acceptance criteria,
 status, owner, and relevant issue or implementation links. Use these statuses:
 `planned`, `in_progress`, `blocked`, `in_review`, and `done`.
