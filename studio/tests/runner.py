@@ -213,6 +213,9 @@ class CaseRunner:
         before = (run["status"], (run.get("gate") or {}).get("id"))
         gate = run.get("gate") or {}
         sheet = gate.get("sheet")
+        if sheet and gate["kind"] == "brief_samples":
+            # The panel frame can mount before the async review body is ready.
+            page.locator(".sample-poll").wait_for(state="visible", timeout=60000)
         if run["status"] == "WAITING_FOR_ACCEPTANCE":
             page.get_by_label("I understand that accepting finalizes this run.").check()
             page.get_by_role("button", name="Accept and finalize").click()

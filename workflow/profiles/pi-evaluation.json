@@ -1,0 +1,10 @@
+{
+  "name": "pi-evaluation",
+  "harness": "pi",
+  "command": [
+    "node",
+    "../../.workflow-runs/pi-evaluation/node_modules/@mariozechner/pi-coding-agent/dist/cli.js"
+  ],
+  "timeout": 900,
+  "trusted_local_execution": true
+}

@@ -16,6 +16,7 @@ from .engine import LANGUAGE_TAG, SKILLS, TERMINAL, Engine, WorkflowError, modul
 from .library import WorkLibrary
 from .prepared import METADATA_CONFIRMATION, load_metadata_helper
 from .storage import Store, json_bytes, now, plain
+from .usage import run_usage
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS works (
@@ -44,12 +45,13 @@ def slug(name):
 
 
 class WorkflowService:
-    def __init__(self, server_root, *, owner=None):
+    def __init__(self, server_root, *, owner=None, execution_profile=None):
         self.root = plain(Path(server_root))
         self.root.mkdir(parents=True, exist_ok=True)
         (self.root / "works").mkdir(exist_ok=True)
         (self.root / "runs").mkdir(exist_ok=True)
         self.owner = owner or default_owner()
+        self.execution_profile = execution_profile
         self.db = sqlite3.connect(self.root / "index.sqlite3", timeout=10, isolation_level=None,
                                   check_same_thread=False)  # One service per request, used sequentially across web threads.
         self.db.row_factory = sqlite3.Row
@@ -244,6 +246,10 @@ class WorkflowService:
                    model=None, agent_models=None, settings=None):
         """Exactly one of: upload (+ manuscript_language) creates a new work; work_id uses an existing work."""
         template = registry.get(template_id)
+        if self.execution_profile:
+            model = self.execution_profile.select(model, template["workflow"]).key
+            for choice in (agent_models or {}).values():
+                self.execution_profile.select(choice, template["workflow"])
         if "consumes" in template:
             raise ValueError("This is a derived template; use create_derived_run with a publication.")
         if (upload is None) == (work_id is None):
@@ -264,6 +270,10 @@ class WorkflowService:
 
     def _create(self, template, work_id, owner, manuscript_language, model, agent_models, restart_of=None,
                 settings=None):
+        if self.execution_profile:
+            model = self.execution_profile.select(model, template["workflow"]).key
+            for choice in (agent_models or {}).values():
+                self.execution_profile.select(choice, template["workflow"])
         library = self.library(work_id)
         source, record = library.source()
         run_id = str(uuid.uuid4())
@@ -274,6 +284,10 @@ class WorkflowService:
             run_id=run_id, settings=settings,
         )
         try:
+            if self.execution_profile:
+                revision, state = engine.store.load()
+                state["execution"] = self.execution_profile.describe(model)
+                engine.store.save(revision, state, "execution.selected", state["execution"])
             self._insert_run(engine.state(), root, restart_of)
         finally:
             engine.close()
@@ -286,6 +300,10 @@ class WorkflowService:
     def create_derived_run(self, work_id, template_id, *, publication_id=None, owner=None, options=None, model=None,
                            agent_models=None, new_edition=False, restart_of=None):
         template = registry.get(template_id)
+        if self.execution_profile:
+            model = self.execution_profile.select(model, template["workflow"]).key
+            for choice in (agent_models or {}).values():
+                self.execution_profile.select(choice, template["workflow"])
         if "consumes" not in template:
             raise ValueError("This template is not derived; use create_run.")
         library = self.library(work_id)
@@ -324,13 +342,15 @@ class WorkflowService:
 
     # ----- run operations -------------------------------------------------------------------
 
-    def get_run(self, run_id):
+    def get_run(self, run_id, *, include_usage=True):
         row = self._run_row(run_id)
         with self.open_run(run_id) as engine:
             state = engine.state()
             result = engine.summary(state)
             result.update(restart_of=row["restart_of"], path=row["path"],
                           available_actions=engine.available_actions(state))
+            if include_usage:
+                result["usage"] = run_usage(engine.store)
             if state.get("gate"):
                 result["gate"] = {key: state["gate"].get(key) for key in
                                   ("id", "kind", "message", "stage", "chapter_id", "record_revision", "options", "pass")}
@@ -605,4 +625,3 @@ class WorkflowService:
             if work["record_revision"] == record_revision:
                 return work
         raise ValueError(f"No published metadata version {record_revision}.")
-

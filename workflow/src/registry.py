@@ -205,7 +205,9 @@ def _tree_hash(root, pattern):
 
 @functools.lru_cache(maxsize=1)
 def _source_hash():
-    return _tree_hash(Path(__file__).resolve().parent, "**/*.py")
+    python = _tree_hash(Path(__file__).resolve().parent, "**/*.py")
+    pi_extension = _tree_hash(WORKFLOW_ROOT / "adapters/pi", "*.mjs")
+    return hashlib.sha256(f"{python}:{pi_extension}".encode()).hexdigest()
 
 
 def engine_identity(template_id):

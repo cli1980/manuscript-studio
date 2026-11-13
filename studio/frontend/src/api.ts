@@ -63,6 +63,7 @@ export interface MetadataField { field: string; group: "author" | "suggested" | 
 
 export interface RunSummary {
   id: string;
+  execution?: ExecutionIdentity | null;
   settings?: { passage_size?: number } | null;
   handed_off_work?: string | null;
   manuscript_language: string;
@@ -88,7 +89,26 @@ export interface RunSummary {
   worker: { active: boolean; paused: boolean; stopped?: string | null; error?: string };
 }
 
+export interface ExecutionIdentity {
+  profile: string;
+  revision: string;
+  harness: string;
+  model_key: string;
+  model: string;
+  endpoint: string | null;
+  base_url: string | null;
+  sandbox: string;
+}
+
+export interface ExecutionCatalog {
+  name: string;
+  harness: string;
+  default_model?: string;
+  models: (ExecutionIdentity & { workflows: string[] })[];
+}
+
 export interface RunDetail extends RunSummary {
+  usage?: TokenUsage;
   available_actions: Action[];
   gate?: Gate;
   metadata?: MetadataView;
@@ -99,6 +119,17 @@ export interface RunDetail extends RunSummary {
   template_title: string | null;
   restart_of: string | null;
   superseded_by: string | null;
+}
+
+export interface TokenUsage {
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cached_input_tokens: number | null;
+  total_tokens: number | null;
+  reported_attempts: number;
+  attempts: number;
+  partial: boolean;
+  warnings: string[];
 }
 
 export interface Template { id: string; title: string; workflow: string; consumes: string | null; stages: string[];
@@ -187,6 +218,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 const post = <T>(path: string, payload: unknown = {}) => request<T>(path, { method: "POST", body: JSON.stringify(payload) });
 
 export const api = {
+  execution: () => request<ExecutionCatalog>("/api/execution"),
   templates: () => request<Template[]>("/api/templates"),
   works: () => request<WorkSummary[]>("/api/works"),
   work: (id: string) => request<WorkDetail>(`/api/works/${encodeURIComponent(id)}`),

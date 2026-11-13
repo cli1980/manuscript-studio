@@ -671,13 +671,36 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 ### Runtime extensibility — harnesses and inference endpoints
 
-- **Status:** `planned` (requested by the owner on 2026-11-06)
+- **Status:** `in_progress` (requested by the owner on 2026-11-06; Pi POC
+  implementation started at the owner's direction on 2026-11-12)
 - **Owner:** `cli1980`
 - **Priority and milestone assignment:** not yet decided.
-- **Outcome:** Users can switch from the current Codex App Server to another
-  supported agent harness and inference endpoint through configuration, while
-  retaining the same workflows, skills, review interfaces, and saved work.
+- **Outcome:** Users can configure the studio to use the current Codex App Server
+  or another supported agent harness and inference endpoints at server startup.
+  Users can choose the most appropriate supported model when starting a
+  workflow, while retaining the same workflows, skills, and review interfaces.
   Adding a provider does not require rewriting the workflow engine.
+- **Startup-only profile** (owner decision, 2026-11-12): the server loads one
+  execution profile at startup and uses it for all execution during that server
+  lifetime. There is no dynamic profile switching, configuration hot reload,
+  or per-run profile selection. Changing the active profile requires restarting
+  the server. This replaces the earlier saved-boundary switching requirement.
+- **Workflow model choice** (owner clarification, 2026-11-12): inference
+  endpoints and their configuration belong to the startup profile, but the
+  user chooses a compatible model when starting a workflow. Model selection
+  does not change the active profile or edit endpoint configuration. The
+  selected model and its configured endpoint are recorded for the run; model
+  changes while the server is running are out of scope. Continuation after a
+  server restart follows the policy below.
+- **Continuation after profile changes** (owner decision, 2026-11-12): after
+  the server restarts with a different profile, unfinished runs continue at
+  the agent-operation level from durable workflow state under the new profile.
+  Do not restart the workflow or redo completed agent operations. Start a fresh
+  harness session when the previous session is incompatible; conversation
+  transfer and continuation of an in-flight tool call are not required.
+  Preserve pending gates and receipts, completed outputs, and approvals.
+  Validate the effective model and endpoint against the new profile before
+  execution and record the effective execution identity for each new attempt.
 - **Starting point:** [workflow/src/runtime.py](workflow/src/runtime.py) defines
   a small `Runtime` protocol and the current `CodexRuntime` adapter. Extend this
   boundary rather than spreading provider-specific behavior into templates,
@@ -692,62 +715,343 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - Define extensible adapter contracts and registration for harnesses and
     endpoints. Keep workflow results, events, errors, usage reporting, and
     cancellation/recovery behavior consistent at the engine boundary.
-  - Introduce named execution profiles selecting a harness, endpoint, model,
-    and relevant options. Use the same profile configuration in the CLI and
-    studio; retain Codex App Server as one supported adapter.
+  - Introduce named execution profiles defining a harness, configured inference
+    endpoints, available models and defaults, and relevant options. Load the
+    active profile once at server startup; CLI invocations load the same
+    configuration when they start. Retain Codex App Server as one supported
+    adapter.
+  - Consolidate an optional user JSON with the project profile at startup.
+    The project owns harness/execution policy; the user may define endpoints,
+    models, and the default model. Merge endpoints by name and models by key,
+    with complete user entries replacing matching project entries. Validate
+    the merged configuration and preserve startup-only snapshot semantics.
+  - Let users select a model for a new workflow in both the CLI and studio,
+    from the models supported by the active profile and applicable to that
+    workflow. Resolve the choice to its configured endpoint without requiring
+    users to edit endpoint settings or workflow templates. Distinguish models
+    with the same name on different endpoints.
   - Declare and validate capabilities, including tools, workspace access,
     structured output, session resume, and cancellation. An incompatible
     profile must explain the missing capability before execution starts.
-  - Support switching profiles for new runs and unfinished runs at a saved
-    turn boundary, without losing artifacts, human decisions, or completed
-    work. Provider-specific sessions are not assumed portable: when needed,
-    start a fresh session from durable workflow state and resume the pending
-    step. A switch must not bypass a gate, replay an approved operation, or
-    require retranslating completed chapters.
+  - Preserve artifacts, human decisions, and completed work during interruption,
+    retry, and recovery, including agent-level continuation after restarting
+    the server with a different profile. Recover the pending agent operation
+    from saved state, using a fresh session when needed. Recovery must not
+    bypass a gate or replay an approved operation. Provider-specific session
+    identities must not be resumed under an incompatible profile; incompatible
+    execution choices fail clearly without discarding saved progress.
   - Keep credentials in server-side configuration or secret references.
     Record the effective harness, endpoint identity, model, and configuration
-    revision per execution attempt so work remains attributable after a
-    switch; exclude secret values from events and exported records.
+    revision per execution attempt so work remains attributable; exclude secret
+    values from events and exported records.
 - **Acceptance criteria:**
   - The existing Codex App Server and at least one alternative harness can
     execute the same workflow through the common runtime contract.
   - At least one harness can use two supported inference endpoints selected
-    through configuration, without engine or workflow-template changes.
-  - A run can switch a supported harness or endpoint at a saved boundary and
-    continue with its artifacts and approvals intact, including when the new
-    harness needs a fresh session.
+    through profile configuration, without engine or workflow-template changes.
+    Different workflow runs may use different models from the loaded profile;
+    this is model selection, not dynamic profile switching.
+  - The active profile stays fixed for the server lifetime; editing its
+    configuration does not change running or subsequent turns until the server
+    restarts. No API or GUI control dynamically switches profiles.
+  - Users can start workflows with different compatible models through the CLI
+    and studio without restarting the server or editing the profile. Each run
+    records the selected model and endpoint; incompatible choices are refused
+    with an explanation before execution starts.
+  - Retry and recovery under the same effective profile preserve artifacts and
+    approvals, including recovery through a fresh harness session.
+  - After restarting the server with a different compatible profile, an
+    unfinished run continues its pending agent operation without restarting
+    the workflow or redoing completed operations. Pending human gates and
+    receipts remain valid; a fresh harness session receives the saved context,
+    and recovery neither bypasses gates nor applies an approved operation twice.
   - The CLI and studio expose the effective execution profile consistently;
     the chapter viewer and human gate behavior remain the same across profiles.
   - Shared adapter tests cover structured results, tool/workspace requirements,
     event and error handling, cancellation, retry, and state recovery.
     Integration checks exercise each supported combination; unsupported
     combinations fail with an actionable explanation.
-- **First tryout — Pi** (selected by the owner on 2026-11-06; `planned`):
+- **POC feature brief — Pi Evaluation** (Pi selected by the owner on
+  2026-11-06; tryout endpoint and model selected on 2026-11-12):
+  - **Status:** `in_progress`; implemented locally and uncommitted, automated
+    local checks and one live private-endpoint translation case passed; human quality
+    review and remaining recovery/isolation evidence pending.
+  - **Owner:** `cli1980`
+  - **Branch:** `feature/runtime-extensibility-poc`
+  - **Implementation progress (2026-11-12, local and uncommitted):**
+    - `workflow/src/execution.py` snapshots startup profiles, endpoints,
+      allowlisted model choices, and credential environment references for the
+      CLI and studio. Model keys are pinned at workflow creation; no hot reload
+      or per-run profile switching is exposed.
+    - `workflow/src/pi_runtime.py` runs pinned Pi `0.73.1` over RPC with isolated
+      runtime configuration and a stage-schema result tool. Every turn starts a
+      fresh session from durable context. The Python engine still validates the
+      result, artifacts, gates, and receipts before advancing.
+    - The studio offers compatible model choices and reports execution identity.
+      Profile changes on server restart invalidate old session identity without
+      resetting completed work or human gates. Each execution attempt records
+      the effective profile revision, harness, model, and endpoint; accepted
+      translation run records retain that provenance.
+    - Pi and profiled Codex expose normalized lifecycle, tool-boundary, and
+      available usage events. Raw Pi provider streams/stderr are not persisted;
+      configured credentials are redacted from returned events, results, and
+      errors. Tool execution is trusted local execution, not an OS sandbox.
+    - Installed Pi `0.73.1` passed a native-Windows RPC check against a local fake
+      inference server, including the full model ID and schema-backed result
+      extension. This is protocol evidence, not live private-endpoint inference or
+      literary-quality evidence.
+    - Automated checks: 81 workflow/profile/transport/API tests passed; the
+      studio case/browser suite passed 5 tests with the live Codex case skipped.
+      Frontend typecheck and production build passed. Recovery tests cover
+      preserved completed outputs, pending review identity and receipt,
+      incompatible-session reset, failure/retry, and successful receipt
+      consumption without repeating a human authorization.
+    - An unauthenticated model-list request to the selected endpoint returned
+      HTTP 401. The local endpoint's credential variable was not present in the development
+      process environment; no other provider credential was substituted.
+      The subsequent live evaluation used the already-running Pi server's
+      credential without exposing or copying it into the development terminal.
+    - **Live Pi translation evidence (2026-11-12):** reused
+      `beijing-night-translation-gui-001` on the evaluation server at port 8767.
+      Run `da6626a3-bfe6-4417-8960-bd0e7a1c7af7`, work `work-43fa92`, completed
+      preparation, samples, brief approval, chapter reviews, consistency,
+      acceptance, and export in 10 Pi turns (about 17 minutes), using the
+      selected private endpoint and exact model ID. Two prepared units were
+      exported; chapter/continuity hashes match their accepted artifacts and
+      the export manifest. The eight case steps passed.
+    - The first attempt found a browser-runner timing race: the gate frame
+      appeared before the sample-poll body. The runner now waits for that body.
+      The same run resumed at its existing sample gate; preparation and the
+      metadata decision were not repeated. This is browser-driver continuation,
+      not server-crash or cross-profile recovery evidence.
+    - Seven gate receipts and final acceptance are explicitly attributed to
+      `delegated-automation`, not a human. The browser's decision requests were
+      intercepted into the shared local engine for that attribution, followed
+      by real server worker resumption; therefore this does not establish
+      end-to-end browser decision-API transport coverage. The local report is
+      `.workflow-runs/pi-translation-browser-report.json`; artifacts are under
+      `.workflow-runs/pi-poc/runs/da6626a3-bfe6-4417-8960-bd0e7a1c7af7/export`.
+      Human literary-quality review, live approved/rejected consistency-fix
+      application, live server/profile-change recovery, and the second endpoint
+      remain outstanding. POC and milestone remain `in_progress`.
+    - **Shared-runtime refactor (local and uncommitted):** both adapters compose
+      `workflow/src/stdio.py` for subprocess/JSONL transport, deadlines,
+      malformed-output/EOF handling, stderr draining, and cleanup. Harness
+      handshakes, session commands, result extraction, and graceful
+      interruption remain adapter-owned. Codex now emits normalized events
+      directly, like Pi; profile code no longer translates Codex notifications.
+      `workflow/src/harnesses.py` registers factories and configuration
+      requirements. Profiles resolve their registration once at startup and
+      create adapters without harness-specific construction branches.
+      Constructors remain free of subprocess side effects.
+    - Refactor checks: 85 workflow/profile/transport/API tests passed, including
+      registered-factory extensibility and startup binding, constructor safety,
+      EOF/malformed JSON, deadline/callback cleanup, protocol interleaving,
+      event normalization, credential redaction, and durable recovery.
+      Studio browser/case checks also passed 5 tests with the separate live
+      Codex unittest skipped. The reusable profile-bound launcher is
+      `python -m studio.tests.run_translation_case`.
+    - **Post-refactor live verification:** the same existing
+      `beijing-night-translation-gui-001` case passed all eight steps separately
+      for Codex and Pi. Codex run `7057c015-0982-4462-b17f-f0ef64b8bdd3`
+      used installed Codex CLI `0.163.0` and model `gpt-6-astra`; Pi run
+      `763a27f5-3a59-4561-a58c-d66faa05549c` used pinned Pi `0.73.1` and
+      the endpoint-qualified model from the local profile. Each completed
+      10 agent turns, exported two units, and passed chapter/continuity hash
+      checks. Both reports' engine identities match the refactored source.
+      Canonical lifecycle, tool-boundary, and usage events were recorded by
+      both adapters.
+    - Each new live run records seven `delegated-automation` gate receipts and
+      delegated final acceptance. The browser-decision interception limitation
+      described above still applies; neither run is a human literary-quality
+      review. Both consistency reviews closed with `confirm consistency`, not
+      a live approved/rejected-fix application scenario. The models/providers
+      differ, so these runs demonstrate functional compatibility rather than a
+      controlled harness-quality or performance comparison.
+      Local reports: `.workflow-runs/refactor-codex-translation-report.json`
+      and `.workflow-runs/refactor-pi-translation-report.json`.
+    - **Per-run token usage:** the run inspector and chapter viewer now show
+      input/output/cached-input/total tokens and reporting-turn coverage.
+      Run detail API/CLI reads aggregate persisted usage without changing
+      artifacts or adding polling; failed/retried attempts remain included.
+      The runs list is unchanged. Cached input is a subset of input, not an
+      extra term in total. Missing usage stays unavailable and incomplete
+      counters are explicitly partial.
+    - Accounting investigation found that Codex `last` is the most recent
+      inference request, not the cumulative turn. New normalized events use
+      thread-total deltas and versioned accounting; previous normalized Codex
+      records are flagged as potentially undercounted. Historical raw Codex
+      cumulative telemetry is supported with resume/duplicate handling.
+      Existing events and accepted outputs were not rewritten; these figures
+      are reported token counts, not billing or controlled cost comparisons.
+      Verification: 92 workflow/accounting/transport/API tests passed, including
+      resumed-thread baselines, repeated telemetry, shrinking per-request
+      counts, retries, missing usage, legacy partial flags, read-only
+      aggregation, and exclusion from list responses. Studio/browser checks
+      passed 5 tests with the live Codex unittest skipped; the run-page check
+      verifies displayed totals and change-feed updates without polling.
+      Frontend typecheck and production build passed.
+    - **Live token-panel check after restart:** fresh Pi run
+      `cb5b29be-3fb9-4287-b469-3254ad9796e0` completed and exported with
+      11 reporting turns: 6,688,662 input, 76,417 output, 5,776,385 cached input
+      (included in input), and 6,765,079 total tokens. Both run inspector and
+      chapter viewer displayed the final values without partial warnings;
+      counts reconcile exactly with persisted usage events, and exported
+      chapter/continuity hashes passed. Usage was also visible during execution.
+      The browser driver hit a stale gate; the same saved run continued through
+      delegated local-engine decisions, with a transient HTTP read failure
+      during continuation. This is a successful token-display/reconciliation
+      check, not a clean uninterrupted browser-case pass. Original failure and
+      final verification are preserved in
+      `.workflow-runs/pi-token-usage-live-report.json`; final panel screenshot:
+      `.workflow-runs/pi-token-usage-final.png`. Decisions remain delegated, not
+      human literary-quality review.
+    - **Codex matching-model tryout:** the installed App Server catalog exposes
+      `gpt-6-sol`, the native advertised-model counterpart to Pi's
+      endpoint-qualified model ID from the local profile. An isolated profile/server
+      on port 8769 completed all eight Beijing-night case steps in run
+      `fa34e2a1-3a74-4f40-a26d-5de6d1d7faae`, with 10 agent turns and
+      verified exported chapter/continuity hashes. Native session metadata
+      confirms `gpt-6-sol` without fallback; global Codex configuration and
+      existing servers were not changed. Seven gate receipts and final
+      acceptance remain `delegated-automation`.
+    - Codex reported 9,117,907 input, 82,087 output, 8,690,816 cached input
+      (included in input), and 9,199,994 total tokens, with complete reporting
+      from all 10 turns. These values reconcile with normalized events and
+      the final cumulative native token counters of all five Codex threads.
+      The run viewer displayed the same totals. Evidence:
+      `.workflow-runs/codex-sol-translation-report.json` and
+      `.workflow-runs/codex-sol-token-usage.png`.
+    - For the clean 10-turn Pi case
+      `763a27f5-3a59-4561-a58c-d66faa05549c`, the corresponding figures are
+      7,515,818 input, 75,899 output, 6,690,345 cached input, and 7,591,717
+      total tokens. Pi reported about 17.5% fewer total tokens in this pair,
+      but Codex reported more cached input. This is not a billing comparison
+      or evidence of inherent harness efficiency: providers/endpoints, exact
+      served model revisions, session strategies, and generated decisions
+      were not controlled. Both use the same advertised model name and case,
+      not a verified identical model deployment. Human quality review remains
+      outstanding.
+    - **User profile JSON consolidation:** studio and CLI accept an explicit
+      `--user-execution-profile` alongside the project `--execution-profile`.
+      User endpoints merge by name and models by key, replacing complete
+      matching entries and retaining other project entries. Users may override
+      the default model, but not the harness, command, timeout, trust policy,
+      or profile name. Thin project policy files may obtain all model/endpoint
+      choices from the user file. Relative command paths remain project-relative.
+      Both inputs and the final profile are validated; duplicate keys, partial
+      endpoint replacements, missing explicit files, and invalid references
+      fail without fallback. Files and credentials are snapshotted once, and
+      the effective merged configuration determines the provenance revision.
+    - User-profile verification: 103 workflow/profile/accounting/transport/API
+      tests passed; 5 studio/browser checks passed with the separate live
+      Codex unittest skipped. Tests cover extension/replacement, restricted
+      fields, secret-reference handling, snapshots, revisions, project-relative
+      paths, CLI creation hints, and merged startup model selection without
+      inference. `workflow/profiles/user.example.json` documents the shape;
+      root `execution-profile.user.json` is gitignored and locally initialized
+      with the existing private endpoint/model and environment-variable reference.
+    - **Local-only inference choices:** the checked-in Pi evaluation JSON now
+      contains harness/command/timeout/trust policy only. The private endpoint,
+      model list, and default model live solely in the gitignored
+      `execution-profile.user.json`; both profile options are required for
+      startup. This relocation preserves the effective merged configuration
+      and its revision hash. Twelve focused profile/startup tests passed,
+      including validation of the shipped policy-only profile with a user file.
+    - **Internal-endpoint residue audit:** runtime code is provider-neutral;
+      remaining private URL, credential-variable, and model-binding literals
+      were removed from reusable tests and repository documentation. Tests
+      use a reserved example-domain endpoint and a synthetic fully qualified
+      model ID, retaining coverage for exact identifier preservation. A scan
+      of all non-ignored repository text files found no remaining internal
+      inference identifiers. Ignored local configuration and original local
+      evaluation evidence remain unchanged. All 104 workflow/profile/usage/
+      transport/API regression tests passed after the fixture cleanup.
+  - **Question:** can Pi execute the existing literary-translation workflow
+    through the shared runtime boundary, using the selected inference service,
+    without weakening workflow validation, human gates, or recovery?
+  - **Tryout configuration:**
+    - Harness: Pi, pinned to `@mariozechner/pi-coding-agent@0.73.1`.
+    - Inference endpoint and initial model: defined in the gitignored local
+      execution profile; exact values remain in local evaluation records.
+      Preserve the full configured model identifier; do not infer a different
+      provider or strip its prefix.
+    - The endpoint and available model are owner-supplied selections, not
+      evidence of successful access or Pi compatibility. Authentication method,
+      supported API protocol, tool calling, streaming, and model capabilities
+      must be verified. Keep credentials in local/server-side secret references,
+      never in the brief, committed configuration, traces, or exports.
+  - **User flow:** start the server with the Pi evaluation profile; start a
+    literary-translation workflow on an existing work and choose the configured
+    model; review its normal gates and accept/export through the existing UI.
+    The CLI uses the same configuration and model identity. The startup profile
+    is immutable during the server lifetime; model selection at run creation
+    does not change the profile.
+  - **Implementation boundary:** keep Codex available alongside a small Pi
+    adapter; put protocol and endpoint specifics behind the runtime boundary,
+    not in translation prompts, domain validation, or review components. Use
+    the current pinned skill bundles and durable workflow context.
   - Build a small `PiRuntime` adapter using Pi's subprocess
     [RPC interface](https://pi.dev/docs/latest/rpc), alongside `CodexRuntime`.
     Pin the tested Pi version and verify native Windows operation, workspace
-    and skill loading, session recovery, events, and cancellation.
+    and skill loading, session recovery, events, and cancellation. Verify the
+    execution-isolation boundary rather than assuming Pi supplies Codex's
+    filesystem and tool-network restrictions.
   - Prove the structured result contract with a schema-validated workflow-result
     tool or equivalent extension. Pi's JSON event stream alone does not
     constrain the final model response; the engine's validation remains
     authoritative.
   - Compare Codex and Pi using the same model and endpoint where both support
     them, recording any differences that prevent a controlled comparison.
-    Then exercise Pi with two inference endpoints selected through profiles.
+    Do not substitute another model silently if the selected combination is
+    unavailable.
   - Run a small literary-translation case through preparation, chapter review,
     whole-book consistency with approved and rejected fixes, and final
-    acceptance/export. Exercise interruption, retry, and switching profiles
-    at a saved boundary, including recovery through a fresh harness session.
-  - **Exit criteria:** artifacts, receipts, and completed chapters survive
-    switching; human gates and exact-fix validation cannot be bypassed;
-    malformed results fail clearly; CLI and studio retain the same workflow
-    behavior. Record correctness, model quality, latency, usage where available,
-    and integration limitations before deciding whether to adopt Pi.
-  - **Status boundary:** Pi is selected for evaluation, not yet implemented,
-    validated, or selected as the default harness.
-- **Open design choices:** the initial inference endpoints and models,
-  concrete adapter interfaces, profile storage and selection UI, and the
-  capability matrix. No implementation schedule has been selected.
+    acceptance/export. Exercise interruption, retry, and recovery through a
+    fresh harness session under the same effective profile. Also restart the
+    server with a different compatible profile and demonstrate agent-level
+    continuation of an unfinished run with its saved progress and approvals.
+  - **Verification and evidence:**
+    - Adapter tests cover structured results, interleaved events, provider
+      errors, malformed output, timeout, cancellation, and process cleanup.
+      Capability checks reject unsupported combinations before agent execution.
+    - A live small-manuscript run covers preparation, chapter reviews,
+      whole-book consistency, and final acceptance/export with the selected
+      endpoint/model. Exercise approved and rejected consistency fixes; if the
+      live model proposes none, record that coverage gap rather than claim it
+      was exercised. Deterministic tests separately verify exact-fix enforcement.
+    - Recovery checks retain artifact hashes, completed operations, pending
+      gates, and receipt identities across interruption, retry, fresh sessions,
+      and a server restart with a different compatible profile. No completed
+      operation is redone and no authorized change is applied twice.
+    - CLI and browser checks show the same effective harness, endpoint, and
+      model. Secret values are absent from client responses, events, and exports.
+    - Record the pinned Pi version, non-secret effective configuration, test/run
+      identities, correctness, model-quality observations, latency, usage where
+      available, and limitations. Distinguish test-double evidence, live-model
+      results, and human quality review.
+  - **Exit criteria:** the selected Pi/endpoint/model combination completes the
+    workflow through the shared contract; recovery preserves artifacts and
+    approvals; gates and exact-fix validation cannot be bypassed; malformed or
+    unsupported execution fails clearly. Report failures and missing coverage
+    explicitly before deciding whether to adopt Pi.
+  - **POC boundary:** this initial evaluation names one endpoint and one model.
+    The broader milestone's two-endpoint demonstration remains outstanding
+    until a second endpoint is selected and tested; this POC alone does not
+    close that milestone. Live profile switching, mid-run model selection,
+    conversation transfer, and unrelated workflow/UI redesign are excluded.
+  - **Status boundary:** the Pi adapter has passed functional live evaluation
+    against the selected private endpoint, but is not adopted as the default
+    harness. Isolation, recovery, and human quality-review gaps remain as
+    recorded above. See `studio/README.md` for local setup and trust limits.
+- **Open design choices:** additional inference endpoints and models beyond the
+  selected Pi tryout, authentication and API compatibility for that endpoint,
+  concrete adapter interfaces, profile storage and startup selection mechanism,
+  model discovery and workflow model-selection UI, whether per-agent model
+  overrides are exposed, and the capability matrix. Dynamic profile switching
+  is out of scope; agent-level continuation after a server restart with a
+  different compatible profile is required. No implementation schedule has
+  been selected.
 
 ### Deterministic DOCX formatting in the studio
 

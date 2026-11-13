@@ -30,6 +30,60 @@ class StudioCaseTests(unittest.TestCase):
     """Each case gets a fresh server root and app; no model runtime is started unless a case asks for one."""
 
     @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build the frontend and set STUDIO_BROWSER=1.")
+    def test_workflow_creation_submits_the_selected_model(self):
+        from urllib.parse import urlsplit
+        from playwright.sync_api import expect
+
+        def check(page, origin):
+            submitted, errors = [], []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            run = {"id": "model-run", "workflow": "literary-translation", "status": "READY",
+                   "worker": {"active": False, "paused": False}}
+
+            def serve(route):
+                path = urlsplit(route.request.url).path
+                if path.startswith("/api/live"):
+                    return live_feed(route, path, [])
+                if path == "/api/execution":
+                    body = {"name": "pi-evaluation", "harness": "pi", "default_model": "one", "models": [
+                        {"model_key": key, "model": model, "endpoint": endpoint,
+                         "workflows": ["literary-translation"]}
+                        for key, model, endpoint in (("one", "First model", "first"),
+                                                    ("two", "Second model", "second"))]}
+                elif path == "/api/templates":
+                    body = [{"id": "literary-translation-v1", "title": "Literary translation",
+                             "workflow": "literary-translation", "stages": ["prepare"], "choices": {}}]
+                elif path == "/api/works":
+                    body = [{"id": "model-work", "title": "Story", "manuscript_language": "zh"}]
+                elif path == "/api/runs" and route.request.method == "POST":
+                    submitted.append(route.request.post_data_json)
+                    # Keep the form visible, so this test isolates model selection from run navigation.
+                    route.fulfill(status=409, json={"detail": "Fixture stops before starting an agent."})
+                    return
+                elif path == "/api/runs":
+                    body = []
+                else:
+                    self.fail(f"Unexpected browser request: {path}")
+                route.fulfill(json=body)
+
+            page.route("**/api/**", serve)
+            page.goto(f"{origin}/#/runs")
+            model = page.get_by_role("combobox", name="Model", exact=True)
+            expect(model).to_have_value("one")
+            model.select_option("two")
+            page.get_by_role("combobox", name="Work", exact=True).select_option("model-work")
+            page.get_by_role("button", name="Create and start", exact=True).click()
+            expect(page.get_by_role("alert")).to_contain_text("Fixture stops")
+            self.assertEqual(submitted, [{"template_id": "literary-translation-v1",
+                                         "work_id": "model-work", "model": "two"}])
+            expect(page.locator("form")).to_contain_text("without an OS sandbox")
+            self.assertEqual(errors, [])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            self.run_in_browser({}, Path(temporary) / "server",
+                                lambda: self.fail("The browser fixture must not run an agent."), check=check)
+
+    @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build the frontend and set STUDIO_BROWSER=1.")
     def test_feedback_stays_with_its_review(self):
         """Advance through approvals without reloading; old annotations must never enter the next reply."""
         from urllib.parse import urlsplit
@@ -202,6 +256,9 @@ class StudioCaseTests(unittest.TestCase):
                 "finalized": False, "engine_current": True, "error": None, "attempts": 3, "available_actions": [],
                 "stages": ["prepare", "line"], "stage_titles": {}, "passes": [], "manuscript_language": "zh",
                 "settings": {}, "gate": None,
+                "usage": {"input_tokens": 1200, "output_tokens": 300, "cached_input_tokens": 700,
+                          "total_tokens": 1500, "reported_attempts": 2, "attempts": 3,
+                          "partial": True, "warnings": ["Some agent turns have not reported token usage."]},
             }
             state = {"revision": 1}
             requests = Counter()
@@ -225,15 +282,20 @@ class StudioCaseTests(unittest.TestCase):
 
             page.route("**/api/**", serve)
             page.goto(f"{origin}/#/runs/{run_id}")
-            expect(page.locator(".facts")).to_contain_text("1/3 chapters")
+            expect(page.locator(".facts").first).to_contain_text("1/3 chapters")
+            expect(page.locator(".token-usage")).to_contain_text("1,500")
+            expect(page.locator(".token-usage")).to_contain_text("(partial)")
             page.wait_for_timeout(1500)  # The initial load and the first snapshot settle.
             settled = requests[f"/api/runs/{run_id}"]
             page.wait_for_timeout(4000)  # Longer than any old polling interval; the feed reconnects meanwhile.
             self.assertGreater(requests["/api/live/stream"], 2)
             self.assertEqual(requests[f"/api/runs/{run_id}"], settled)
             run["progress"] = {"completed": 2, "total": 3}
+            run["usage"].update(total_tokens=1800, input_tokens=1500, reported_attempts=3, partial=False, warnings=[])
             state["revision"] = 2
-            expect(page.locator(".facts")).to_contain_text("2/3 chapters")
+            expect(page.locator(".facts").first).to_contain_text("2/3 chapters")
+            expect(page.locator(".token-usage")).to_contain_text("1,800")
+            expect(page.locator(".token-usage")).not_to_contain_text("(partial)")
             self.assertEqual(requests[f"/api/runs/{run_id}"], settled + 1)
             self.assertEqual(errors, [])
 

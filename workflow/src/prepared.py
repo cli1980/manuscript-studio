@@ -381,6 +381,10 @@ class PreparedManuscriptEngine(Engine):
             "engine": state.get("engine"), "created_at": state["created_at"],
             "accepted_at": state["acceptance"]["created_at"], "acceptance": state["acceptance"],
             "restart_of": state.get("restart_of"),
+            "execution_attempts": [
+                {"event_id": event_id, "created_at": created_at, **json.loads(payload)}
+                for event_id, created_at, payload in self.store.db.execute(
+                    "SELECT id,created_at,payload FROM events WHERE kind='execution.started' ORDER BY id")],
             "passes": [{"number": p["number"], "stage": p["stage"], "accepted_at": (p["accepted"] or {}).get("created_at")}
                        for p in state.get("passes") or []],
             "source": {"name": state["source_name"], "sha256": state["source"]["sha256"]},

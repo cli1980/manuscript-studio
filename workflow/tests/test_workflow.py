@@ -13,6 +13,7 @@ from pathlib import Path
 
 from ..src import registry
 from ..src.engine import Engine, WorkflowError, result_schema
+from ..src.execution import ExecutionProfile
 from ..src.runtime import CodexRuntime, Request
 from ..src.service import WorkflowService
 from ..src.storage import digest, now
@@ -21,6 +22,7 @@ from ..src.translation import TranslationEngine
 from ..src import document_adapters
 from . import run_e2e
 from . import monitor_performance
+from .test_execution import profile_data
 
 TRANSLATION = "literary-translation-v1"
 FORMATTING = "manuscript-formatting-v1"
@@ -947,6 +949,68 @@ class WorkflowTests(unittest.TestCase):
         self.engine.retry()
         self.assertEqual(self.engine.state()["next_input"]["id"], receipt)
         self.assertEqual(len(self.gate_receipts()), 1)
+
+    def test_profile_restart_preserves_completed_work_and_pending_receipt(self):
+        self.prepare()
+        self.engine.advance(ScriptedRuntime(lambda request: self.map_gate()))
+        revision, state = self.engine.store.load()
+        state.update(execution={"profile": "previous-profile", "harness": "codex"},
+                     thread_id="old-codex-thread")
+        self.engine.store.save(revision, state, "test.profile_selected")
+        gate, outputs = state["gate"], state["outputs"]
+        self.reopen()  # A new controller sees exactly the same pending review.
+        self.assertEqual(self.engine.state()["gate"], gate)
+        self.engine.reply(gate["id"], "PM001 approve")
+        receipt = self.engine.state()["next_input"]
+        approvals = self.engine.state()["approvals"]
+        with patch.dict("os.environ", {"TEST_INFERENCE_KEY": "fixture-key"}):
+            profile = ExecutionProfile(profile_data())
+
+        def fail(request, on_event, on_thread):
+            self.assertIsNone(request.thread_id)  # Never resume the old harness's conversation.
+            self.assertIn(receipt["id"], request.prompt)
+            on_thread("fresh-pi-thread")
+            raise RuntimeError("Interrupted Pi operation")
+
+        with patch("workflow.src.harnesses.PiRuntime") as adapter:
+            adapter.return_value.run.side_effect = fail
+            with self.assertRaisesRegex(RuntimeError, "Interrupted Pi"):
+                self.engine.advance(profile.runtime())
+        state = self.engine.state()
+        self.assertEqual(state["execution"]["harness"], "pi")
+        self.assertEqual(state["execution"]["model"], "vendor/family/test-model")
+        self.assertEqual(state["outputs"], outputs)
+        self.assertEqual(state["approvals"], approvals)
+        self.assertEqual(state["next_input"], receipt)
+        count = len(state["receipts"])
+        self.engine.retry()
+        self.assertEqual(self.engine.state()["next_input"], receipt)
+        self.assertEqual(len(self.engine.state()["receipts"]), count)
+        with patch("workflow.src.harnesses.PiRuntime") as adapter:
+            def complete(request, on_event, on_thread):
+                self.assertIsNone(request.thread_id)
+                self.assertIn(receipt["id"], request.prompt)
+                on_thread("fresh-pi-retry")
+                return self.map_gate("2", True)
+            adapter.return_value.run.side_effect = complete
+            state = self.engine.advance(profile.runtime())
+        self.assertIsNone(state["next_input"])
+        self.assertEqual(len(state["receipts"]), count)
+        self.assertEqual(state["outputs"], outputs)
+        self.assertEqual(state["status"], "WAITING_FOR_HUMAN")
+        self.assertEqual(state["gate"]["kind"], "map_exceptions")
+        self.engine.reply(state["gate"]["id"], "confirm final closure")
+        self.assertEqual(self.engine.state()["status"], "READY")
+        attempts = [e for e in self.engine.store.events() if e["kind"] == "execution.started"]
+        self.assertEqual(attempts[-1]["payload"]["execution"], state["execution"])
+
+    def test_profile_execution_refuses_an_unconfigured_runtime(self):
+        revision, state = self.engine.store.load()
+        state["execution"] = {"profile": "explicit"}
+        self.engine.store.save(revision, state, "test.profile_selected")
+        with self.assertRaisesRegex(ValueError, "requires an execution profile"):
+            self.engine.advance(ScriptedRuntime(self.preparation))
+        self.assertEqual(self.engine.state()["status"], "READY")
 
     def test_export_conflict_is_not_overwritten(self):
         self.complete_translation()
@@ -2131,6 +2195,14 @@ for line in sys.stdin:
               "params": {"command": "fixture denied command"}})
         answer = json.loads(sys.stdin.readline())
         assert answer["result"]["decision"] == "decline"
+        for method in ("item/started", "item/completed"):
+            send({"method": method, "params": {"threadId": "thread-1", "turnId": "turn-1",
+                  "item": {"id": "tool", "type": "commandExecution", "exitCode": 0,
+                           "aggregatedOutput": "private tool output"}}})
+        for _ in range(2):
+            send({"method": "thread/tokenUsage/updated", "params": {"threadId": "thread-1", "turnId": "turn-1",
+                  "tokenUsage": {"total": {"inputTokens": 600, "outputTokens": 60, "cachedInputTokens": 350},
+                                 "last": {"inputTokens": 100, "outputTokens": 10, "cachedInputTokens": 50}}}})
         # Notifications intentionally precede the RPC response.
         send({"method": "item/completed", "params": {"threadId": "thread-1", "turnId": "turn-1",
               "item": {"type": "agentMessage", "text": json.dumps({"outcome": "blocked"})}}})
@@ -2150,6 +2222,11 @@ for line in sys.stdin:
                     self.assertEqual(response, {"outcome": "blocked"})
                     self.assertEqual(threads, ["thread-1"])
                     self.assertTrue(any(event[0] == "runtime.request" for event in events))
+                    self.assertEqual([kind for kind, _ in events if kind.startswith("runtime.tool_")],
+                                     ["runtime.tool_started", "runtime.tool_completed"])
+                    self.assertEqual(sum(p["input"] for k, p in events if k == "runtime.usage"), 100)
+                    self.assertNotIn("private tool output", json.dumps(events))
+                    self.assertTrue(all(kind.startswith("runtime.") for kind, _ in events))
 
     def test_timeout_terminates_process(self):
         with tempfile.TemporaryDirectory() as temp:

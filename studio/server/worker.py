@@ -12,10 +12,11 @@ from workflow.src.storage import now
 class Workers:
     """One thread per active run. Human waits, blockers, failures, and completion stop a worker."""
 
-    def __init__(self, server_root, runtime_factory, *, owner=None):
+    def __init__(self, server_root, runtime_factory, *, owner=None, execution_profile=None):
         self.server_root = server_root
         self.runtime_factory = runtime_factory
         self.owner = owner
+        self.execution_profile = execution_profile
         self.lock = threading.Lock()
         self.threads = {}
         self.paused = set()
@@ -56,7 +57,7 @@ class Workers:
             thread.join(timeout)
 
     def _loop(self, run_id):
-        service = WorkflowService(self.server_root, owner=self.owner)
+        service = WorkflowService(self.server_root, owner=self.owner, execution_profile=self.execution_profile)
         try:
             while True:
                 with self.lock:

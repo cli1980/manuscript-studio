@@ -7,7 +7,8 @@ import threading
 from pathlib import Path
 
 # Agent streaming events that the timeline hides by default; turn boundaries stay visible.
-QUIET_PREFIXES = ("item/", "thread/", "account/", "mcpServer/", "remoteControl/", "codex/", "test.")
+QUIET_PREFIXES = ("item/", "thread/", "account/", "mcpServer/", "remoteControl/", "codex/", "test.",
+                  "runtime.tool_", "runtime.usage")
 
 
 def visible(kind):

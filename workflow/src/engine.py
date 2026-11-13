@@ -611,10 +611,19 @@ class Engine:
                 else:
                     self.store.save(revision, state, "acceptance.requested", {"acceptance_id": state["acceptance_id"]})
                 return state
+            model = state["definition"]["agents"][stage["agent"]].get("model")
+            if hasattr(runtime, "describe"):
+                execution = runtime.describe(model, state["workflow"])
+                if state.get("execution") != execution:
+                    state["thread_id"] = None
+                state["execution"] = execution
+            elif state.get("execution"):
+                raise ValueError("This run requires an execution profile; use --execution-profile to continue.")
             self.before_turn(state)
             state.update(status="RUNNING", attempts=state["attempts"] + 1, error=None)
             revision = self.store.save(revision, state, "execution.started",
-                                       {"stage": state["stage"], "chapter_id": self.instance(state)["chapter_id"]})
+                                       {"stage": state["stage"], "chapter_id": self.instance(state)["chapter_id"],
+                                        "execution": state.get("execution")})
 
             def on_thread(thread_id):
                 nonlocal revision
@@ -625,7 +634,7 @@ class Engine:
                 schema = self.result_schema_for(state)
                 result = runtime.run(Request(
                     self.workspace, self.stage_prompt(state, stage),
-                    state["definition"]["agents"][stage["agent"]].get("model"),
+                    model,
                     state["thread_id"], schema,
                 ), self.store.event, on_thread)
                 error = next(Draft202012Validator(schema).iter_errors(result), None)
@@ -976,7 +985,7 @@ class Engine:
         result = {key: state.get(key) for key in (
             "id", "template_id", "workflow", "work_id", "owner", "status", "stage", "attempts", "error",
             "export_path", "document_path", "manuscript_language", "restart_of", "superseded_by", "settings",
-            "handed_off_work")}
+            "handed_off_work", "execution")}
         result["chapter_id"] = iteration["chapter_id"] if iteration else None
         iterations = state.get("iterations") or []
         whole = next((item for item in iterations if item["chapter_id"] == "_whole"), None)
