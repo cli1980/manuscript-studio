@@ -9,6 +9,17 @@ Read [roadmap.md](roadmap.md) before starting project work. Keep progress accura
 and understandable to both agents and humans. Do not invent priorities,
 milestones, completed checks, or human approvals.
 
+## UX specification
+
+[docs/ux/README.md](docs/ux/README.md) is the versioned source of truth for
+user flows, screen contracts, interaction rules, and UX decisions. Read the
+relevant flow/screen documents before changing the studio UI, and update them
+with behavior changes. Distinguish current behavior from proposed designs,
+and source mapping from actual browser/test validation.
+
+Keep milestone scope, delivery status, priorities, and implementation evidence
+in `roadmap.md`; link to UX IDs instead of duplicating detailed designs there.
+
 ## Compatibility
 
 Until the product's first formal release, do not preserve backward compatibility

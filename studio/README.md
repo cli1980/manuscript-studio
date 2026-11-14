@@ -1,5 +1,11 @@
 # Manuscript Studio web application
 
+User flows, screen contracts, and interaction decisions are maintained in the
+[versioned UX specification](../docs/ux/README.md). Use its stable flow/screen
+IDs when reviewing or changing the interface. Current behavior and planned
+designs are separate; the setup and operational guidance below is not a second
+UX backlog.
+
 ```text
 .venv-workflow/Scripts/python.exe -m pip install -r studio/requirements.txt
 cd studio/frontend && npm ci && npm run build && cd ../..

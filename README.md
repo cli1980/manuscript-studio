@@ -190,6 +190,11 @@ Provides a shared interactive review interface for stable-ID approval sheets. It
 
 ## Workflow prototype
 
+The [versioned UX specification](docs/ux/README.md) maps the studio's current
+user flows and screens, distinguishes future designs, and records interaction
+decisions. The [roadmap](roadmap.md) tracks milestone delivery rather than
+duplicating those detailed designs.
+
 The [workflow CLI](workflow/README.md) provides an initial orchestration implementation:
 verified preparation, a human metadata review gate, translation with
 source-grounded review and human gates,
@@ -215,6 +220,7 @@ Run the existing dependency-free Python regression suites from the repository ro
 ```text
 python -B scripts/test_install_skills.py
 python -B scripts/test_plugin_listing.py
+python -B scripts/check_ux_spec.py
 python -B plugins/manuscript-studio/skills/literary-agent-querying/scripts/test_sample_boundary.py
 python -B plugins/manuscript-studio/skills/literary-agent-querying/scripts/test_validate_on_demand.py
 python -B plugins/manuscript-studio/skills/review-approval-sheet/scripts/test_approval_review.py

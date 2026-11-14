@@ -11,7 +11,10 @@ workflow supported in both the CLI and the web GUI.
 - Milestones are outcome-based and ordered by priority. They have no target dates.
 - Every milestone is owned by the project owner, `cli1980`, unless stated otherwise.
 - The roadmap file stays at `roadmap.md`, which is where [AGENTS.md](AGENTS.md) points.
-- All planned work, milestones, scope, and progress live only in `roadmap.md`.
+- Milestones, delivery scope, priorities, and implementation progress live in
+  `roadmap.md`. Detailed user flows, screen contracts, interaction rules, and
+  UX design decisions live in the versioned [UX specification](docs/ux/README.md).
+  Link to stable flow/screen IDs instead of duplicating their design here.
   The GitHub Project
   [Manuscript Studio Requirements](https://github.com/users/cli1980/projects/2) is
   used only to collect and triage external requirements (New, Triage, Accepted,
@@ -28,11 +31,11 @@ Agreed in the 2026-10-26 planning session:
   Noncommercial 1.0.0; commercial use requires a separate license negotiated
   with the copyright holder. Already-published MIT versions of `workflow/` stay
   MIT. `fixtures/` keep the terms recorded with each fixture.
-- **Intake on the Works page** (revised by the owner on 2026-10-27; originally
-  "workflow first, then upload"). Manuscripts are added on the Works page, each
-  upload creating a new work, and the Works page is the standard place for
-  workflow intake and outcomes. Workflows are started from the workflow page on
-  an existing work; preparation remains each run's first stage.
+- **Interaction contracts:** intake, reading/decision placement, versioned
+  metadata, and confirmation behavior are specified in
+  [UX principles](docs/ux/principles.md) and
+  [UXD-001](docs/ux/decisions/UXD-001-interaction-contracts.md), preserving the
+  original owner decisions and dates.
 - **Manuscripts are immutable.** Manuscript text changes only through workflow
   stages and their human gates. The GUI presents the original upload, prepared
   chapters, and workflow outputs read-only.
@@ -64,10 +67,12 @@ Agreed in the 2026-10-26 M1 design review (details in
   chapter, restart a stage, or restart an unfinished workflow. Restarts reuse
   the glossary and voice of the last completed chapter; completed chapters are
   not changed unless restarted.
-- **Finalization.** Final acceptance is irreversible: the workflow becomes
-  read-only on that work and nothing in the run can be restarted. Changes
-  require adding the manuscript again as a new work. The GUI must notify users
-  prominently before and after acceptance.
+- **Finalization.** Final acceptance makes that run immutable. A new run on the
+  same work can publish the next version (owner correction, 2026-10-28).
+  See [UF-13](docs/ux/flows/UF-13-finalize.md) and
+  [UF-14](docs/ux/flows/UF-14-next-version.md) for the user-facing contract and
+  [UXD-001](docs/ux/decisions/UXD-001-interaction-contracts.md) for the superseded
+  new-upload-only wording.
 - **Engine updates.** An unfinished run must be restarted after an engine code
   update.
 
@@ -150,9 +155,9 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - Restarting a chapter archives its work, restores glossary and voice from the
     last completed chapter, and translates only that chapter again; restarting a
     stage or an unfinished workflow keeps receipts and events.
-  - After final acceptance, the run's own chapters and stages cannot be restarted (new runs on the work publish the next version), and
-    are refused; after an engine update, unfinished runs allow only reading and
-    restarting the workflow.
+  - After final acceptance, the run's own chapters/stages cannot be restarted;
+    new runs on the work publish the next version. After an engine update,
+    unfinished runs allow only reading and restarting the workflow.
 - **Progress:** the metadata review gate was implemented first (2026-10-26).
   On 2026-10-27 the remaining scope was implemented: the template registry and
   `template.json` files, the split into
@@ -236,60 +241,19 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     start a workflow on an existing work from the workflow page.
   - A background worker runs agent turns automatically until the run needs a
     human (gate, acceptance, blocker, or failure); replies resume it.
-  - An intuitive workflow dashboard and run view for inspecting status: overall
-    state, current stage and chapter, progress, the pending human action, the
-    reason for any blocker or failure, and a timeline with a live event stream.
-  - Workflow controls with clear availability and confirmation:
-    - **Pause:** stop automatic execution after the current agent turn,
-      preserving saved state. Immediate pause by interrupting the turn was
-      removed from M3 (owner decision, 2026-11-10): across 121 measured turns
-      the median was 1.4–1.9 minutes and the longest 7, so waiting for the turn
-      costs little, while interrupting discards its work. See Later.
-    - **Resume:** continue automatic execution from the saved state.
-    - **Retry:** retry the current step from saved state with a fresh agent
-      thread after a failure, block, or pause.
-    - **Restart chapter / stage / workflow:** discard and redo one chapter, one
-      stage, or an unfinished workflow, as defined in the M1 design. There is
-      no checkpoint rollback.
-    - **Stop:** cancel the run permanently, retaining its artifacts and history.
-  - A prominent notice before final acceptance that accepting finalizes the run
-    and makes the workflow read-only on the work, with explicit confirmation;
-    a persistent banner on finalized runs; and a notice listing runs that must
-    be restarted after an engine update.
-  - Download of the original upload, and read-only views of prepared chapters
-    and workflow outputs. A download replaces viewing the original upload
-    (owner decision, 2026-11-10): the chapter viewer already shows its
-    verified prepared text, and the file itself opens faithfully in Word.
-  - Metadata editing with version history.
-  - All translation gates as native forms driven by the approval-sheet JSON and
-    submitted through the existing validator and parser; final acceptance with
-    source and English side by side. The Markdown export download was removed
-    from M3 (owner decision, 2026-11-10); downloads of accepted versions are
-    planned in the UX enhancement's works explorer.
-  - Whole-book translation consistency (added by the owner on 2026-10-28;
-    implemented locally on 2026-11-06; closed with M3 on 2026-11-12, subject
-    to the verification limits recorded above). Chapters carry continuity through shared files
-    (`glossary.md`, `voice.md`, completed English chapters, and the chapter
-    brief). After the last
-    chapter and before final acceptance, the translation workflow runs one
-    whole-book consistency pass over all English chapters against the source and
-    continuity files: names and terminology, forms of address, voice drift per
-    character or narrator, and cross-chapter references. It proposes only fixes
-    for objective inconsistencies, as one approval sheet decided in a single
-    submission with separate closure; it does not retranslate or restyle.
-    Approved fixes are applied and the affected chapters re-verified before
-    acceptance. The literary-translation skill defines the pass, and the
-    template adds it as a concluding whole-book step.
-    - Completion of all saved chapters automatically starts a distinct
-      whole-book job. Its review and final acceptance stay in the chapter
-      viewer, with chapter links on findings and separate whole-book progress.
-    - The engine binds coverage and proposals to source/output hashes, requires
-      receipt-backed approve/reject decisions and separate closure, and checks
-      candidate copies against the exact approved fixes before promoting them
-      together. A clean review also requires explicit confirmation.
-    - A retry resumes the job; restarting any chapter invalidates its review.
-      Applied fixes are recorded per chapter and in the accepted version's
-      `run.json`; restarting consistency preserves completed chapter outputs.
+  - A dashboard, run controls, live progress/history, read-only chapter review,
+    versioned metadata, native gates, and irreversible final acceptance.
+    Detailed interaction contracts are maintained in
+    [UF-03 through UF-18](docs/ux/README.md#flow-inventory), the
+    [screen contracts](docs/ux/README.md#screen-contracts), and
+    [dated decisions](docs/ux/decisions/UXD-001-interaction-contracts.md).
+  - Whole-book translation consistency (owner addition 2026-10-28; implemented
+    2026-11-06; closed with M3 on 2026-11-12 subject to the recorded limits).
+    Objective fixes require receipt-backed decisions, separate closure, and
+    exact-fix/content verification before acceptance. Coverage and proposals
+    bind source/output hashes; promotion validates candidate copies, and
+    `run.json` retains per-chapter applied fixes.
+    [UF-07](docs/ux/flows/UF-07-translate.md) owns the review/recovery interaction.
   - Localhost-only deployment, with the explicit loopback preview-origin option.
     Codex credentials are configured server-wide. Remote deployment and login
     belong to the standalone remote-mode milestone.
@@ -305,19 +269,10 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - Final acceptance is offered only after the whole-book consistency pass is
     closed, and every applied consistency fix is recorded against the chapter
     it changed.
-- **Implied closure for advice-type sheets** (owner decision, 2026-10-28;
-  implemented with the front-matter change in `d9896c5`): the separate closure is redundant where a later step shows the
-  full result. For translation advice and map exceptions, a submission that
-  decides every item with resolving decisions counts as final closure; a
-  discuss or revise decision still produces a new revision of the same sheet.
-  Chapter approval keeps its own decision: "Approve chapter" without edits, and,
-  when the final check proposes edits, a separate closure presented as approving
-  the chapter with those edits, because nothing later shows the final text.
-  Changes the approval-sheet and translation skill contracts, the engine's
-  closure handling, the translation template, the studio review screen, and
-  tests; unfinished runs need a workflow restart.
-  - Manuscript text cannot be modified from the GUI outside workflow gates.
-  - Metadata edits are versioned and visible in history.
+- **Review decisions:** the 2026-10-28 implied-closure decision and its
+  chapter-approval exceptions are preserved in
+  [UXD-001](docs/ux/decisions/UXD-001-interaction-contracts.md). The domain
+  validators remain authoritative; the UX migration does not change them.
 - **Out of scope:** DOCX formatting in the web application, PDF intake, user
   management and roles, remote deployment, real-time collaboration, non-English
   targets, and manual manuscript text editing.
@@ -330,48 +285,24 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 - **Depends on:** M1; M3 for web support
 - **Outcome:** A Literary Edit workflow is available in both the CLI and the web
   GUI.
-- **Scope agreed so far (2026-10-27):** template `literary-editing-v1`:
-  preparation (reused) → metadata review → optional developmental editing
-  (chapter evidence, then one whole-book verdict and `DEV-###` recommendations
-  at a revision/approval gate; report only, no text changes) → line editing →
-  copy editing (each chapter by chapter with shared style sheet, continuity
-  concordance, and editorial brief; per chapter a decision review with separate
-  closure, then an explicit apply authorization; each stage ends with a
-  whole-book consistency pass with its own gate) → final acceptance → export.
-  Formatting reuses the unchanged derived template after acceptance. Text to
-  edit, including a translation, is uploaded as a new work.
-- **Editing passes chosen by the user** (owner decision, 2026-11-05; replaces
-  the fixed developmental → line → copy sequence and optional stages;
-  implemented locally and uncommitted, covered by deterministic tests and a
-  browser check of the pass decisions, not yet by a live run):
-  1. Preparation and metadata review.
-  2. The user picks one pass: developmental, line, or copy editing. When the
-     pass completes, the user accepts its output in a separate decision; the
-     accepted text and editorial files are the next pass's input. Step 2
-     repeats as often as the user wants, in any order, including the same pass
-     again. There is no discard: a pass is redone with a stage restart before
-     it is accepted.
-  3. Final acceptance (irreversible), offered after metadata review and after
-     every accepted pass, including with zero passes. After it no further pass
-     can run.
-  4. Export, automatic after final acceptance, as in every workflow.
-  - Design: a generic `select` stage kind in the engine. Its options are
+- **Scope:** template `literary-editing-v1`, shared preparation/metadata,
+  developmental recommendations (including `DEV-###` whole-book findings;
+  report-only), line/copy editing with shared editorial state, required
+  review/application gates, final acceptance/export, and derived formatting.
+  The original 2026-10-27 fixed stage sequence was superseded on 2026-11-05.
+- **UX contract:** [UF-08](docs/ux/flows/UF-08-edit.md) and
+  [UXD-001](docs/ux/decisions/UXD-001-interaction-contracts.md) define repeatable
+  user-selected passes, pass acceptance, and implied editorial closure with
+  separate application authorization. The original pass-choice change had
+  deterministic and browser checks but no live-run evidence.
+  - Engine design: a generic `select` stage kind. Its options are
     stages that run only when chosen and return to the selection when done;
     the engine owns the pass-acceptance and pass-choice decisions and records
     a pass history. Templates declare the options and their titles, so the
     studio renders the choice without per-workflow code. `optional` stages
-    and `skip_stages` are removed. The studio adds an `EditingWorkflowUI`
-    page-behavior class, keeping decisions on the run page until the viewer
-    supports editing.
-- **Implied closure for editorial reviews** (owner decision, 2026-11-05;
-  uncommitted): the separate closure after item decisions is removed, as for
-  translation advice. A submission that decides every item with resolving
-  decisions closes the editorial review; a reopening decision still produces a
-  new revision. The apply authorization stays, because it shows exactly what
-  changes before the text is edited. A chapter with proposals now takes two
-  decisions instead of three. Changes the template (`"closure": "implied"`),
-  the editing engine's instructions to the agent, the E2E launcher, and tests;
-  unfinished editing runs need a workflow restart.
+    and `skip_stages` are removed. Current page behavior and remaining viewer
+    work are documented in the UX specification, rather than freezing the
+    historical run-page-only placement as the present design.
 - **Deferred to the remaining M4 work:** developmental-stage details,
   restarting a completed editorial chapter, linking an edited translation to
   its source work, and web support.
@@ -442,211 +373,29 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 ### UX enhancement — studio interface structure
 
-- **Status:** `planned` (recorded by the owner on 2026-10-28 from a design review)
+- **Status:** `in_progress` for UX specification and source mapping (owner
+  direction, 2026-11-13); remaining interface redesign is not implemented by
+  this documentation change. Original design review recorded 2026-10-28.
 - **Owner:** `cli1980`
-- **Depends on:** M3 studio as implemented locally (`studio/`)
-- **Outcome:** The studio is organized as four distinct interfaces: an
-  evolving page viewer, a separate run inspector, a separate works explorer,
-  and one unified decision GUI for every kind of approval. The workflow engine
-  and its gate model do not change.
-- **Findings (design review, 2026-10-28):**
-
-  | Perspective | Fit today | Main gaps |
-  |---|---|---|
-  | Evolving page viewer | Partial | Chapter text is shown as whole blocks without paragraph alignment; the viewer exists only inside a run, not for accepted versions |
-  | Separate run inspector | Partial | The run page still hosts the metadata review and final acceptance forms; the timeline is a raw event list |
-  | Works explorer | Mostly | The work page mixes browsing with actions; the library is a flat file list rather than workflow → version |
-  | Unified approval GUI | No (UI level) | Six different form components for one engine gate model |
-
-- **Scope:**
-  1. **Unified decision panel.** The engine already models every decision the
-     same way (kind, optional bound text, optional approval sheet, offered
-     commands, closure, recorded receipt), but the UI uses six components:
-     the item-by-item review (translation advice), the list form (map
-     exceptions and other sheets), free replies (questions, continuation), the
-     chapter approval panel, the metadata gate, and final acceptance. Replace
-     them with one decision panel driven by the gate: a header saying what is
-     being decided and why, the conversation so far (the reviewer's feedback
-     and the agent's answer), a body by shape (the item-by-item review for every
-     sheet, command buttons, a feedback box), one closure pattern, and one
-     style for irreversible actions. Metadata review and final acceptance keep
-     their own bodies inside the same frame.
-  2. **Run inspector.** The run page becomes inspection and control only:
-     stage progress, chapter progress, a readable decision history (receipts,
-     already summarized in each version's `run.json`), errors, and controls,
-     with no forms. Decisions move to the page viewer (see the frontend
-     structure decision below).
-  3. **Works explorer.** The library is browsed as workflow → version → files,
-     using the version preview card from the format panel (`run.json` and
-     `manifest.json`). The work page is organized into sections: overview and
-     metadata, versions (with formatting and downloads), runs, and library and
-     publication log. Add downloads, a preview of the original source
-     document, and comparison between metadata versions. Intake stays on the
-     Works list.
-  4. **Evolving page viewer.** Give the viewer its own document model: the
-     prepared paragraphs plus per-stage versions, numbered by paragraph (as the
-     passage map already is). The content source is selectable: the run in
-     progress or an accepted version (`<workflow>/vNNN`). Split the viewer into
-     a reading area and a decision area so new layouts (aligned source and
-     target, diffs for line and copy editing, single-language reading,
-     highlighting of sheet item locations) do not touch decision logic, and so
-     several editing stages and the whole-book pass fit in one view.
-- **Metadata review on the front-matter chapter** (owner decision, 2026-10-28;
-  implemented after the 黑松石 run completed, in `d9896c5`):
-  - Every prepared work starts with exactly one front-matter unit, split
-    verbatim from the source: the material before the first chapter, and at
-    least the title heading. The prepare-manuscript skill contract and its
-    validator enforce it; workflow, studio, skill, and evaluation fixtures are
-    updated accordingly.
-  - The engine attaches the metadata review gate to that front-matter chapter
-    (the metadata record itself stays work-level and shared), so the studio
-    shows metadata review in the page viewer beside the prepared front matter,
-    through the same routing as every other chapter decision, without a
-    special case.
-  - Applies to the translation and editing templates; unfinished runs need a
-    workflow restart when it lands.
-  - A missing title is not a blocker (owner decision, 2026-11-10, replacing
-    the earlier "stop and ask the user"; implemented and committed locally). Preparation
-    uses every available source of a title, in order: the work's metadata
-    title, the source document's own title property, then the file name. It
-    writes the title as the front matter's opening heading and records it as
-    `supplied_title` (text, basis, evidence). The validator checks that the
-    heading matches the record. The metadata review on the front matter, and
-    the front-matter page in the chapter viewer, show that the title was
-    supplied, so the user approves it there. A corrected title takes effect
-    when preparation is restarted.
-- **Extensible front-matter reviews; translation brief** (owner decision,
-  2026-11-03; implemented and committed locally on 2026-11-03; a live
-  end-to-end run on 《房客》 exercised the brief with delegated approval only):
-  - The front-matter page is extensible per workflow: besides the shared
-    metadata review, a template can declare its own front-matter stages
-    (`"front_matter": true`) whose gates present workspace `documents` for
-    approval with a declared command. Every such review uses the same
-    front-matter page in the chapter viewer.
-  - `literary-translation-v1` adds a `brief` stage after metadata review: the
-    agent drafts `glossary.md` and `voice.md` from the whole prepared
-    manuscript; the user approves them (`approve brief`) or sends corrections
-    the agent applies. The approved files are the starting point for every
-    chapter. Direct editing of the files in the studio is not included
-    (owner choice: feedback only).
-  - Tryout samples (owner decision, 2026-11-04; committed locally): the brief
-    also translates three randomly picked passages three ways each into
-    `brief-samples.md`. A `brief_samples` poll on the front-matter page shows
-    each original beside its variants; the user picks one per sample, with
-    optional reasons, before approving the brief. The samples carry forward
-    like the glossary and voice and guide tone and voice, without binding later
-    passages. The brief approval page renders its documents as formatted
-    Markdown (`react-markdown`, used across the studio).
-  - Changes the template, engine, translation skill contract, studio, and
-    tests; unfinished translation runs need a workflow restart.
-- **Per-run maximum passage size** (owner decision, 2026-11-03; implemented
-  and committed locally): `literary-translation-v1` declares a default
-  (1,500 characters for Chinese, Japanese, or Korean; 800 words otherwise).
-  A run may choose another value when it starts (the start panel's Advanced
-  section, the service, or `--passage-size`); the value is fixed for the run
-  and kept on a workflow restart. The engine refuses a passage map with a
-  longer passage unless an `oversize` exception for its exact range is
-  approved through the existing map-exceptions review. One live run on
-  《房客》 divided the story into three passages within the default.
-- **Frontend structure** (owner decision, 2026-11-04):
-  - Four components: the **work explorer** (works list, intake, work page),
-    the **workflow explorer** (the cross-work list of runs, today's
-    "Workflows" tab, with filters such as workflow, status, and needs-me), **run
-    management** (status, progress, timeline, and controls only), and the
-    **chapter viewer** (the run's review page). Shared widgets serve all four:
-    the decision panel (approval sheets, sample poll, document review, chapter
-    approval, metadata review, final acceptance), the Markdown and document
-    viewer, the metadata editor, and status and progress tags.
-  - A run can be started from both the work explorer and the workflow explorer.
-  - Each workflow defines its page behavior in the frontend (`studio/frontend/src/workflows.ts`: a base
-    class keeping everything on the run page, with per-workflow subclasses). Literary translation makes
-    every decision in the chapter viewer, and starting a run opens it; formatting keeps its decisions on
-    the run page and has no chapter link. Literary editing (owner decision, 2026-11-05; uncommitted) follows
-    translation through a shared `ChapterViewerWorkflowUI` base: starting a run and every decision open the
-    viewer; pass choices and whole-book decisions show at the end of its content column.
-  - Viewer and decision design (owner review, 2026-11-05; uncommitted): the chapter viewer, decision panel,
-    and agent feedback widget are generic and hold no workflow-specific text or gate kinds. Each workflow's
-    `WorkflowUI` defines what differs: the reading panes (`panes()`: translation shows two, the original and
-    the translation, with inline comments on a draft awaiting approval; editing shows one, the text being
-    edited), decision wording (`decisionCopy()`: heading, explanation, button labels), chapter statuses
-    (`awaitingLabel()`, `stageVerb()`), the notice after a reply (`afterReply()`), and the agent's name.
-    The translation-only chapter approval component is replaced by the shared decision slot.
-  - One decision placement rule (owner request, 2026-11-08; implemented): every decision follows the reading
-    area regardless of its gate kind. A chapter's decision sits under that chapter's text; decisions not tied
-    to one chapter (whole-book jobs such as the developmental verdict and consistency reviews, pass choices,
-    final acceptance) sit at the end of the content column and are scrolled into view once. Only before
-    chapters exist is the decision the page's sole content. This replaces the earlier top placement and its
-    translation-consistency exception.
-  - Phase 1 (implemented and committed locally, 2026-11-04): starting a run opens the
-    viewer; the viewer shows a run status bar with problem banners linking to
-    run management, preparation questions before chapters exist, and final
-    acceptance; the run page links to the viewer instead of showing decision
-    forms for chapter-based runs.
-  - Shared agent feedback widget (owner decision, 2026-11-05; uncommitted): every exchange with the agent in any
-    workflow (approval sheets, chapter approval, editorial reviews, apply authorizations, questions) uses one
-    widget (`AgentFeedback`): the conversation so far, the item-by-item review for every sheet, otherwise the
-    offered commands and a feedback box or inline comments. The list-style sheet form and free-reply form are
-    removed; the brief's document review, the sample poll, metadata review, pass choices, and final acceptance
-    keep their own bodies.
-  - Inline comments (owner decision, 2026-11-04; committed locally): feedback on text is given as inline
-    comments on the translation (not the original) and on the brief documents, using Recogito's text
-    annotator. Drafts stay in the browser until sent; each comment keeps its quote, range, and paragraph
-    number so a later source/translation alignment can show it beside the matching original paragraph.
-    Comments are sent as ordinary feedback, so the engine is unchanged.
-  - Phase 2 (planned): a "Whole book" entry in the viewer for decisions not
-    tied to one chapter, such as literary editing's developmental verdict and
-    consistency passes. Needs a small web-API addition, because the chapter
-    endpoint does not serve the internal whole-book ID (`_whole`); today these
-    decisions have no reading page of their own. Needed before the editing
-    workflow is used in the studio.
-    - The chapter list gains a "Whole book" item after the last chapter,
-      selectable and routed like a chapter.
-    - The chapter endpoint serves `_whole` with the whole-book job's reading
-      material (for example the developmental report, or the consistency
-      findings with links to their chapters) and its status per stage.
-    - The `WorkflowUI` defines the whole-book panes (`wholeBookPanes()`), so
-      the job's material is the reading area and its decision follows it
-      through the same placement rule as any chapter.
-  - Phase 2b (planned): remove the remaining workflow-specific code from the
-    generic chapter viewer (`studio/frontend/src/views/Chapters.tsx`), as the
-    viewer and decision design requires. Today it still contains the
-    whole-book label check for literary translation, the translation-only
-    whole-book consistency banner in the run status bar, and the "Applied
-    consistency fixes" panel. Move them into `WorkflowUI` overrides, for
-    example `wholeBookLabel()`, `statusNotice(run)`, and
-    `extraPanels(chapter)`, with neutral base defaults. Acceptance: the viewer
-    references no workflow IDs or gate kinds, and translation and editing runs
-    render as before.
-  - Phase 3 (planned): formatting decisions (settings sheet, visual check) stay
-    on the run page until a formatted-document preview exists, then move into
-    the viewer as a "Formatted document" entry that reuses the decision panel.
-- **Formatted output becomes a new work** (owner decision, 2026-11-05;
-  committed locally; derived metadata uncommitted): formatting stays the optional "Format
-  this output" step after a completed translation; when it completes, its DOCX
-  automatically becomes a new work in Works, linked to the original work and
-  run, with metadata derived from the original rather than copied: the title
-  from the translated front matter, language-neutral facts (work type, form,
-  audience, series position and relationship, contributors for review), and
-  `original_language`; free text in the original's language starts empty for
-  the new work's preparation to infer. Ready for further workflows such as
-  editing. This also covers M4's open item on
-  linking an edited translation to its source work, for formatted output.
-- **Suggested order:** 1 (unified decision panel), 2 (run inspector), 3 (works
-  explorer by version), 4 (paragraph-aligned page viewer; the largest piece,
-  needed before the editing workflow reaches the GUI). All four are frontend
-  and web-API changes; runs in progress are unaffected.
-- **Acceptance criteria:**
-  - Every human decision, of any kind, is presented by the same decision panel
-    with a consistent header, conversation, closure, and irreversible-action
-    style.
-  - The run page contains no decision forms; every decision, including
-    metadata review, whole-book decisions, final acceptance, and (once a
-    preview exists) formatting decisions, opens in the page viewer.
-  - A work's accepted versions can be browsed, previewed, formatted, and
-    downloaded from the works explorer.
-  - The page viewer shows source and output aligned by paragraph for both a run
-    in progress and an accepted version, and highlights the location of each
-    sheet item under review.
+- **Depends on:** M3 studio and existing workflow/approval contracts.
+- **Outcome:** versioned, reviewable user flows and coherent work exploration,
+  run inspection, reading, and decision surfaces without changing domain gates.
+- **UX specification:** [index and 18 current flows](docs/ux/README.md),
+  [screen contracts](docs/ux/README.md#screen-contracts), and
+  [studio design/owner-decision record](docs/ux/designs/studio-interface.md).
+  Detailed interface findings, phases, placement, front matter, samples,
+  passage-size controls, and formatted-work hand-off are maintained there.
+- **Remaining implementation scope:** selectable whole-book reading, completion
+  of generic workflow presentation, version-oriented exploration/downloads,
+  paragraph-aligned/accepted-version reading, and later formatted preview.
+  Detailed design acceptance boundaries live in the specification, not here.
+- **Progress:** initial source-mapped specification and migration prepared on
+  `feature/ux`, including separate current/target behavior and a migration map.
+  Mapping does not claim new browser tests, usability review, or design approval.
+- **Documentation verification:** the checker validates 18 flows, six screen
+  contracts, and local links across 31 Markdown documents. All 19 Mermaid
+  diagrams rendered successfully with CLI 12.2.0; a representative translation
+  diagram was visually inspected. Generated previews remain in ignored output.
 
 ### Translation judge improvement — sentence-level fidelity
 
@@ -791,19 +540,13 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   settings as an approval sheet, records receipts, and attests a visual review
   of every page.
 - **Scope:**
-  - A native settings gate replaces the agent's design proposal: profile
-    presets (submission, editorial-review, reader-facing) with defaults from
-    the work's metadata, fonts available to the selected renderer, and the
-    existing settings validation. The receipt binds the exact settings.
+  - Replace agent proposals/attestation with host-owned settings and exact-build
+    page-review receipts. The [target UX flow and screen contract](docs/ux/designs/deterministic-formatting.md)
+    own the presets, settings form, review gallery, and revision interaction.
   - The build runs as a worker job, one renderer instance at a time; revised
     settings rebuild into a new build directory.
-  - A page-review gate replaces the agent attestation: the user inspects the
-    rendered pages, then approves (publish, export, hand off) or revises the
-    settings. QA records the human receipt.
   - Automated checks support that review: fonts in the rendered PDF match the
     settings, no blank pages, no stranded headings, and the page count.
-  - Studio: a grouped settings form with presets and a rendered-page gallery
-    in the shared decision panel.
   - Remove the agent stage, its prompts, and the attestation checks from the
     built-in path; edition identity no longer depends on a model or skill hash.
     The `format-manuscript` skill remains for plugin use outside the studio.
@@ -820,10 +563,10 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   label is hard-coded); scene-break rules (`***`, `---`), lists, images, code,
   and special forms such as poetry are refused; Word rendering requires a
   Windows server, otherwise LibreOffice, whose pagination can differ.
-- **Open decisions:** whether an optional agent "suggest settings" action
-  remains; whether review happens in the chapter viewer (UX enhancement
-  Phase 3) or on the run page; whether scene-break and non-English support are
-  part of this feature; whether the external Documents-skill path is kept.
+- **Open decisions:** interaction options and review location are recorded in
+  the [formatting target](docs/ux/designs/deterministic-formatting.md).
+  Supporting scene breaks/non-English output and retaining the external
+  Documents-skill path remain unresolved scope decisions.
 
 ### Later (unordered)
 
