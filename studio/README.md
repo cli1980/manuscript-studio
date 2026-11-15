@@ -13,6 +13,16 @@ when given with `--allow-origin` (for a local preview proxy).
 - **Works** is the place for intake and outcomes: add a manuscript (each upload
   creates a new work), browse every work's library, metadata, and publication
   log without opening a run, and start derived formatting.
+  Language is optional at intake and has no default. Leave the hint blank for
+  preparation to infer it from the manuscript; the work displays a pending
+  language until then. Translation's default passage limit and counting unit
+  are selected after that language is known.
+  Preparation proposes a title/subtitle when explicitly present in the source.
+  Users can also enter either in the intake form; their saved values are
+  authoritative and need not appear in the source.
+  Published metadata supplies the work's display title; the upload filename is
+  only a fallback. A title proposal does not overwrite a supplied title or an
+  intentional clearing, and a generated filename heading is not a source title.
 - **Workflows** starts a workflow on an existing work (preparation is its first
   stage) and lists runs with what each needs. A background worker runs agent
   turns until a human is needed; Pause stops after the current turn. The run page
@@ -268,6 +278,58 @@ diagnostics, and configured credentials are redacted from structured events,
 results, and errors. Trusted tool processes can still access their environment;
 this is not credential isolation from agent tools.
 
+## Interior-design review in literary editing
+
+Start a new literary-editing run, or restart an older run whose engine has changed.
+After preparation and metadata review, run and accept any editing passes, or
+finish with zero passes. Choose **Review manuscript**, inspect the candidate
+chapters under **Approve manuscript for formatting**, and choose
+**Approve manuscript and continue**. This approval freezes the
+manuscript and metadata, then automatically starts the final formatting phase.
+There is no early Format/interior-design button or separate content-only finish.
+
+At manuscript approval, choose **Purpose** (default **Print-ready**, or Submission
+or Editorial review), **Binding** (paperback/hardcover) and optionally
+**Print vendor: IngramSpark**. There is one vendor option; the matching binding
+variant loads automatically, with its rule sources and DOCX guidance. The
+selected version/data/hash are supplied to the design agent and bound in the
+proposal. No vendor is selected by default.
+The purpose and its design guidance reach the agent before authoring. Print-ready
+describes intended use, not successful print validation.
+
+The interior-design skill produces a proposal, then the chapter viewer presents
+an editable human form. Edit geometry, fonts/leading, paragraph settings,
+navigation, furniture and special-role style mappings. Geometry is edited in mm
+with live inch equivalents. Preferred page count, internal IDs/profile references,
+hashes and raw JSON/debug views are not exposed in this form. Literary reading is
+read-only. **Save specification changes** creates a validated new revision.
+You can request an agent revision or respond to necessary author/design questions and
+approve the exact saved proposal.
+
+Purpose, vendor and binding are shown as a read-only summary; target IDs and
+profile references remain internal. Their duplicate selectors are removed, and
+direct API saves cannot change them. To choose a different target, reopen manuscript
+approval and select it there before authoring a new proposal. Layout, typography,
+and other design settings remain editable.
+
+Technical questions about fonts, producer capabilities, vendor readiness or final
+PDF checks are not part of design approval. If there are no author questions,
+no answer fields or acknowledgement are required. Approval still does not
+verify production or print compliance.
+
+This is a proposal-review slice, not the complete formatting pipeline. Profile
+selection and geometry advisories are implemented; exact product availability,
+effective producer capabilities, deterministic production and rendered-page
+review remain unverified/unimplemented.
+Proposal approval stops the run as BLOCKED with that explanation; it does not
+publish or generate DOCX/PDF. Design-only restarts keep the manuscript approval;
+reopen `approve-manuscript` to revise the approved basis, which invalidates
+downstream design decisions. Final publication/page review remain pending.
+The legacy work-page/completed-run formatter actions, separate template and old
+format skill are removed. Existing legacy runs show read-only history rather
+than an active six-item sheet; they do not block new supported workflows. See the
+[tracked design](../tools/formattor/docs/interior-design-and-production.md).
+
 Run commands from the repository root. `npm run dev` (in `studio/frontend`) serves the frontend on port 5173 and proxies `/api` to the server.
 
 Layout: `server/` holds the FastAPI app and the background worker, `frontend/` the
@@ -306,6 +368,14 @@ STUDIO_BROWSER=1 .venv-workflow/Scripts/python.exe -m unittest studio.tests.test
 
 It checks that comments and general feedback do not carry into the next review
 without a page reload, and that failed submissions preserve the current draft.
+
+The embedded interior-design browser check uses the real API/engine with a
+scripted skill, not a live model. It covers form population, a saved edit, desktop
+and 390 px mobile layout, and approval stopping before production:
+
+```text
+STUDIO_BROWSER=1 .venv-workflow/Scripts/python.exe -m unittest studio.tests.test_cases.StudioCaseTests.test_editable_interior_design_gate -v
+```
 
 ### Live cases
 

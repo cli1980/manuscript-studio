@@ -40,7 +40,7 @@ The framework follows five principles:
 - Provide a web application for workflow initiation, monitoring, manuscript inspection, and human intervention.
 - Support versioned artifacts and agent-specific execution contexts.
 - Implement manuscript preparation, translation into English with integrated fidelity and prose review, human artifact acceptance, and Markdown export.
-- Support an optional or manually triggered final `format-manuscript` agent for one readable DOCX, subject to specification approval and available construction/rendering capabilities.
+- Compose final formatting after manuscript approval, beginning with interior design and editable specification review; production/page-review integration remains pending.
 
 **Future phases**
 
@@ -430,9 +430,9 @@ The canonical skill source is [`plugins/manuscript-studio/skills/`](../../plugin
 | `literary_editor` | [literary-editing](../../plugins/manuscript-studio/skills/literary-editing/SKILL.md), line-edit service | `prepare-manuscript`, `review-approval-sheet` | English prose review, verdicts, proposals, approved revisions, and whole-book consistency when requested |
 | `literary_copyeditor` | `literary-editing`, copyedit service | `prepare-manuscript`, `review-approval-sheet` | Correctness and consistency review, proposals, approved revisions, and a final global pass |
 | Markdown export | No agent required | None | Package the selected reviewed Markdown artifacts and provenance without changing their text |
-| Optional final formatter | [format-manuscript](../../plugins/manuscript-studio/skills/format-manuscript/SKILL.md) | `prepare-manuscript`, `review-approval-sheet`, configured document adapter | Approved edition design, consolidation of accepted English chapters, DOCX generation, and rendered-page verification |
+| Interior design in the final phase | [interior-design](../../plugins/manuscript-studio/skills/interior-design/SKILL.md) | Verified preparation | Proposed design specification, followed by the native editable human gate; no document construction or page approval |
 
-Only preparation and translation are mandatory agent stages in the default literary-translation template. The formatter is an optional final operation after artifact acceptance/export, and can be requested later without rerunning translation. The editing/copyediting rows describe reusable services for separate, explicitly requested workflows; they are not required post-translation passes.
+Only preparation and translation are mandatory agent stages in the current literary-translation template. Its final-phase design/production composition remains pending. Literary editing already enters design review after manuscript approval; there is no separate post-export formatter route. The editing/copyediting rows describe reusable services, not required post-translation passes.
 
 The [review-approval-sheet](../../plugins/manuscript-studio/skills/review-approval-sheet/SKILL.md) skill is a shared interface helper. It validates and renders review state and parses dispositions; it does not authorize or apply domain changes. Document/PDF/OCR adapters are additional environment capabilities, not supplied by `prepare-manuscript`. Missing extraction capabilities leave preparation blocked.
 
@@ -607,23 +607,17 @@ Feedback about awkwardness or readability also returns to translation review: it
 
 Iteration 1 supports pending domain feedback and final accept/export. Reopening completed chapters from final acceptance, manual editing with dependency invalidation, and cross-run revision routing remain future iterations.
 
-### 5.6 Stage 4 — Markdown export and optional final formatter
+### 5.6 Stage 4 — Markdown export and final formatting
 
-The MVP exports the selected accepted Markdown chapters and provenance without modifying their content. This is an orchestrator operation, not an assumed formatting-agent capability.
+Translation currently exports the selected accepted Markdown chapters and provenance without modifying their content. This is an orchestrator operation, not an assumed formatting-agent capability.
 
-After export, the optional [format-manuscript](../../plugins/manuscript-studio/skills/format-manuscript/SKILL.md) agent consolidates the accepted chapters into one readable DOCX. Formatting is the derived template [`manuscript-formatting-v1`](../templates/manuscript-formatting-v1/template.json): `create --template manuscript-formatting-v1 --work WORK` creates or reuses a run over the work's `accepted-markdown-chapters/1` publication; the E2E launcher's `--format-docx` flag triggers the same operation after export. Both require a configured document adapter and its generation/render environment.
+Literary editing instead proceeds from zero or more accepted editing passes to manuscript approval, then automatically enters its final formatting phase. The [interior-design](../../plugins/manuscript-studio/skills/interior-design/SKILL.md) proposal populates an editable human specification-review form. Approval freezes the exact content and metadata; a design-only restart preserves this basis, while reopening manuscript approval invalidates downstream design decisions.
 
-The formatting run pins the accepted chapter order, contents, and acceptance record from that publication. It uses a separate input manifest, immutable snapshots, the publication's manuscript language, and a `manuscript-formatting/` workspace. It does not re-extract the original-language source, alter translation decisions, or read or modify the translation run's state.
+The legacy standalone formatter, its skill/template, post-publication UI actions and CLI/E2E launch options are removed. Old runs remain read-only historical snapshots with no active format-spec approval sheet and cannot occupy the active-run slot. No old approval is automatically converted into a new design approval.
 
-The formatter first presents the manuscript-bound design, edition profile, classification, and consequential settings as revision-bound `FM###` items. Item dispositions and separate final closure precede generation. Corrections reopen affected choices and invalidate closure. `reader-facing` is the default purpose for a readable consolidated edition; `editorial-review` and `submission` are alternatives with their own approved conventions.
+Design approval currently blocks at unimplemented deterministic production/page review. Translation's composition of this final phase also remains pending. Neither a completed Markdown export nor a saved design is evidence of an approved rendered edition. See the [current design](../../tools/formattor/docs/interior-design-and-production.md) for requirement traceability and remaining decisions.
 
-Construction and rendering have independent interfaces. The built-in builder uses `python-docx` on both Windows and in the cloud. A Windows Word renderer updates fields and exports PDF through a dedicated COM instance; the cloud renderer uses headless LibreOffice with an isolated profile. PDFium generates page images for either backend. Fonts must exist in the selected environment. An external Documents skill can be selected instead, retaining its own capability requirements.
-
-The settings JSON is bound to the specification's approval along with its readable proposal. After closure, deterministic host code builds the DOCX and renders it; model turns are reserved for design and visual review. The host derives actual heading pages from the rendered PDF outline, rebuilds the linked TOC until pagination converges, and verifies the displayed entries before emitting page evidence. It records adapter/code versions, renderer, settings, and source identities. Switching renderers invalidates pagination evidence and creates a new edition requiring fresh review.
-
-The formatter inspects every emitted page and records visual QA. The driver verifies source/specification/settings/output identities, manuscript paragraph text and order, semantic headings, and complete hashed page evidence before publishing `export/manuscript.docx` in the formatting job. Generated DOCX/PDF/PNG files are immutable within a reviewed build. Design corrections require new approval and a fresh build. Visual layout assessment remains an agent attestation; file existence alone does not establish literary or visual quality.
-
-Missing construction or render/visual-verification capabilities produce `blocked-adapter`, not an ad hoc unverified edition. General proofreading services and PDF/EPUB editions remain outside this implementation. Unsupported manuscript structures require additional deterministic audit support rather than lossy conversion.
+Workflow-neutral `python-docx` construction, Word/LibreOffice rendering and DOCX inspection primitives remain as foundations for the future producer. They are not a second application-level formatting route.
 
 ### 5.7 Optional publication preparation outside the default flow
 
@@ -1064,7 +1058,7 @@ Future workflow templates may include:
 
 Agents and skills should be reusable across these workflows wherever responsibilities overlap.
 
-The repository already supplies `literary-agent-querying`; its future integration retains designated-input restrictions, story-ledger review, named-agent package authorization, and source-evidence rules. It must not automatically consume edited workspace manuscripts or editorial reports. The optional `format-manuscript` integration described in Section 5.6 retains specification approval, output-adapter dependencies, and visual verification. The separate cover-design prototype is not part of the six-skill distributed plugin or this MVP.
+The repository already supplies `literary-agent-querying`; its future integration retains designated-input restrictions, story-ledger review, named-agent package authorization, and source-evidence rules. It must not automatically consume edited workspace manuscripts or editorial reports. Final formatting follows the embedded design and approval boundaries in Section 5.6, not the removed standalone formatter. The separate cover-design prototype is not part of the six-skill distributed plugin or this MVP.
 
 ### 10.3 Runtime extensibility
 
@@ -1146,7 +1140,7 @@ Explore:
 - Agentic planning and orchestration
 - Multi-market localization
 - Non-English target-language skills
-- Additional PDF/EPUB editions beyond the optional DOCX formatter, with explicit construction and rendering dependencies
+- PDF/EPUB editions with explicit construction, rendering and approval dependencies
 - Publishing and submission integrations
 - Automated quality evaluation
 
@@ -1166,7 +1160,7 @@ The Phase 1 implementation is successful when:
 8. Reader/editor feedback returns to source-grounded translation review; no general line-editing or copyediting stage silently polishes an accepted translation.
 9. Pending human input pauses an operation without timeout retries; recovery preserves settled choices and resumes the verified phase.
 10. Backend restart reconciles database, domain records, pending review receipts, and shared summaries without duplicate application or lost approvals.
-11. The application exports the selected accepted Markdown manuscript. An explicitly requested final formatter can produce a consolidated DOCX only after design closure, content-integrity checks, and complete render/visual-QA evidence; it does not claim manual source synchronization.
+11. Translation exports accepted Markdown. Editing's final phase starts with manuscript approval and native design review; deterministic document production and human rendered-page approval remain pending, and no separate legacy formatter can bypass those boundaries.
 12. A second workflow definition or agent runtime can be introduced without major modifications to the orchestration core.
 13. Review submissions are revision-bound; stale or duplicate submissions cannot apply changes or clear a gate. The inline bridge or permitted text fallback uses the existing parser.
 14. Glossary/voice state and user changes survive context replacement; upstream edits invalidate affected preparations, proposals, and acceptances.

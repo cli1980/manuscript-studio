@@ -2,9 +2,11 @@
 
 This is the shared roadmap and development progress record for humans and agents.
 
-The current goal is a usable web frontend for managing manuscripts and their
-workflows, starting with literary translation, followed by a Literary Edit
-workflow supported in both the CLI and the web GUI.
+The highest-priority current focus is
+[deterministic DOCX formatting in the studio](#deterministic-docx-formatting-in-the-studio),
+as directed by the owner on 2026-11-13. It takes precedence over other planned
+or unfinished work. Literary translation and editing remain supported workflows;
+their remaining work is not removed by this priority change.
 
 ## Conventions
 
@@ -1091,55 +1093,268 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 ### Deterministic DOCX formatting in the studio
 
-- **Status:** `planned` (requested by the owner on 2026-11-08 after a
-  feasibility review)
+- **Status:** `in_progress` (requested by the owner on 2026-11-08 after a
+  feasibility review; prioritized on 2026-11-13; proposal-only skill conversion
+  implemented; embedded editing proposal-review form implemented; vendor-aware
+  intake and native production integration not yet implemented)
 - **Owner:** `cli1980`
-- **Priority and milestone assignment:** not yet decided.
-- **Outcome:** Formatting an accepted version in the studio needs no agent.
-  The user sets the design in a form, the host builds and renders the DOCX, and
-  the user approves the rendered pages before publication and hand-off.
-- **Starting point:** the built-in path is already mostly deterministic.
+- **Priority:** highest current priority (owner decision, 2026-11-13);
+  takes precedence over other planned or unfinished work.
+- **Branch:** `feature/deterministic-docx-formatting`.
+- **Milestone assignment:** not yet decided.
+- **Analysis (2026-11-13):**
+  [requirement and implementation gaps](tools/formattor/docs/deterministic-docx-gap-analysis.md)
+  traced across the engine, document adapters, service, API, and UI. Fifteen
+  existing formatting/builder/API tests pass. Native human page review,
+  agent-free lifecycle, rendered-layout QA, and renderer serialization remain
+  baseline gaps; no new browser or real-renderer verification is claimed.
+  Its fully-agent-free/standalone framing is superseded by the revised direction
+  below; production, not necessarily design, is agent-free.
+- **Revised direction (owner, 2026-11-13):** three components: convert the
+  original formatting skill to interior design; provide a design-intake GUI
+  combining its proposed form with a print-vendor profile (IngramSpark first);
+  and generate the document deterministically from the approved design.
+  Formatting is embedded in editing and translation and always consumes
+  manuscript-preparation results, not another formatting result.
+- **Skill independence (owner clarification, 2026-11-14):** `interior-design`
+  can run standalone against verified preparation or be invoked as a reusable
+  component. Its proposal carries no workflow/run IDs. Embedded formatting
+  and zero-pass editing routes remain orchestration rules, not skill requirements
+  (IDP-R13/IDP-C08 in the design).
+- **High-level design:** [interior design and deterministic production](tools/formattor/docs/interior-design-and-production.md)
+  (draft). Detailed component contracts, cross-component flow, vendor-source
+  findings, lifecycle choices, and open questions live there. Its stable
+  `IDP-R` requirement IDs distinguish owner-confirmed direction from the open
+  `IDP-D` decisions; implementation and validation must be traced explicitly.
+- **Skill reference (owner supplied, 2026-11-13):**
+  [author-brief mapping and proposed refinements](tools/formattor/docs/interior-design-skill-brief-mapping.md)
+  captures the reference's author intent, reading, series/preferences, production
+  targets, and semantic text-role implications. This is design input, not approval
+  of every questionnaire field, service, or new renderer capability.
+- **Outcome:** a prepared manuscript is designed, reviewed, and formatted inside
+  its parent workflow. AI can propose the interior design; the user approves
+  the effective design and rendered pages; production and rebuilds are native.
+- **Semantic roles (owner clarification, 2026-11-13):** preparation skill and
+  workflow require annotation/modification support, and downstream workflows,
+  including translation, must preserve/transfer roles. See
+  [upstream ownership and role hand-off](tools/formattor/docs/semantic-role-handoff.md)
+  and IDP-R10 through IDP-R12. These contracts/tools are not implemented by the
+  current proposal-only schema or its byte-range validator.
+- **Skill implementation (2026-11-13):** converted `format-manuscript` to
+  [interior-design](plugins/manuscript-studio/skills/interior-design/SKILL.md),
+  with a closed
+  [proposal schema](plugins/manuscript-studio/skills/interior-design/schemas/interior-design-proposal.schema.json),
+  synthetic example, and read-only validator. Fourteen proposal tests pass;
+  installer/listing checks report 31 passes and three Windows symlink skips;
+  15 existing formatter/builder/API checks pass after decoupling the legacy
+  generator. These are contract/functional checks, not live-model design-quality,
+  new browser-flow, or real-renderer evidence at that checkpoint. Native document
+  production remains unimplemented, and no production profile or finalization
+  decision is approved; the later proposal-review slice is recorded below.
+- **Standalone real-manuscript check (2026-11-14):** direct execution with the
+  owner's unchanged short prompt produced a source-bound proposal after preparing
+  and reading a complete 69,663-word English novel (22 units). Shape and local
+  source validation pass; stale metadata and tampered-span checks reject changes.
+  Original/prepared inputs remain unchanged after design. Local, ignored evidence:
+  `.workflow-runs/standalone-interior-memory-xfbsy9bu/test-report.md`.
+  This is not a blind evaluation, human design approval, or renderer verification.
+  It exposed missing canonical role/text-anchor/transfer contracts, inline versus
+  block style application and special-form layout controls, edition-purpose
+  uncertainty, and conflicting metadata-prefill guidance. These remain gaps;
+  no schema/runtime changes were made during the check.
+- **Embedded proposal-review slice (2026-11-15):** literary editing offers
+  zero or more accepted passes followed by **Review manuscript** and explicit
+  manuscript approval. Approval freezes content and metadata and automatically
+  starts the final formatting phase with `interior-design` and a native editable
+  human form. IDP-C11/IDP-R15 supersede the earlier Format/Interior-design
+  shortcut and its display-label override; no early command remains.
+  Saves validate and create new revisions/gate IDs; proposal approval
+  binds the saved JSON separately from its `proposed` status. Exact accepted edits
+  require separate output preparation; source text/metadata remain frozen.
+  Focused engine/API tests cover approval ordering, frozen input before the agent,
+  zero-pass and edited-output handoff, stale approvals, reopening and design-only
+  restarts, human edits, revision feedback, and blocking before production. The
+  full workflow/API suite passes (77 tests); Chromium verifies the removed early
+  action, explicit manuscript approval and automatic transition, then form
+  saving/approval on desktop and 390 px mobile against a scripted skill.
+  Targeted CLI checks use the manuscript-approval notice rather than claiming
+  final publication. A
+  single-snapshot run-detail read fixes the gate-arrival race exposed by that
+  check. Typecheck/build pass; no new live-model run or document rendering is
+  claimed. See IDP-R14/IDP-C10 and the implemented slice in the
+  [design](tools/formattor/docs/interior-design-and-production.md).
+  Vendor-aware effective-spec compilation, translation composition, production
+  and page review remain pending. The separate editing content-only finish is removed; manuscript
+  approval is not final publication. Design restarts preserve the approved basis;
+  reopening manuscript approval invalidates downstream decisions. IDP-D01 is
+  partly resolved and IDP-D02 is resolved for editing.
+- **Legacy-route removal (owner direction, 2026-11-15):** IDP-R16/IDP-C12 remove
+  the old formatter skill, engine/template, bundled agent adapter and work/run/
+  CLI/E2E launch paths. The remaining public path is the parent's final
+  formatting phase, not the old six-item `format_spec` review. Existing old runs
+  are read-only history with their recorded status/decisions/artifacts preserved;
+  they cannot execute or block a new supported workflow. New metadata/workflow
+  catalogs omit the retired workflow; historical publications are unchanged.
+  Verified: 73 workflow/API tests, 30 preparation tests, 25 preparation-
+  evaluation tests and 31 installer checks pass (three platform skips). The
+  browser test now starts from the actual work-page workflow launcher and reaches
+  the editable form after manuscript approval. Read-only live browser checks
+  also verify the user's old sheet and both removed launchers; all three live
+  run revisions/state hashes remain unchanged after reloading Studio.
+  Typecheck/build and LF/whitespace checks pass. No live model or document
+  renderer ran for these checks.
+  Translation composition and producer/page-review integration remain pending.
+- **IngramSpark profile selection (2026-11-15, IDP-R17/C13/C14):** added one
+  [sourced vendor profile](plugins/manuscript-studio/skills/interior-design/profiles/ingramspark.json)
+  with paperback/hardcover variants. Choosing IngramSpark loads the variant for
+  the selected binding automatically. The proposal carries its exact data,
+  source/version and canonical hash; mismatched/substituted profiles or targets
+  are rejected. Selection is available at manuscript approval and in the native
+  review form. Retargeting requests a revised proposal with the saved draft,
+  preserving approved manuscript content and compatible saved choices for review.
+  Reviewed custom-trim coverage, safety and bleed warnings are advisory, not
+  invented hard rules or complete vendor product support. No renderer,
+  PDF/X preflight, product-availability verification or page approval is added.
+  Seventeen proposal tests, two focused workflow checks and the real
+  work-page-to-design browser check pass; browser coverage includes automatic
+  variant loading, both bindings, retargeting and retained font/gutter edits.
+  Typecheck/build and installer checks pass (31 checks, three platform skips).
+  All 75 workflow/API regression tests pass. A cancelled/outdated run is
+  presented read-only without hydrating a newer form against its pinned older
+  schema; its records are not migrated or executed.
+- **Purpose before design authoring (2026-11-15, IDP-R18/C15/C16):** the
+  formatting-entry dropdown defaults to **Print-ready** (renamed from
+  reader-facing), alongside Submission and Editorial review. It appears at the
+  existing manuscript-approval transition, not an early formatting shortcut.
+  The host supplies the selected purpose and rationale guidance before the
+  first agent call, and checks that the proposal retains the choice. Later
+  purpose changes originally requested a revised proposal through target controls;
+  IDP-C17 supersedes that interaction with read-only proposal fields and entry-only selection.
+  Print-ready is intent, not a compliance receipt. Verified: 76 workflow/API
+  tests, 17 proposal tests, typecheck/build and the native browser flow pass.
+  Browser coverage checks the default, a non-default purpose before authoring,
+  its proposal binding, a later purpose revision and one purpose dropdown
+  rather than a duplicate editable specification field. The browser uses a
+  scripted agent; no live-model quality or production validation is implied.
+- **Read-only proposal entry choices (2026-11-15, IDP-C17):** removed the
+  duplicate purpose/vendor/binding selectors and target-changing action from
+  proposal review. The generic production-target editor also renders target ID,
+  vendor ID, binding and profile references as read-only outputs, without
+  nullable-field clear/set controls. Server checks reject changes through
+  advanced JSON/API saves; print target vendor/binding must match the entry
+  selection. Reopen manuscript approval to choose a new target; design
+  revisions retain the original choices. Layout and typography stay editable.
+  Verified: all 76 workflow/API tests, frontend typecheck/build and the native
+  browser flow pass. Coverage checks absent duplicate selectors, nested
+  read-only outputs, rejected target/profile edits and continued font/gutter
+  editing on desktop/mobile. Browser authoring uses a scripted agent.
+- **Design-review cleanup (2026-11-15, IDP-C18/C19):** removed technical
+  capability/vendor/PDF approval questions at their source, including the rule
+  requiring a blocking vendor question. Only genuine author/design decisions
+  remain; no acknowledgement is needed when questions are empty. Geometry now
+  shows mm with live inch equivalents, and the approval heading is **Approve
+  manuscript for formatting**. Removed preferred page count from the proposal
+  contract and hid internal IDs, profile references, hashes and raw JSON/debug
+  views from the normal UI; validation metadata remains internal and fixed.
+  Production/preflight remain pending, not passed by this cleanup. Verified:
+  77 workflow/API tests, 18 proposal tests, typecheck/build and the native
+  browser flow pass. Coverage includes approval without technical
+  acknowledgements, rejected technical-question kinds/page-count preference,
+  live inch conversion, the new heading, hidden internal fields and mobile
+  layout. Browser authoring is scripted; no live-model or production test ran.
+- **Proposal-to-DOCX assessment (2026-11-15, IDP-C20):** completed a
+  [current field-level gap analysis](tools/formattor/docs/proposal-to-docx-gap-analysis.md)
+  before implementation. It distinguishes compiler/capability approval,
+  missing DOCX behavior, underspecified role/page/font semantics and native
+  build/QA/page-review delivery. A temporary synthetic DOCX probe confirms that
+  even the current example loses independent margins/gutter, outside folios and
+  heading leading through the old flat builder interface. No real manuscript,
+  renderer/PDF, production workflow or application behavior was changed.
+  All three retained adapter tests pass (LibreOffice execution is mocked);
+  assessment links, LF and whitespace checks pass. Initial delivery subset
+  and the proposed order remain recommendations.
+- **Formattor package evaluation (2026-11-15, IDP-R19/C21):** owner-confirmed
+  structure is proposal intake, an
+  implementation-independent format engine, and format implementations with
+  DOCX default and potential InDesign. The
+  [design evaluation](tools/formattor/docs/formattor-package-design.md) maps the gaps
+  to component owners, proposes neutral contracts/capability negotiation,
+  separates native composition from orchestration, and identifies migration
+  of skill-local validation/profile authority without breaking standalone use.
+  Word/LibreOffice remain DOCX render strategies, not peer format implementations.
+  This is documentation only: no package, code migration, InDesign support or
+  production capability is implemented. Output/subset/semantic decisions remain
+  explicit pending work. Design links, requirement/decision uniqueness, LF and
+  whitespace checks pass; application tests were not rerun for documentation-only changes.
+- **Standalone tool and document consolidation (2026-11-15, IDP-C22/C23):**
+  after comparing inside-workflow placement with standalone use, the owner
+  selected an installable tool with Python API and CLI under `tools/formattor`.
+  This supersedes C21's initial `workflow/src/formattor` location without
+  changing its three-part architecture or default DOCX implementation.
+  All seven related design/gap documents now live under the tool's `docs/`,
+  indexed by [the tool README](tools/formattor/README.md); instructions and
+  cross-references point to the new canonical location. IDP-D09 is resolved.
+  Only documentation/project directories are present: no executable package,
+  CLI, dependency installation or generator behavior has been implemented.
+  Verified all seven relocations and 60 relative document links; no stale
+  incoming references remain. LF and whitespace checks pass. No application
+  tests or server restart were needed for this documentation-only change.
+- **Retained construction foundations:** the low-level
   [workflow/src/document_adapters.py](workflow/src/document_adapters.py)
   validates the settings, checks fonts, builds the DOCX, renders it with Word or
-  LibreOffice, converges TOC page numbers, and rasterizes every page;
-  [workflow/src/formatting.py](workflow/src/formatting.py) audits text, order,
-  and heading styles, then publishes and hands off. The agent only proposes the
-  settings as an approval sheet, records receipts, and attests a visual review
-  of every page.
+  LibreOffice, converges TOC page numbers, and rasterizes pages.
+  [workflow/src/document_audit.py](workflow/src/document_audit.py) retains
+  workflow-independent DOCX inspection. These utilities do not expose a legacy
+  formatter or complete the pending production integration.
 - **Scope:**
-  - A native settings gate replaces the agent's design proposal: profile
-    presets (submission, editorial-review, reader-facing) with defaults from
-    the work's metadata, fonts available to the selected renderer, and the
-    existing settings validation. The receipt binds the exact settings.
+  - An interior-design skill takes verified preparation, metadata, and agent
+    reading (genre, synopsis, vibe, and related evidence) and emits a proposed
+    design form. Construction and visual-QA attestation leave the skill.
+  - The standalone tool's intake combines the proposed form, user choices,
+    versioned vendor constraints, and real font/producer capabilities into one
+    effective specification, exposed through the native GUI for approval.
+    Initial print-vendor support targets IngramSpark.
+  - The shared formatting phase is composed by literary editing and translation,
+    not registered as a separate public workflow. Its preparation package must
+    match the actual text being formatted; output preparation cannot overwrite
+    the original source package.
+  - Literary editing requires manuscript approval before final formatting after preparation and
+    metadata review, with zero editing passes or after any accepted pass
+    (owner clarification, 2026-11-13). This skips editing, not preparation,
+    outstanding pass gates, design approval, or human page review.
   - The build runs as a worker job, one renderer instance at a time; revised
-    settings rebuild into a new build directory.
-  - A page-review gate replaces the agent attestation: the user inspects the
-    rendered pages, then approves (publish, export, hand off) or revises the
-    settings. QA records the human receipt.
-  - Automated checks support that review: fonts in the rendered PDF match the
-    settings, no blank pages, no stranded headings, and the page count.
-  - Studio: a grouped settings form with presets and a rendered-page gallery
-    in the shared decision panel.
-  - Remove the agent stage, its prompts, and the attestation checks from the
-    built-in path; edition identity no longer depends on a model or skill hash.
-    The `format-manuscript` skill remains for plugin use outside the studio.
+    settings create a new candidate and invalidate previous page approval.
+  - Native technical checks and human approval of the exact final page set gate
+    publication. Production identity uses effective design/input/profile/tool
+    facts, not model/skill hashes. Agent provenance is recorded separately.
+  - Editable DOCX/review output and vendor-ready interior PDF are distinguished;
+    ordinary PDF export is not proof of IngramSpark/PDF print compliance.
 - **Acceptance criteria:**
-  - An accepted version is formatted entirely in the browser without an agent
-    turn; identical settings and renderer produce identical text, structure,
-    and pagination checks.
-  - No DOCX is published without a receipt-bound settings approval and a
-    page-review approval of that exact build.
+  - Both parent workflows can drive the phase in the browser from the correct
+    ready preparation package. After design approval, production/rebuilds require
+    zero agent calls; unchanged inputs/settings/tooling yield repeatable text,
+    structure, and pagination checks.
+  - No edition is published without receipt-bound effective-design approval and
+    human page approval of that exact build.
+  - The zero-pass editing route formats the unchanged prepared manuscript
+    without invoking editorial passes or claiming it was edited. After accepted
+    passes, formatting uses preparation of their exact output.
   - Existing content, heading, TOC, and page-number checks still pass; the new
-    automated checks fail clearly.
-  - Formatter tests run with a stand-in renderer, without Word or LibreOffice.
-- **Known limits (existing in both paths):** English output only (the Contents
+    automated checks fail clearly. Unintended blanks are distinguished from
+    approved layout blanks and vendor-side processing.
+  - Vendor-target readiness is claimed only when applicable pinned profile
+    checks pass; unsupported print capability is blocked, not silently waived.
+  - Producer tests run with a stand-in renderer, without Word/LibreOffice or an
+    agent. Design-skill and embedded-workflow checks are separate.
+- **Known current limits:** English output only (the Contents
   label is hard-coded); scene-break rules (`***`, `---`), lists, images, code,
   and special forms such as poetry are refused; Word rendering requires a
   Windows server, otherwise LibreOffice, whose pagination can differ.
-- **Open decisions:** whether an optional agent "suggest settings" action
-  remains; whether review happens in the chapter viewer (UX enhancement
-  Phase 3) or on the run page; whether scene-break and non-English support are
-  part of this feature; whether the external Documents-skill path is kept.
+- **Open decisions:** remaining publication/page-review integration, initial product and
+  deliverable scope, PDF print-preflight capability, proposal-generation/reuse
+  policy, and additional-edition/hand-off behavior are enumerated in the draft
+  design. Skill-contract implementation does not imply full design approval or
+  completion of native intake/production.
 
 ### Later (unordered)
 
