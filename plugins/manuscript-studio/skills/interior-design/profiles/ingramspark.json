@@ -1,0 +1,138 @@
+{
+  "id": "ingramspark",
+  "name": "IngramSpark",
+  "version": "2026-08-24.1",
+  "source": {
+    "title": "IngramSpark File Creation Guide",
+    "edition": "2026-08-24",
+    "url": "https://www.ingramspark.com/hubfs/downloads/file-creation-guide.pdf",
+    "sha256": "dec4241447dd5848899e8dcfc4d8687a4e54336e18e9ab0d309235ef1d9a2fb7",
+    "reviewed_at": "2026-11-15"
+  },
+  "docx_guidance": {
+    "classification": "studio_recommendation",
+    "mirrored_margins": true,
+    "inside_margin_excludes_gutter": true,
+    "recommended_safety_mm": 13,
+    "gutter": "Choose additional binding allowance for the selected binding and rendered extent; do not add it twice.",
+    "page_size": "Use the chosen interior trim, not cover, board, spine or jacket dimensions.",
+    "typography": "Font family, type size, leading and special-passage styles remain design choices.",
+    "delivery": "DOCX is editable source. A separately verified single-page interior PDF is the print deliverable."
+  },
+  "rules": [
+    {
+      "id": "single-pdf",
+      "classification": "vendor_requirement",
+      "phase": "rendered-output",
+      "pages": [9, 11],
+      "applies_to": "all",
+      "statement": "Supply one complete interior PDF with individual pages, not reader spreads or partial revisions."
+    },
+    {
+      "id": "embedded-fonts",
+      "classification": "vendor_requirement",
+      "phase": "rendered-output",
+      "pages": [4, 9],
+      "applies_to": "all",
+      "statement": "Embed all fonts, including styled and fallback faces. DOCX font declarations or installation do not prove PDF embedding."
+    },
+    {
+      "id": "no-printer-marks",
+      "classification": "vendor_requirement",
+      "phase": "rendered-output",
+      "pages": [9, 11],
+      "applies_to": "all",
+      "statement": "Do not include crop, printer or registration marks."
+    },
+    {
+      "id": "safety",
+      "classification": "vendor_recommendation",
+      "phase": "design",
+      "pages": [8, 9, 11],
+      "applies_to": "all",
+      "statement": "Allow at least 0.5 inch (guide rounds to 13 mm) safety on all sides. Include headers, footers and folios in safety review."
+    },
+    {
+      "id": "bleed",
+      "classification": "vendor_requirement",
+      "phase": "design-and-rendered-output",
+      "pages": [9, 11],
+      "applies_to": "bleeding-interiors",
+      "statement": "Extend bleeding elements 0.125 inch (3.175 mm; guide rounds to 3 mm) beyond top, bottom and outside trim edges. No bind-edge bleed."
+    },
+    {
+      "id": "bw-images",
+      "classification": "vendor_recommendation",
+      "phase": "rendered-output",
+      "pages": [8],
+      "applies_to": "black-and-white",
+      "statement": "Use grayscale; recommended resolution is 600 ppi for 1-bit line art and 300 ppi for 8-bit grayscale continuous-tone images."
+    },
+    {
+      "id": "pdf-standard",
+      "classification": "vendor_requirement",
+      "phase": "rendered-output",
+      "pages": [8, 10, 11],
+      "applies_to": "color",
+      "statement": "Color interiors must comply with PDF/X-1a:2001 or PDF/X-3:2002. These standards are also listed in the black-and-white quick reference; ordinary PDF export is not conformance evidence."
+    },
+    {
+      "id": "color",
+      "classification": "vendor_requirement",
+      "phase": "rendered-output",
+      "pages": [11],
+      "applies_to": "color",
+      "statement": "Use CMYK images and convert spot colors; images below 72 ppi are rejected. The recommended image resolution is 300 ppi (page 10)."
+    },
+    {
+      "id": "color-bind-strip",
+      "classification": "vendor_recommendation",
+      "phase": "design",
+      "pages": [11],
+      "applies_to": "color",
+      "statement": "For perfect-bound and hardcover color books, leave a 0.125 inch white strip inside the bind-side trim, in addition to the recommended 0.5 inch margin."
+    },
+    {
+      "id": "page-processing",
+      "classification": "vendor_requirement",
+      "phase": "rendered-output",
+      "pages": [9, 40],
+      "applies_to": "all",
+      "statement": "Vendor processing stores an even page count and may add pages/manufacturing information. Verify the selected trim/paper/ink/binding product's actual page range after rendering; do not invent one universal limit or manufacturing text."
+    }
+  ],
+  "variants": {
+    "paperback": {
+      "name": "Paperback",
+      "binding": "paperback",
+      "vendor_binding": "Perfect Bound",
+      "pages": [40, 41],
+      "custom_trim_ranges_in": {
+        "white": {"width": [4, 8.5], "height": [6, 11]},
+        "groundwood": {"width": [4, 8.5], "height": [6, 11]},
+        "creme": {"width": [4, 6.14], "height": [6, 9.252]}
+      },
+      "notes": [
+        "Ranges describe custom-trim geometry, not availability of every paper/ink/trim combination.",
+        "Confirm the exact product against the trim-size matrix before production."
+      ]
+    },
+    "hardcover": {
+      "name": "Hardcover",
+      "binding": "hardcover",
+      "vendor_binding": "Case Laminate / Dust Jacket; construction must be confirmed",
+      "pages": [40, 41],
+      "custom_trim_ranges_in": {
+        "white": {"width": [5, 8.5], "height": [7, 11]},
+        "groundwood": {"width": [5, 6.14], "height": [7, 9.252]},
+        "creme": {"width": [5, 6.14], "height": [7, 9.252]}
+      },
+      "notes": [
+        "Page 41 custom ranges apply to Case Laminate and Dust Jacket, not a blanket digital-cloth capability claim.",
+        "The guide additionally limits a custom Dust Jacket to 6.14 x 9.252 inches; confirm construction before production.",
+        "Cover/board/jacket allowances are not interior margins or gutters.",
+        "Confirm the exact product and page range against the trim-size matrix before production."
+      ]
+    }
+  }
+}

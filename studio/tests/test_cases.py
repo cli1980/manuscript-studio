@@ -29,6 +29,180 @@ def live_feed(route, path, runs, revision=None):
 class StudioCaseTests(unittest.TestCase):
     """Each case gets a fresh server root and app; no model runtime is started unless a case asks for one."""
 
+    @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build frontend and set STUDIO_BROWSER=1.")
+    def test_intake_language_starts_blank_and_does_not_block_upload(self):
+        from playwright.sync_api import expect
+
+        def check(page, origin):
+            page.goto(origin + "/#/works")
+            expect(page.get_by_label("Language hint (optional)")).to_have_value("")
+            page.locator('input[type="file"]').set_input_files({
+                "name": "story.md", "mimeType": "text/markdown",
+                "buffer": b"# A story\n\nThe morning light fell across the empty room.\n",
+            })
+            button = page.get_by_role("button", name="Add as a new work")
+            expect(button).to_be_enabled()
+            with page.expect_response(lambda r: r.url == origin + "/api/works" and r.request.method == "POST") as added:
+                button.click()
+            self.assertTrue(added.value.ok, added.value.text())
+            self.assertIsNone(added.value.json()["manuscript_language"])
+            expect(page.get_by_text("language pending preparation", exact=False)).to_be_visible()
+            author = page.locator(".author-form")
+            title = author.locator(".form-row").filter(has=page.locator("label").filter(has_text=re.compile("^Title$"))).locator("input")
+            subtitle = author.locator(".form-row").filter(has=page.locator("label").filter(has_text=re.compile("^Subtitle$"))).locator("input")
+            expect(title).to_be_visible()
+            expect(subtitle).to_be_visible()
+            title.fill("My own title, not present in the manuscript")
+            with page.expect_response(lambda r: r.url.endswith("/metadata") and r.request.method == "POST") as saved:
+                author.get_by_role("button", name=re.compile("^Save")).click()
+            self.assertTrue(saved.value.ok, saved.value.text())
+            expect(page.get_by_role("heading", name="My own title, not present in the manuscript", exact=True)).to_be_visible()
+            workflow = page.get_by_role("heading", name="Start a workflow", exact=True).locator("..")
+            workflow.get_by_role("combobox").select_option("literary-translation-v1")
+            workflow.locator("summary").filter(has_text="Advanced").click()
+            limit = workflow.get_by_label("Maximum passage size", exact=False)
+            expect(limit).to_have_attribute("placeholder", "Automatic")
+            limit.fill("1100")
+            expect(limit).to_have_value("1100")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            self.run_in_browser({}, Path(temporary) / "server", lambda: None, check=check)
+
+    @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build frontend and set STUDIO_BROWSER=1.")
+    def test_editable_interior_design_gate(self):
+        """Real API/engine with a scripted skill: edit, save and approve from the browser."""
+        import base64
+        import time
+
+        from playwright.sync_api import expect
+        from .test_web import Scripted, interior_design
+
+        def check(page, origin):
+            errors = []
+            server_errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.on("response", lambda response: server_errors.append(response.url)
+                    if "/api/" in response.url and response.status >= 500 else None)
+            headers = {"Origin": origin}
+            work = page.request.post(origin + "/api/works", headers=headers, data={
+                "upload": {"name": "synthetic.md", "data": base64.b64encode(b"# Story\n\nA short story.\n").decode()},
+                "manuscript_language": "zh",
+            }).json()
+            page.goto(origin + "/#/works/" + work["id"])
+            expect(page.get_by_role("heading", name="Format as DOCX", exact=True)).to_have_count(0)
+            start = page.get_by_role("heading", name="Start a workflow", exact=True).locator("..")
+            expect(start.get_by_role("combobox").locator('option[value="manuscript-formatting-v1"]')).to_have_count(0)
+            start.get_by_role("combobox").select_option("literary-editing-v1")
+            with page.expect_response(lambda r: r.url == origin + "/api/runs" and r.request.method == "POST") as created:
+                start.get_by_role("button", name="Start", exact=True).click()
+            self.assertTrue(created.value.ok, created.value.text())
+            run = created.value.json()
+            run_url = origin + "/api/runs/" + run["id"]
+            for _ in range(100):
+                run = page.request.get(run_url).json()
+                if run.get("gate"):
+                    break
+                time.sleep(0.1)
+            self.assertEqual(run["gate"]["kind"], "metadata_review")
+            confirmed = page.request.post(run_url + "/metadata/confirm", headers=headers, data={
+                "gate_id": run["gate"]["id"], "record_revision": run["metadata"]["record_revision"],
+            })
+            self.assertTrue(confirmed.ok, confirmed.text())
+            page.goto(f"{origin}/#/runs/{run['id']}/chapters")
+            expect(page.get_by_role("button", name="Format", exact=True)).to_have_count(0)
+            expect(page.get_by_role("button", name="Proceed to interior design", exact=True)).to_have_count(0)
+            page.get_by_role("button", name="Review manuscript", exact=True).click()
+            expect(page.get_by_role("heading", name="Approve manuscript for formatting", exact=True)).to_be_visible()
+            expect(page.get_by_label("Purpose", exact=True)).to_have_value("print-ready")
+            page.get_by_label("Purpose", exact=True).select_option("editorial-review")
+            page.get_by_label("Binding", exact=True).select_option("hardcover")
+            page.get_by_label("Print vendor", exact=True).select_option("ingramspark")
+            expect(page.get_by_text("Loaded profile: IngramSpark / Hardcover", exact=True)).to_be_visible()
+            page.get_by_label("Binding", exact=True).select_option("paperback")
+            expect(page.get_by_text("Loaded profile: IngramSpark / Paperback", exact=True)).to_be_visible()
+            page.get_by_label("Binding", exact=True).select_option("hardcover")
+            approve = page.get_by_role("button", name="Approve manuscript and continue", exact=True)
+            expect(approve).to_be_disabled()
+            page.get_by_role("checkbox", name="I approve this manuscript for formatting.", exact=True).check()
+            approve.click()
+            expect(page.get_by_role("heading", name="Review formatting specification")).to_be_visible()
+            current = page.request.get(run_url).json()
+            self.assertEqual(current["gate"]["design_review"]["proposal"]["vendor_profile"]["variant_id"], "hardcover")
+            self.assertEqual(current["gate"]["design_review"]["proposal"]["edition_brief"]["purpose"], "editorial-review")
+            expect(page.get_by_label("Purpose", exact=True)).to_have_count(0)
+            expect(page.get_by_label("Binding", exact=True)).to_have_count(0)
+            expect(page.get_by_label("Print vendor", exact=True)).to_have_count(0)
+            expect(page.get_by_role("button", name="Update target and revise proposal", exact=True)).to_have_count(0)
+            expect(page.get_by_text("Print vendor: IngramSpark / Hardcover", exact=True)).to_be_visible()
+            targets = page.locator("summary").filter(has_text=re.compile(r"^production targets \(1\)$")).locator("..")
+            targets.locator("summary").first.click()
+            edition = targets.locator("summary").filter(has_text=re.compile("^Output 1$")).locator("..")
+            edition.locator("summary").first.click()
+            for name in ("id", "vendor id", "binding", "vendor profile ref"):
+                expect(edition.get_by_label(name, exact=True)).to_have_count(0)
+                expect(edition.get_by_label(name + " (read-only)", exact=True)).to_have_count(0)
+            expect(page.get_by_text("vendor_profile/data", exact=False)).to_have_count(0)
+            expect(page.get_by_label("preferred page count", exact=True)).to_have_count(0)
+            expect(page.get_by_text("Advanced specification JSON", exact=True)).to_have_count(0)
+            expect(page.get_by_text("Complete bound proposal (read-only)", exact=True)).to_have_count(0)
+            expect(page.get_by_text("Questions before design approval", exact=True)).to_have_count(0)
+            self.assertTrue(all(q["kind"] in ("author-input", "design-choice")
+                                for q in current["gate"]["design_review"]["proposal"]["questions"]))
+            page.locator("summary").filter(has_text=re.compile(r"^styles \(2\)$")).click()
+            body = page.locator("summary").filter(has_text=re.compile("^body$")).locator("..")
+            body.locator("summary").first.click()
+            body.locator("summary").filter(has_text=re.compile("^font$")).click()
+            body.get_by_label("family", exact=True).fill("Garamond")
+            body.get_by_label("size pt", exact=True).fill("12")
+            gutter = page.get_by_label("gutter mm", exact=True)
+            expect(gutter).to_have_value("3")
+            expect(page.get_by_label("gutter mm in inches", exact=True)).to_have_text("(0.118 in)")
+            gutter.fill("5")
+            expect(page.get_by_label("gutter mm in inches", exact=True)).to_have_text("(0.197 in)")
+            expect(page.get_by_role("button", name="Approve this design specification")).to_be_disabled()
+            with page.expect_response(lambda r: r.url == run_url + "/interior-design") as saved:
+                page.get_by_role("button", name="Save specification changes").click()
+            self.assertTrue(saved.value.ok, saved.value.text())
+            expect(page.get_by_text(re.compile("Specification revision 2"))).to_be_visible()
+            expect(page.get_by_role("button", name="Save specification changes")).to_be_disabled()
+            expect(gutter).to_have_value("5")
+            current = page.request.get(run_url).json()
+            self.assertEqual(current["gate"]["design_review"]["proposal"]["design_system"]["page"]["gutter_mm"], 5)
+            self.assertEqual(current["gate"]["design_review"]["proposal"]["design_system"]["styles"][0]["font"]["family"], "Garamond")
+            self.assertEqual(current["gate"]["design_review"]["proposal"]["design_system"]["styles"][0]["font"]["size_pt"], 12)
+            self.assertEqual(current["gate"]["design_review"]["proposal"]["revision"], 2)
+            self.assertEqual(current["gate"]["design_review"]["proposal"]["vendor_profile"]["variant_id"], "hardcover")
+            self.assertEqual(current["gate"]["design_review"]["proposal"]["edition_brief"]["purpose"], "editorial-review")
+            evidence = os.environ.get("STUDIO_EVIDENCE_DIR")
+            if evidence:
+                page.screenshot(path=str(Path(evidence) / "interior-gate-desktop.png"), full_page=True)
+            page.set_viewport_size({"width": 390, "height": 844})
+            expect(gutter).to_be_visible()
+            self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 391)
+            if evidence:
+                page.screenshot(path=str(Path(evidence) / "interior-gate-mobile.png"), full_page=True)
+            for question in current["gate"]["design_review"]["proposal"]["questions"]:
+                if question["blocking"]:
+                    page.get_by_label(question["question"], exact=False).fill("Keep the proposed new-page openings.")
+            with page.expect_response(lambda r: r.url == run_url + "/interior-design") as approved:
+                page.get_by_role("button", name="Approve this design specification").click()
+            self.assertTrue(approved.value.ok, approved.value.text())
+            expect(page.get_by_text(re.compile("Interior design approved. Deterministic document production"))).to_be_visible()
+            current = page.request.get(run_url).json()
+            self.assertEqual((current["status"], current["finalized"], current["attempts"]), ("BLOCKED", False, 2))
+            page.goto(origin + "/#/works/" + work["id"])
+            expect(page.get_by_role("heading", name="Story", exact=True)).to_be_visible()
+            expect(page.locator(".metadata tr").filter(
+                has=page.locator("th").filter(has_text=re.compile("^Title$")))).to_contain_text("Story")
+            expect(page.locator(".metadata tr").filter(
+                has=page.locator("th").filter(has_text=re.compile("^Manuscript language$")))).to_contain_text("zh")
+            expect(page.get_by_role("heading", name="Detected or measured", exact=True)).to_be_visible()
+            self.assertEqual(errors, [])
+            self.assertEqual(server_errors, [])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            self.run_in_browser({}, Path(temporary) / "server", lambda: Scripted(interior_design), check=check)
+
     @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build the frontend and set STUDIO_BROWSER=1.")
     def test_works_creation_requires_a_compatible_model_and_supports_legacy_execution(self):
         from urllib.parse import urlsplit

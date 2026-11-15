@@ -56,14 +56,6 @@
       "operation": null,
       "state_locator": null,
       "updated_at": null
-    },
-    "format-manuscript": {
-      "status": "not_started",
-      "basis_revision": null,
-      "scope": null,
-      "operation": null,
-      "state_locator": null,
-      "updated_at": null
     }
   }
 }

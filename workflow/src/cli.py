@@ -8,7 +8,6 @@ import shutil
 import sys
 from pathlib import Path
 
-from .engine import finalization_notice
 from .execution import ExecutionProfile
 from .runtime import CodexRuntime
 from .service import WorkflowService
@@ -20,6 +19,10 @@ def emit(value):
 
 def display(engine, state, *, review=False):
     emit(engine.summary(state))
+    if engine.retired:
+        print("\nThis workflow was removed. Its history and artifacts are read-only; "
+              "start a supported workflow to continue.")
+        return
     if not review:
         return
     if state.get("gate"):
@@ -64,7 +67,7 @@ def display(engine, state, *, review=False):
             if artifact.get("content_changed_after_sanity_review"):
                 print("Text changed after the approved sanity-review base; inspect the applied changes.")
             print("Accepted candidate:\n" + engine.store.content(artifact).decode("utf-8"))
-        print("\nIMPORTANT: " + finalization_notice(state["workflow"]))
+        print("\nIMPORTANT: " + engine.acceptance_details(state)["notice"])
         print("Accept with: python -m workflow accept RUN --acceptance-id ACCEPTANCE-ID --confirm-final")
     if engine.finalized(state):
         print(f"\nFINAL: this run is finalized; its {state['workflow']} version on work {state['work_id']} can never "
@@ -117,18 +120,12 @@ def parser():
     origin = create.add_mutually_exclusive_group(required=True)
     origin.add_argument("--source", type=Path, help="Upload a manuscript; always creates a new work.")
     origin.add_argument("--work", help="Start this workflow on an existing work.")
-    create.add_argument("--manuscript-language", help="Required with --source, e.g. zh-CN.")
-    create.add_argument("--publication", help="Derived templates: the accepted-output publication (default: latest).")
+    create.add_argument("--manuscript-language", help="Optional language hint; preparation detects it when omitted.")
     create.add_argument("--model", help="Configured model key with --execution-profile; otherwise a runtime model ID.")
     create.add_argument("--agent-model", action="append", metavar="AGENT=MODEL", help="Model for one agent.")
     create.add_argument("--passage-size", type=int, metavar="N",
                         help="Maximum passage size for this run (characters for CJK text, else words); "
                              "default from the template.")
-    backend = create.add_mutually_exclusive_group()
-    backend.add_argument("--documents-skill", type=Path, help="Formatting: external Documents skill.")
-    backend.add_argument("--renderer", choices=("word", "libreoffice"), help="Formatting: built-in renderer.")
-    create.add_argument("--purpose", choices=("reader-facing", "editorial-review", "submission"), default="reader-facing")
-    create.add_argument("--new-edition", action="store_true", help="Formatting: create a distinct edition.")
     runs = sub.add_parser("runs", help="List runs.")
     runs.add_argument("--work")
     metadata = sub.add_parser("metadata", help="Edit one shared metadata field of a run.")
@@ -153,7 +150,7 @@ def parser():
         elif command == "accept":
             child.add_argument("--acceptance-id", required=True)
             child.add_argument("--confirm-final", action="store_true",
-                               help="Confirm that accepting finalizes the run and makes the workflow read-only.")
+                               help="Confirm the displayed manuscript-approval or finalization notice.")
         elif command == "retry":
             child.add_argument("--confirm-stopped", action="store_true")
             child.add_argument("--refresh-gate", action="store_true")
@@ -213,24 +210,10 @@ def run(service, args):
             value = json.loads(args.value_file.read_text(encoding="utf-8-sig"))
             emit(service.edit_work_metadata(args.work, args.field, value, args.reason))
     elif command == "create":
-        from . import registry
-        template = registry.get(args.template)
-        if "consumes" in template:
-            if args.source or args.manuscript_language:
-                raise ValueError("Derived templates start from an existing work's publication; use --work.")
-            if args.passage_size:
-                raise ValueError("--passage-size applies to templates that divide chapters into passages.")
-            run_id = service.create_derived_run(
-                args.work, args.template, publication_id=args.publication, model=args.model,
-                agent_models=agent_models(args.agent_model), new_edition=args.new_edition,
-                options={"documents_skill": args.documents_skill, "renderer": args.renderer, "purpose": args.purpose})
-        else:
-            if args.publication or args.renderer or args.documents_skill or args.new_edition:
-                raise ValueError("Formatting options apply only to derived templates.")
-            run_id = service.create_run(args.template, upload=args.source, work_id=args.work,
-                                        manuscript_language=args.manuscript_language, model=args.model,
-                                        agent_models=agent_models(args.agent_model),
-                                        settings={"passage_size": args.passage_size} if args.passage_size else None)
+        run_id = service.create_run(args.template, upload=args.source, work_id=args.work,
+                                    manuscript_language=args.manuscript_language, model=args.model,
+                                    agent_models=agent_models(args.agent_model),
+                                    settings={"passage_size": args.passage_size} if args.passage_size else None)
         show(service, run_id)
         profile_option = f' --execution-profile "{args.execution_profile}"' if args.execution_profile else ""
         if args.user_execution_profile:

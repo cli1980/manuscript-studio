@@ -65,10 +65,15 @@ provided or inferable from that text.
 Keep preparation `in_progress` while enriching an otherwise verified revision.
 Then run the preparation validator and mark it ready when the source checks pass.
 Unconfirmed genre/audience and unknown optional metadata do not block extraction
-readiness. Manuscript language is required for the existing ready-state contract.
+readiness. A title present in the source must populate metadata before ready,
+unless the user explicitly cleared it; a generated `supplied_title` for an
+untitled source is not evidence of an actual title. Manuscript language is required.
 Present the resulting values together, identifying inferred, unknown, and stale
 fields, and invite corrections without adding a mandatory metadata approval gate.
-Existing workflow-specific approval gates still apply.
+Existing workflow-specific approval gates still apply. Intake may leave language
+null. Infer it from the prepared text through the evidence-bound enrichment step;
+if the language is uncertain or multilingual without a clear primary language,
+keep preparation blocked and request clarification rather than choosing a default.
 
 ## Field groups
 
@@ -77,11 +82,15 @@ exposes them as `AUTHOR`, `SUGGESTED`, and `COMPUTED`.
 
 | Group | Fields | Who sets them |
 |---|---|---|
-| Provided by the user | `/title`, `/subtitle`, `/contributors`, `/audience`, `/edition/label`, `/edition/status`, `/series/name`, `/series/position`, `/series/relationship` | Initialized empty (null or `[]`) when the work is added; the user fills them in afterwards. Agents never propose them (`enrich` refuses), even when the manuscript appears to state them. |
-| Suggested from the manuscript | `/work_type`, `/form`, `/genres`, `/keywords`, `/description`, `/original_language` | Agents propose them through `enrich` with evidence and confidence; they stay `proposed` until the user confirms or corrects them. |
-| Computed | `/manuscript_language`, `/extent` | Manuscript language is fixed when the work is added; extent is measured from the prepared revision. Neither is edited by hand in workflows. |
+| Provided by the user | `/contributors`, `/audience`, `/edition/label`, `/edition/status`, `/series/name`, `/series/position`, `/series/relationship` | Initialized empty (null or `[]`) when the work is added; the user fills them in afterwards. Agents never propose them (`enrich` refuses), even when the manuscript appears to state them. |
+| Suggested from the manuscript | `/title`, `/subtitle`, `/work_type`, `/form`, `/genres`, `/keywords`, `/description`, `/original_language` | Agents propose them through `enrich` with evidence and confidence; they stay `proposed` until the user confirms or corrects them. Agent title/subtitle proposals require extraction from actual quoted source text, not invention or a supplied heading generated from the filename. |
+| Computed | `/manuscript_language`, `/extent` | Language may be unknown at intake; preparation infers it from the supplied text with evidence before becoming ready. Extent is measured from the prepared revision. Neither is edited by hand in downstream workflows. |
 
-A user may still correct any user-provided or suggested field with `set`.
+These groups govern agent behavior, not permission to enter metadata. Users can
+supply or correct any user-provided or suggested field with `set`, including a
+title absent from the manuscript. User confirmation is sufficient grounding;
+it needs no manuscript quote. Preserve supplied or confirmed values, including
+deliberate clearing, before evaluating competing agent proposals.
 
 ## Prior work record (input/output contract)
 

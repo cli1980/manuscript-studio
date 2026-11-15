@@ -20,7 +20,7 @@ from .storage import digest
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_SETTINGS = {
-    "schema_version": 1, "profile": "reader-facing", "body_font": "Georgia",
+    "schema_version": 1, "profile": "print-ready", "body_font": "Georgia",
     "fallback_font": "Times New Roman", "font_size": 11, "title_font_size": 24,
     "heading_font_size": 16, "folio_font_size": 9, "toc_font_size": 11,
     "page_width_inches": 6, "page_height_inches": 9, "margin_inches": .75,
@@ -40,7 +40,7 @@ def require(condition, message):
 def validate_settings(settings):
     require(isinstance(settings, dict) and set(settings) == set(DEFAULT_SETTINGS), "Incomplete/unknown format settings.")
     require(type(settings["schema_version"]) is int and settings["schema_version"] == 1, "Unsupported settings version.")
-    require(settings["profile"] in ("submission", "editorial-review", "reader-facing"), "Invalid edition profile.")
+    require(settings["profile"] in ("submission", "editorial-review", "print-ready"), "Invalid edition profile.")
     require(settings["alignment"] in ("left", "justify"), "Unsupported body alignment.")
     for key in ("body_font", "fallback_font"):
         require(isinstance(settings[key], str) and 0 < len(settings[key].strip()) <= 100, f"Invalid {key}.")

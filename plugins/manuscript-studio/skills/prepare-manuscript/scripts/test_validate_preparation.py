@@ -12,7 +12,7 @@ import validate_preparation as validator
 import prepare_metadata as metadata
 
 NOW = "2026-10-19T12:00:00Z"
-WORKFLOWS = ("literary-editing", "literary-translation", "literary-agent-querying", "format-manuscript")
+WORKFLOWS = ("literary-editing", "literary-translation", "literary-agent-querying")
 
 
 def write_json(path, value):
@@ -95,6 +95,23 @@ class PreparationTests(unittest.TestCase):
         self.assertEqual(result["chapters"], 2)
         self.assertTrue(result["local_sources_checked"])
         self.workflow()
+        self.assertEqual(self.validate()["preparation_status"], "ready")
+
+    def test_unknown_language_is_inferred_with_evidence_before_ready(self):
+        blank = metadata.blank("example-work", None, location=str(self.source), actor="test")
+        self.assertIsNone(blank["metadata"]["manuscript_language"])
+        self.assertNotIn("/manuscript_language", blank["metadata_provenance"])
+        self.work["metadata"]["manuscript_language"] = None
+        with self.assertRaisesRegex(ValueError, "determined source language"):
+            self.validate()
+        self.work["preparation"]["status"] = "in_progress"
+        self.save()
+        metadata.update(self.root / "work.json", "enrich",
+                        proposals=[self.proposal("/manuscript_language", "zh")], actor="prepare-manuscript")
+        self.work = self.read_work()
+        self.assertEqual(self.work["metadata"]["manuscript_language"], "zh")
+        self.assertEqual(self.work["metadata_provenance"]["/manuscript_language"]["review_status"], "proposed")
+        self.work["preparation"]["status"] = "ready"
         self.assertEqual(self.validate()["preparation_status"], "ready")
 
     def test_discovery_only_record_does_not_claim_readiness(self):
@@ -277,8 +294,55 @@ class PreparationTests(unittest.TestCase):
     def read_work(self):
         return validator.load_json(self.root / "work.json")
 
+    def test_extracts_missing_title_without_overwriting_supplied_or_cleared_title(self):
+        path = self.root / "work.json"
+        proposal = self.proposal("/title", "第一章", origin="extracted",
+                                 evidence=[{"chapter_id": "chapter-1", "locator": "Title heading", "quote": "第一章"}])
+        self.work["metadata"]["title"] = None
+        self.work["preparation"]["status"] = "in_progress"
+        self.save()
+        updated = metadata.update(path, "enrich", proposals=[proposal], actor="prepare-manuscript")
+        self.assertIn("/title", updated["applied"])
+        work = self.read_work()
+        self.assertEqual(work["metadata"]["title"], "第一章")
+        self.assertEqual(work["metadata_provenance"]["/title"]["origin"], "extracted")
+        self.assertEqual(work["metadata_provenance"]["/title"]["review_status"], "proposed")
+        for value in ("Author's preferred title", None):
+            metadata.update(path, "set", field="/title", value=value)
+            self.assertIn("/title", metadata.update(path, "enrich", proposals=[proposal])["skipped"])
+            self.assertEqual(self.read_work()["metadata"]["title"], value)
+
+    def test_ready_cannot_silently_omit_an_existing_source_title(self):
+        self.work["metadata"]["title"] = None
+        with self.assertRaisesRegex(ValueError, "record the source title"):
+            self.validate()
+        self.work["preparation"]["status"] = "in_progress"
+        self.save()
+        metadata.update(self.root / "work.json", "set", field="/title", value=None, rationale="Author cleared it")
+        self.work = self.read_work()
+        self.work["preparation"]["status"] = "ready"
+        self.assertEqual(self.validate()["preparation_status"], "ready")
+
+    def test_user_confirmed_title_is_grounded_without_source_evidence(self):
+        path = self.root / "work.json"
+        metadata.update(path, "set", field="/title", value="An author-chosen title absent from the manuscript")
+        proposal = self.proposal("/title", "Superseded agent guess", origin="extracted",
+                                 evidence=[{"chapter_id": "chapter-1", "locator": "Old guess", "quote": "Not in source"}])
+        result = metadata.update(path, "enrich", proposals=[proposal])
+        self.assertIn("/title", result["skipped"])
+        work = self.read_work()
+        self.assertEqual(work["metadata"]["title"], "An author-chosen title absent from the manuscript")
+        self.assertEqual(work["metadata_provenance"]["/title"]["review_status"], "confirmed")
+        self.assertEqual(work["metadata_provenance"]["/title"]["evidence"], [])
+        work["metadata"]["title"] = None
+        metadata.record(work, "/title", "provided", actor="user", rationale="Explicitly left blank", review="confirmed")
+        write_json(path, work)
+        self.assertEqual(validator.validate(path)["preparation_status"], "ready")
+        self.assertIn("/title", metadata.update(path, "enrich", proposals=[proposal])["skipped"])
+        self.assertIsNone(self.read_work()["metadata"]["title"])
+
     def test_inference_is_grounded_proposed_and_does_not_replace_existing_values(self):
-        for field, value in (("/title", "Different title"), ("/audience", "adult"),
+        for field, value in (("/audience", "adult"),
                              ("/contributors", [{"id": "a", "name": "A", "roles": ["author"]}])):
             with self.subTest(field=field), self.assertRaisesRegex(ValueError, "provided by the user"):
                 metadata.update(self.root / "work.json", "enrich", actor="prepare-manuscript",
@@ -296,6 +360,9 @@ class PreparationTests(unittest.TestCase):
         self.assertFalse(metadata.update(self.root / "work.json", "enrich", proposals=proposals)["written"])
 
     def test_unfounded_metadata_proposals_leave_the_record_untouched(self):
+        self.work["metadata"]["title"] = None
+        self.work["preparation"]["status"] = "in_progress"
+        self.save()
         before = (self.root / "work.json").read_bytes()
         cases = [
             self.proposal(evidence=[{"chapter_id": "chapter-1", "locator": "Paragraph 1", "quote": "Invented quote"}]),
@@ -304,6 +371,9 @@ class PreparationTests(unittest.TestCase):
             self.proposal(basis_revision="r0009"),
             self.proposal("/form", "not-a-form"),
             self.proposal(confidence=None),
+            self.proposal("/title", "Invented title", origin="extracted"),
+            self.proposal("/subtitle", "Invented subtitle", origin="extracted"),
+            self.proposal("/title", "第一章"),  # A title is extracted, not creatively inferred.
         ]
         for proposal in cases:
             with self.subTest(proposal=proposal), self.assertRaises(ValueError):
@@ -311,6 +381,22 @@ class PreparationTests(unittest.TestCase):
             self.assertEqual((self.root / "work.json").read_bytes(), before)
         with self.assertRaisesRegex(ValueError, "JSON array"):
             metadata.update(self.root / "work.json", "enrich", proposals={})
+
+    def test_supplied_filename_heading_is_not_extracted_as_a_source_title(self):
+        front = self.manifest["chapters"][0]
+        path = self.revision / front["file"]
+        path.write_bytes(b"# Filename heading\n\n" + path.read_bytes())
+        front.update(sha256=validator.digest(path),
+                     supplied_title={"text": "Filename heading", "basis": "source_name", "evidence": "upload filename"})
+        self.work["metadata"]["title"] = None
+        self.save()
+        proposal = self.proposal("/title", "Filename heading", origin="extracted",
+                                 evidence=[{"chapter_id": front["chapter_id"], "locator": "Heading",
+                                            "quote": "Filename heading"}])
+        before = (self.root / "work.json").read_bytes()
+        with self.assertRaisesRegex(ValueError, "not a supplied title heading"):
+            metadata.update(self.root / "work.json", "enrich", proposals=[proposal])
+        self.assertEqual((self.root / "work.json").read_bytes(), before)
 
     def test_direct_metadata_edits_and_deliberate_clearing_survive_enrichment(self):
         path = self.root / "work.json"

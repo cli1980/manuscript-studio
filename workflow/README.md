@@ -22,7 +22,8 @@ Implementation modules live in `workflow/src/`:
 | `prepared.py` | Shared preparation stage, prepared-package verification, per-chapter iterations, restart chapter, metadata review |
 | `translation.py` | `literary-translation-v1` prompts, translation gate rules, chapter completion, accepted-output publication |
 | `editing.py` | `literary-editing-v1`: developmental, line, and copy editing passes chosen by the user, each chapter by chapter with a whole-book pass |
-| `formatting.py` | `manuscript-formatting-v1`, a derived template over an accepted-output publication |
+| `interior.py` | Embedded interior-design proposal hand-off and revision-bound native human form review; production remains pending |
+| `document_audit.py` | Workflow-independent DOCX inspection primitives |
 | `library.py` | Per-work artifact library with an append-only publication log |
 | `service.py` | The service API shared by the CLI and the future web application; run/work index |
 | `cli.py` | Thin CLI client of the service |
@@ -44,9 +45,15 @@ Every command takes `--server-root` (default `.workflow-runs`):
 ```
 
 Uploading a manuscript always creates a new work, even for an identical file. A
-work has at most one unfinished run at a time, across all workflows including
-formatting. Final acceptance publishes the accepted artifacts into the work
+work has at most one unfinished supported run at a time. Retired historical
+workflows do not occupy that slot. Final acceptance publishes the accepted artifacts into the work
 library and makes that workflow read-only on the work.
+
+Manuscript language may be omitted at intake (`--manuscript-language` is an
+optional hint). Preparation infers it from the actual text and records evidence;
+ready preparation requires a determined language. The engine adopts that result
+before downstream stages and selects language-dependent translation defaults
+then, rather than treating an unknown language as Chinese or English.
 
 The case-driven [E2E launcher](tests/run_e2e.py) accepts an explicit workflow
 manifest. Live model execution is separate from the deterministic unit-test suite,
@@ -286,7 +293,8 @@ service API and lives in [`studio/`](../studio/README.md).
 ## Literary editing (M4)
 
 ```text
-prepare → metadata review → [choose a pass → run it → accept its output]* → accept → Markdown export
+prepare → metadata review → [choose a pass → run it → accept its output]*
+  → approve manuscript → final formatting (design → review → production/pages pending)
 ```
 
 Upload the text to edit (for example an accepted translation's assembled
@@ -298,7 +306,9 @@ Markdown) as a new work:
 
 After metadata review the run waits at the `passes` select stage. Reply exactly
 `run developmental`, `run line`, or `run copy` to start a pass, or `finish` to
-go to final acceptance (also with no pass at all). When a pass completes, the
+review and approve the manuscript (also with no pass at all). Approval starts the
+final formatting phase automatically; it does not finalize or publish the run.
+There is no early formatting shortcut. When a pass completes, the
 run asks you to accept its output (`accept pass`); the accepted text and
 editorial files are the next pass's starting point. Passes can run in any order
 and repeat; each has its own job folders (`editorial/passes/<NNN>-<pass>/`) and
@@ -319,144 +329,38 @@ exactly `apply accepted changes`, and only then application. A chapter cannot
 complete if its text changed without that authorization, and other chapters
 cannot change outside their own jobs. The developmental pass collects
 chapter evidence and ends with one whole-book verdict and `DEV-###`
-recommendations; it never changes text. Final acceptance publishes the edited
-chapters under `literary-editing/` and an `accepted-markdown-chapters/1`
-publication, so formatting works unchanged. Restarting a completed editorial
+recommendations; it never changes text. Approval freezes the manuscript and
+metadata before the interior-design proposal and editable specification review.
+Design approval currently blocks at unimplemented deterministic production/page
+review; it does not publish a completed edition or a content-only version.
+Reopening manuscript approval invalidates design decisions, while restarting
+only design preserves the approved content. Restarting a completed editorial
 chapter, and other details, are deferred to the rest of M4.
 
-## Optional final manuscript formatter
+## Final formatting
 
-The final formatter consolidates the accepted English chapters into one readable
-DOCX. It uses `format-manuscript`, `review-approval-sheet`, `prepare-manuscript`,
-and the bundled [local document adapter](adapters/documents-local/SKILL.md).
-It does not line-edit or retranslate the manuscript. It is the derived template
-[`manuscript-formatting-v1`](templates/manuscript-formatting-v1/template.json): it
-reads a work's `accepted-markdown-chapters/1` publication (not a parent run's
-state) and uses that output's manuscript language. The built-in builder currently
-supports English manuscripts only.
+Formatting is the last embedded phase after manuscript approval, not a separate
+workflow launched from a completed publication. In literary editing it starts
+with `interior-design` and the editable specification-review form described
+above. Translation composition, deterministic production and rendered-page review
+remain pending.
 
-For a work whose translation is finalized:
+Manuscript approval can select IngramSpark with paperback/hardcover binding.
+The binding variant is automatic, pinned and incorporated into the proposal.
+The native design form displays entry choices read-only; reopen manuscript
+approval to choose a different purpose/vendor/binding. Source rules and recommendations remain distinct;
+advisory geometry checks are not final-PDF preflight or proof of product availability.
 
-```powershell
-.\.venv-workflow\Scripts\python.exe -m pip install -r workflow/requirements-docx.txt
-.\.venv-workflow\Scripts\python.exe -m workflow create --template manuscript-formatting-v1 `
-  --work WORK_ID --renderer word --purpose reader-facing
-```
+The legacy formatter engine/template, adapter skill, work/run launch buttons and
+CLI/E2E formatting flags have been removed. Old runs are displayed as `RETIRED`
+read-only history, keeping their recorded status, artifacts and decisions.
+They cannot resume or accept old `FM###` sheets and do not occupy the
+one-unfinished-run slot. This does not cancel, migrate or approve them.
 
-`--publication PUB` selects a specific accepted-output publication (default: the
-latest). This creates a run under `runs/` and prints its ID; an unchanged request
-reuses the existing edition, and `--new-edition` creates a distinct one. Formatting
-runs count toward the one-unfinished-run-per-work limit, publish nothing into the
-work, and never make formatting read-only. When a formatting run completes through
-`step` (the CLI or the studio's worker), its DOCX is handed off as a new work
-(template `"hands_off": true`): the document is that work's source, in the output's
-manuscript language. Its metadata is derived from the original, not copied: the
-title comes from the translated front matter, language-neutral facts carry over
-(work type, form, audience, series position and relationship, contributors for
-review), `original_language` is set, and free text in the original's language
-(subtitle, genres, keywords, description, series name, edition label) starts empty
-for the new work's preparation to infer in its own language. The new work's `library.json` records its `origin` (work,
-run, and source version), and both works show the link. Use the normal commands on
-that run:
-
-```powershell
-.\.venv-workflow\Scripts\python.exe -m workflow step FORMAT-RUN --codex "C:/path/to/codex.exe"
-.\.venv-workflow\Scripts\python.exe -m workflow review FORMAT-RUN
-.\.venv-workflow\Scripts\python.exe -m workflow reply FORMAT-RUN --gate GATE-ID --response-file response.txt
-```
-
-The formatter proposes a manuscript-bound format specification and machine
-settings in `format-settings.json`, including the
-edition classification, typography, page geometry, section headings, TOC, and
-page furniture. Resolve its `FM###` items, run another step to receive the new
-closure revision, then explicitly confirm final closure before generation.
-The CLI uses the skill's text fallback. `--purpose` also supports
-`editorial-review` and `submission`; source wording and order remain protected
-for every profile.
-
-The formatting run has its own pinned input/skill snapshots, runtime context,
-review records, and SQLite state. It preserves the completed translation run and
-the work's publications. Retry failures with `retry` on the formatting run,
-subject to the same stopped-process rules as translation.
-
-Document construction and rendering are separate capabilities:
-
-| Component | Windows | Cloud/Linux |
-|---|---|---|
-| DOCX builder | `python-docx` | The same `python-docx` builder |
-| Field/pagination/PDF renderer | Dedicated Microsoft Word COM instance | Isolated headless LibreOffice |
-| Page-image generation | PDFium | PDFium |
-| Content checks and visual-review gate | Shared workflow checks | The same checks |
-
-Choose `--renderer word` or `--renderer libreoffice`. The default is controlled by
-`document_backend.renderer` in the formatting template; `platform-default`
-selects Word on Windows and LibreOffice elsewhere. Builder code, renderer identity,
-settings, and the accepted manuscript are bound to the edition. Switching renderers
-creates a distinct edition and requires fresh design review/rendering/QA; page
-numbers from Word are not reused for LibreOffice.
-
-After specification closure, the host records the closure, constructs the DOCX,
-and runs the selected renderer without another model-authored builder script.
-It reads actual heading destinations from the PDF outline and rebuilds the static
-linked TOC until page numbers converge. All PDF pages are rasterized to PNG.
-Only then does the formatting agent inspect every page and record visual QA.
-Generated files and their hashes cannot be edited by the agent; design corrections
-go through a new specification review and a fresh build.
-
-Word requires a local Windows session with Microsoft Word installed. The worker
-uses `DispatchEx`, refuses an instance with existing documents, and closes only its
-own generated document/application. Active COM rendering is bounded by a timeout;
-an interrupted worker may require closing its isolated orphan Word instance.
-The renderer is trusted host code over job-local paths, rather than a request to
-relax the Codex agent's sandbox.
-
-For cloud deployment, install LibreOffice Writer, fontconfig, and the approved
-fonts in the image, plus `requirements-docx.txt`. `pywin32` is Windows-only and is
-not installed on Linux. The LibreOffice process uses a private user profile.
-Missing fonts fail rather than silently substituting an unapproved face.
-
-An external Documents skill is still supported through `--documents-skill PATH`,
-instead of `--renderer`; it must provide its own usable toolchain/render contract.
-The earlier desktop-managed Documents package remains incompatible with this
-standalone environment, but is no longer the default. Missing selected capabilities
-produce `blocked-adapter`; visual review is never bypassed.
-
-Completion requires:
-
-- A current specification closure and exact source/specification/output hashes.
-- One DOCX containing all accepted manuscript paragraphs in source order, with
-  semantic heading/title styles and no unapproved additional prose.
-- Automatic page-number fields for multi-page editions, and declared TOC entries
-  using TOC styles rather than duplicated manuscript paragraphs.
-- A QA manifest and hashed PNG evidence for every rendered page, with recorded
-  visual inspection and specification-conformance results.
-
-The host checks paragraph text/order, headings, identities, and evidence
-completeness. Visual inspection and layout conformance are agent attestations,
-not independently proven by a PNG's existence. The current content audit supports
-ordinary paragraph/heading Markdown with inline emphasis, links, and line breaks;
-unsupported blocks such as images, raw HTML, and thematic-break markup are
-rejected rather than silently omitted. More specialized literary structures
-need an extended audit contract before delivery.
-
-The verified result is `runs/<formatting-run>/export/manuscript.docx`, accompanied by
-its provenance manifest. Format specifications and render evidence remain in the
-job's workspace/snapshots. The accepted English text is the formatter's source;
-the original Chinese preparation is never substituted for it.
-
-The E2E launcher can trigger this final operation automatically after export:
-
-```powershell
-python workflow/tests/run_e2e.py --case PATH_TO_CASE_JSON --setup --format-docx `
-  --renderer word
-```
-
-Use `--case PATH_TO_CASE_JSON --resume COMPLETED-TRANSLATION-RUN-ID --format-docx ...` to add it to an existing
-E2E run without repeating translation. `--format-purpose` selects the profile.
-Explicit `--auto-approve-recommended` also applies to recommended format decisions,
-with the same separate-closure and delegated-decision audit rules. Formatting has
-its own status in the E2E report; a successful DOCX does not turn unreviewed
-translation-quality checks into passes.
+Workflow-neutral construction/rendering utilities remain in
+[document_adapters.py](src/document_adapters.py), with DOCX inspection in
+[document_audit.py](src/document_audit.py). They are foundations for the pending
+producer, not an alternative application route or a claim of production readiness.
 
 ## State, failures, and recovery
 

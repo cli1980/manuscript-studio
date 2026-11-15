@@ -1,0 +1,206 @@
+{
+  "contract": "interior-design-proposal/1",
+  "schema_version": 1,
+  "proposal_id": "example-interior",
+  "revision": 1,
+  "status": "proposed",
+  "vendor_profile": null,
+  "basis": {
+    "preparation": {
+      "work_id": "example-work",
+      "record_revision": 1,
+      "work_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "revision": "r0001",
+      "manifest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "language": "en-US",
+      "scope": {"kind": "whole_work", "chapter_ids": ["front-matter", "chapter-one"]},
+      "units": [
+        {"chapter_id": "front-matter", "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+        {"chapter_id": "chapter-one", "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}
+      ]
+    },
+    "reading_ref": null,
+    "author_brief_ref": null,
+    "capabilities_ref": null
+  },
+  "reading": {
+    "source": "agent-analysis",
+    "essence": "A synthetic story about returning to a changed home.",
+    "genres": ["literary fiction"],
+    "synopsis": "In this invented example, a returning traveler reconciles memory with the present.",
+    "themes": ["memory", "belonging"],
+    "voice": "Restrained and reflective",
+    "mood": ["quiet", "intimate"],
+    "audience": "Proposed adult literary readership",
+    "symbols": [],
+    "characters": ["The returning traveler"],
+    "important_excerpts": [],
+    "structure_notes": ["A title unit followed by a narrative chapter."],
+    "confidence": "medium",
+    "uncertainties": ["This file demonstrates schema shape, not an actual manuscript assessment."],
+    "evidence_refs": ["sample-text"]
+  },
+  "author_preferences": {
+    "imprint": null,
+    "isbn": null,
+    "expected_changes": "unknown",
+    "series_direction": "unknown",
+    "prior_design_ref": null,
+    "likes": [],
+    "avoid": [],
+    "reference_designs": [],
+    "evidence_refs": []
+  },
+  "edition_brief": {
+    "purpose": "print-ready",
+    "production_targets": [
+      {
+        "id": "editable-edition",
+        "format": "editable-docx",
+        "vendor_id": null,
+        "binding": "paperback",
+        "paper": null,
+        "ink": "black-and-white",
+        "trim_mm": {"width": 152.4, "height": 228.6},
+        "vendor_profile_ref": null
+      }
+    ]
+  },
+  "design_system": {
+    "page": {
+      "trim_mm": {"width": 152.4, "height": 228.6},
+      "margins_mm": {"inside": 19, "outside": 17, "top": 19, "bottom": 22},
+      "gutter_mm": 3,
+      "bleed_mm": 0,
+      "chapter_start": "new-page",
+      "blank_policy": "no-added-blanks"
+    },
+    "styles": [
+      {
+        "id": "body",
+        "role": "body",
+        "heading_level": null,
+        "font": {
+          "family": "Georgia",
+          "fallback_families": ["Times New Roman"],
+          "size_pt": 11,
+          "weight": "regular",
+          "italic": false,
+          "color": "#000000",
+          "line_spacing": {"mode": "multiple", "value": 1.25}
+        },
+        "paragraph": {
+          "model": "first-line",
+          "first_line_indent_mm": 4,
+          "space_before_pt": 0,
+          "space_after_pt": 0,
+          "alignment": "left",
+          "indent_opening_paragraph": false,
+          "keep_with_next": false,
+          "widow_lines": 2,
+          "orphan_lines": 2
+        }
+      },
+      {
+        "id": "chapter-heading",
+        "role": "heading",
+        "heading_level": 1,
+        "font": {
+          "family": "Georgia",
+          "fallback_families": ["Times New Roman"],
+          "size_pt": 16,
+          "weight": "regular",
+          "italic": false,
+          "color": "#000000",
+          "line_spacing": {"mode": "multiple", "value": 1.1}
+        },
+        "paragraph": {
+          "model": "block",
+          "first_line_indent_mm": 0,
+          "space_before_pt": 24,
+          "space_after_pt": 18,
+          "alignment": "center",
+          "indent_opening_paragraph": false,
+          "keep_with_next": true,
+          "widow_lines": 2,
+          "orphan_lines": 2
+        }
+      }
+    ],
+    "navigation": {"include_toc": false, "toc_depth": 0, "scene_break": "preserve-source", "ornament": null},
+    "furniture": {
+      "running_heads": "none",
+      "folio_position": "outside-footer",
+      "front_matter_numbering": "none",
+      "body_numbering_start": 1
+    }
+  },
+  "text_roles": [
+    {
+      "id": "main-narrative",
+      "name": "Main narrative",
+      "kind": "body",
+      "function": "Continuous narrative with no invented ornamental treatment.",
+      "style_id": "body",
+      "occurrences": [
+        {
+          "chapter_id": "chapter-one",
+          "chapter_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "start_byte": 0,
+          "end_byte": 20,
+          "text_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      ],
+      "evidence_refs": ["sample-text"]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "sample-text",
+      "source": "prepared-text",
+      "locator": "revisions/r0001/chapters/0002.md",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "detail": "Synthetic illustrative source; all example checksums are placeholders, not verified input."
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "page-rhythm",
+      "path": "/design_system/page",
+      "rationale": "A moderate measure supports the example's reflective narrative; final vendor geometry remains unresolved.",
+      "evidence_refs": ["sample-text"],
+      "alternatives": ["A wider measure on the same trim."]
+    },
+    {
+      "id": "type-rhythm",
+      "path": "/design_system/styles",
+      "rationale": "A quiet serif and restrained heading scale keep emphasis on the prose; font availability is not verified.",
+      "evidence_refs": ["sample-text"],
+      "alternatives": []
+    },
+    {
+      "id": "navigation-restraint",
+      "path": "/design_system/navigation",
+      "rationale": "The simple narrative structure does not establish a need for a visible TOC.",
+      "evidence_refs": ["sample-text"],
+      "alternatives": ["Add a TOC if the author requests navigation for a longer edition."]
+    },
+    {
+      "id": "quiet-furniture",
+      "path": "/design_system/furniture",
+      "rationale": "Minimal furniture supports the intimate proposed visual direction.",
+      "evidence_refs": ["sample-text"],
+      "alternatives": []
+    }
+  ],
+  "questions": [
+    {
+      "id": "chapter-openings",
+      "path": "/design_system/page/chapter_start",
+      "kind": "design-choice",
+      "question": "Keep the proposed new-page chapter openings, or request right-hand chapter openings?",
+      "options": ["Keep new-page openings", "Request right-hand openings"],
+      "blocking": true
+    }
+  ]
+}

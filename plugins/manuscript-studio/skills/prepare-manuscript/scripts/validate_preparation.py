@@ -186,7 +186,14 @@ def validate(work_path, *, check_sources=False):
                 "Ready preparation requires a verified revision manifest.")
         require(work["discovery"]["selection_status"] == "confirmed" and not preparation["blockers"],
                 "Ready preparation requires confirmed source selection and no blockers.")
-        require(manuscript_language(work) is not None, "Ready preparation requires the source language.")
+        require(manuscript_language(work) is not None and manuscript_language(work) not in ("und", "mul", "zxx"),
+                "Ready preparation requires a determined source language.")
+        front = manifest["chapters"][0]
+        title_record = work.get("metadata_provenance", {}).get("/title", {})
+        require(work["metadata"]["title"] is not None or front.get("supplied_title")
+                or title_record.get("origin") in ("provided", "user_edit")
+                or title_record.get("review_status") == "confirmed",
+                "Ready preparation must record the source title in metadata; enrich it before marking ready.")
     if preparation["status"] == "blocked":
         require(preparation["blockers"], "Blocked preparation must explain its blockers.")
     for name, state in work["workflows"].items():

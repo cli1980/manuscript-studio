@@ -40,6 +40,31 @@ Agreed in the 2026-10-26 planning session:
   chapters, and workflow outputs read-only.
 - **Metadata is editable and versioned.** Shared `work.json` metadata can be edited
   from the GUI. Every change is versioned and attributable.
+- **User-confirmed metadata is grounded** (owner clarification, 2026-11-15).
+  Title/subtitle remain editable in the initial manuscript form. Source-evidence
+  requirements constrain agent proposals, not the user's chosen title. Confirmed
+  or supplied values, including deliberate clearing, take precedence over agent
+  proposals; inference field groups must not remove manual entry.
+  Verified: 76 workflow/API tests, 30 preparation tests and a browser regression
+  saving a user-chosen title absent from the manuscript pass, as does the build.
+- **Language may be unknown at intake** (owner clarification, 2026-11-15).
+  There is no Chinese default or mandatory language entry. Preparation infers the
+  language from manuscript text and must establish it before becoming ready;
+  uncertain cases request clarification. Downstream settings use that result.
+  Implemented in intake, the preparation hand-off and translation settings:
+  75 workflow/API tests, 26 preparation-contract tests and two browser checks
+  pass; typecheck/build and LF checks pass. Detection hand-off uses scripted
+  preparation in tests, not a new live-model accuracy evaluation.
+- **Source-supported title extraction** (owner correction, 2026-11-15).
+  Preparation can propose missing title/subtitle from quoted manuscript text;
+  supplied values and deliberate clearing remain protected. Ready preparation
+  cannot silently omit a source title, while generated headings for untitled
+  sources do not establish an actual title. Work names/languages read published
+  metadata rather than treating the intake filename as another authority.
+  Verified with 76 workflow/API tests, 29 preparation tests, two browser checks
+  and frontend build. A read-only isolated-copy recheck of the owner's novel
+  rejects the original missing-title record, accepts the extracted source title
+  and retains the already inferred `en`; no approved records were rewritten.
 - **DOCX first.** DOCX and Markdown/text intake come first; PDF comes later.
 - **Generalize before expanding.** The engine must be generalized before any
   workflow other than literary translation is added.
@@ -134,7 +159,8 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   - A required metadata review gate after preparation. Versioned metadata edits:
     each change increments `record_revision`, retains a snapshot, and records an
     event. Edits are refused while an agent turn is running, fields the run
-    depends on (such as `manuscript_language`) are locked once the run exists,
+    depends on are locked for downstream execution; `manuscript_language` may
+    start unknown and is established by verified preparation,
     and edits after confirmation are recorded in history only.
   - Final acceptance is irreversible and reported through
     `available_actions`; an engine update requires restarting unfinished runs.

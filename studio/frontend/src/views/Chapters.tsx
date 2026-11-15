@@ -200,7 +200,7 @@ const SUPPLIED_BASIS = { metadata: "the work's metadata", document_properties: "
 function RunStatusBar({ run }: { run: RunDetail }) {
   const working = run.status === "RUNNING" || run.worker.active;
   const state = working ? "agent working" : run.status === "WAITING_FOR_HUMAN" ? "waiting for you"
-    : run.status === "WAITING_FOR_ACCEPTANCE" ? "ready to finalize" : null;
+    : run.status === "WAITING_FOR_ACCEPTANCE" ? run.acceptance?.title : null;
   const ended = run.status === "COMPLETED" || run.status === "CANCELLED";
   const problem = !run.engine_current && !ended && !run.finalized
     ? "The workflow engine changed after this run started; it can only be restarted."

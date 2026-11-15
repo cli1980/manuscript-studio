@@ -35,8 +35,15 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 button.danger { border-color: #c0392b; color: #a12c20; }
 button.link { border: none; background: none; color: #1f5fbf; padding: 0; text-align: left; }
 .text { white-space: pre-wrap; word-break: break-word; background: #fbfbfc; border: 1px solid #e6e9ed; padding: 0.6rem; border-radius: 4px; max-height: 70vh; overflow: auto; font-family: Georgia, "Songti SC", "SimSun", serif; font-size: 0.98rem; line-height: 1.55; }
-.split { display: grid; grid-template-columns: minmax(220px, 320px) 1fr; gap: 1rem; }
-.columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
+.split { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: 1rem; }
+.split > * { min-width: 0; }
+.columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 1rem; }
+@media (max-width: 760px) {
+  .split { grid-template-columns: minmax(0, 1fr); }
+  .top { flex-wrap: wrap; gap: 0.5rem 1rem; padding: 0.7rem 1rem; }
+  .top .muted { margin-left: 0; }
+  main { padding: 1rem 1rem 3rem; }
+}
 .list { list-style: none; padding: 0; margin: 0; }
 .list li { padding: 0.35rem 0.3rem; border-bottom: 1px solid #eceff2; }
 .list li.selected { background: #eef4fb; }
@@ -44,6 +51,14 @@ button.link { border: none; background: none; color: #1f5fbf; padding: 0; text-a
 fieldset { border: 1px solid #dde2e7; border-radius: 4px; margin: 0.6rem 0; }
 fieldset label { display: block; margin: 0.2rem 0; }
 textarea { width: 100%; box-sizing: border-box; margin: 0.4rem 0; font: inherit; }
+.interior-review { max-width: 70rem; }
+.interior-review fieldset { min-width: 0; margin: 1rem 0; }
+.interior-review .design-node { margin: 0.5rem 0 0.5rem 0.8rem; }
+.interior-review .design-field { display: block; margin: 0.6rem 0; overflow-wrap: anywhere; }
+.interior-review .design-field input:not([type="checkbox"]), .interior-review .design-field select {
+  max-width: calc(100% - 0.7rem); margin-left: 0.7rem; box-sizing: border-box;
+}
+.interior-review pre { overflow: auto; max-height: 32rem; }
 input, select { padding: 0.25rem; font: inherit; }
 .item { border-top: 1px solid #e6e9ed; padding: 0.5rem 0; }
 .item.resolved h3 { color: #3f7a3f; }

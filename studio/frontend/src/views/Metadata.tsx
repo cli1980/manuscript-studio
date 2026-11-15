@@ -6,8 +6,8 @@ type Provenance = Record<string, { origin: string; review_status: string; confid
 
 const GROUPS: { id: MetadataField["group"]; title: string; note: string }[] = [
   { id: "author", title: "Provided by you", note: "Only you know these. They start empty when the manuscript is added; agents never fill them." },
-  { id: "suggested", title: "Suggested from the manuscript", note: "Agents propose these with evidence during preparation. Confirm or correct them." },
-  { id: "computed", title: "Computed", note: "Fixed when the work was added or measured from the prepared manuscript." },
+  { id: "suggested", title: "Manuscript details", note: "Provide these yourself or review source-supported suggestions. Your confirmed values take precedence." },
+  { id: "computed", title: "Detected or measured", note: "Language is detected from the manuscript during preparation; extent is measured from the prepared text." },
 ];
 
 const LABELS: Record<string, string> = {
@@ -139,14 +139,14 @@ export function MetadataTable({ metadata, fields, provenance = {}, locked = [], 
   );
 }
 
-// Open form for the fields only the user can provide, shown on a work before any workflow has run.
+// Optional user input before a workflow, including titles preparation can fill when missing.
 export function AuthorForm({ metadata, fields, onSave, onDone }: {
   metadata: Record<string, unknown>;
   fields: MetadataField[];
   onSave: (field: string, value: unknown, reason: string) => Promise<void>;
   onDone: () => void;
 }) {
-  const author = fields.filter((field) => field.group === "author");
+  const author = fields.filter((field) => field.group === "author" || field.field === "/title" || field.field === "/subtitle");
   const initial = () => Object.fromEntries(author.map((f) => [f.field, structuredClone(valueAt(metadata, f.field) ?? null)]));
   const [values, setValues] = useState<Record<string, unknown>>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -184,7 +184,7 @@ export function AuthorForm({ metadata, fields, onSave, onDone }: {
     <form className="panel author-form" onSubmit={(e) => { e.preventDefault(); void save(); }}>
       <h2>About this manuscript</h2>
       <p className="muted">Fill in what you know before starting a workflow. Everything is optional and can be changed later;
-        agents suggest the remaining fields (genres, description, …) during preparation.</p>
+        agents suggest missing fields during preparation. Your saved values take precedence.</p>
       {author.map((field) => (
         <div key={field.field} className="form-row">
           <label>{LABELS[field.field] ?? field.field}</label>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Gate, type GateOption, type RunDetail } from "../api";
+import { api, type FormatTarget, type Gate, type GateOption, type RunDetail } from "../api";
 import { Documents, documentTitle, TextBlock } from "./common";
 import { Markdown } from "./Markdown";
 import { workflowUI } from "../workflows";
@@ -8,6 +8,8 @@ import { MetadataTable } from "./Metadata";
 import { AgentFeedback } from "./AgentFeedback";
 import { SamplePoll } from "./SamplePoll";
 import type { ReviewedText } from "../reviewText";
+import { InteriorDesignReview } from "./InteriorDesignReview";
+import { VendorTargetFields } from "./VendorTargetFields";
 
 type Perform = (op: () => Promise<RunDetail>) => void;
 // Sends an exact reply; `sent` runs only after the server accepted it (e.g. to clear drafted comments).
@@ -26,12 +28,14 @@ export function GatePanel({ run, perform, inViewer = false, comments, commentLab
   reviewedText?: ReviewedText;
 }) {
   const ui = workflowUI(run.workflow);
+  if (run.retired) return <div className="banner warn">This workflow was removed. Its history and artifacts are read-only.
+    Start a supported workflow to use the final formatting specification review.</div>;
   // The workflow decides where its decisions are made; elsewhere the panel only links there.
   const page = inViewer ? null : ui.decisionPage(run);
   if (page) {
     return (
       <div className="panel gate">
-        <h2>{run.status === "WAITING_FOR_ACCEPTANCE" ? "Ready to finalize" : run.gate ? ui.decisionCopy(run.gate).heading : ""}</h2>
+        <h2>{run.status === "WAITING_FOR_ACCEPTANCE" ? run.acceptance?.title : run.gate ? ui.decisionCopy(run.gate).heading : ""}</h2>
         <p>Decisions happen in the review viewer, beside the text.</p>
         <a className="button" href={page}>Open the review viewer</a>
       </div>
@@ -51,7 +55,9 @@ export function GatePanel({ run, perform, inViewer = false, comments, commentLab
     <div className="panel gate">
       <h2>{copy.heading}</h2>
       {copy.intro && <p className="muted">{copy.intro}</p>}
-      {gate.kind === "metadata_review" && run.metadata
+      {gate.kind === "interior_design_review" && gate.design_review
+        ? <InteriorDesignReview key={gate.id} run={run} gate={gate} perform={perform} />
+        : gate.kind === "metadata_review" && run.metadata
         ? <MetadataGate run={run} gate={gate} perform={perform} />
         : gate.options?.length
         ? <ChoiceDecision gate={gate} options={gate.options} reply={reply} />
@@ -156,17 +162,23 @@ function MetadataGate({ run, gate, perform }: { run: RunDetail; gate: Gate; perf
 function Acceptance({ run, perform }: { run: RunDetail; perform: Perform }) {
   const acceptance = run.acceptance!;
   const [understood, setUnderstood] = useState(false);
+  const [target, setTarget] = useState<FormatTarget>(acceptance.format_target ?? {
+    purpose: "print-ready", vendor_id: null, binding: "paperback",
+  });
   return (
     <div className="panel gate">
-      <h2>Final acceptance</h2>
+      <h2>{acceptance.title}</h2>
       <p>Read every chapter before accepting:</p>
       <ul>{acceptance.outputs.map((o) => <li key={o.chapter_id}>{workflowUI(run.workflow).hasChapterViewer
         ? <a href={`#/runs/${run.id}/chapters/${encodeURIComponent(o.chapter_id)}`}>{o.chapter_id}</a> : o.chapter_id}{" "}
         <span className="mono muted">{o.sha256.slice(0, 12)}</span></li>)}</ul>
-      <div className="banner warn"><strong>This is irreversible.</strong> {acceptance.notice}</div>
-      <label><input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} /> I understand that accepting finalizes this run.</label>
-      <p><button className="danger" disabled={!understood}
-        onClick={() => perform(() => api.accept(run.id, acceptance.acceptance_id, true))}>Accept and finalize</button></p>
+      <div className="banner warn">{acceptance.finalizes && <strong>This is irreversible. </strong>}{acceptance.notice}</div>
+      {acceptance.vendor_profiles && <VendorTargetFields profiles={acceptance.vendor_profiles} target={target} onChange={setTarget} />}
+      <label><input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} />{" "}
+        {acceptance.finalizes ? "I understand that accepting finalizes this run." : "I approve this manuscript for formatting."}</label>
+      <p><button className={acceptance.finalizes ? "danger" : "primary"} disabled={!understood}
+        onClick={() => perform(() => api.accept(run.id, acceptance.acceptance_id, true,
+          acceptance.vendor_profiles ? target : undefined))}>{acceptance.action_label}</button></p>
     </div>
   );
 }

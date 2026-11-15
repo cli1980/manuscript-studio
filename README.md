@@ -180,9 +180,17 @@ Translates literary works chapter by chapter using source analysis, a living glo
 
 Reads and positions a novel, builds a synopsis-complete story ledger, researches and prioritizes suitable literary agents, and prepares reusable query materials. Existing approved artifacts are reused by default. Only an explicit request to build a package for a specific agent creates an on-demand ZIP, including a synopsis only when that agent's verified guidelines request one.
 
-### `format-manuscript`
+### `interior-design`
 
-Inspects a project draft, recommends and confirms a reusable genre- and purpose-appropriate formatting specification, then orchestrates production of a polished manuscript edition without changing the prose. Its current primary path produces visually verified Word manuscripts with semantic styles and an accurate table of contents while keeping the specification reusable for future PDF and EPUB adapters.
+Reads verified preparation, metadata, agent reading and author preferences to
+produce a proposed interior-design form: typography, leading, geometry, paragraph
+rhythm, semantic text roles and navigation. It runs standalone without a workflow
+run or orchestration UI, or can be called as a reusable component. The
+[output schema](plugins/manuscript-studio/skills/interior-design/schemas/interior-design-proposal.schema.json)
+and [synthetic example](plugins/manuscript-studio/skills/interior-design/references/proposal.example.json)
+are machine-readable. This replaces the former `format-manuscript` skill; it
+does not generate documents, approve designs or attest production QA. Native
+intake and deterministic production integration remain separate work.
 
 ### `review-approval-sheet`
 
@@ -196,8 +204,10 @@ source-grounded review and human gates,
 explicit artifact acceptance, and Markdown export. It persists run state and review
 receipts in SQLite and uses a Codex App Server adapter. General line editing is not
 part of the default translation flow.
-An optional final manuscript formatter can consolidate accepted English chapters
-into a readable DOCX after format-specification approval and document/render QA.
+Literary editing starts its final formatting phase after manuscript approval,
+with interior design and an editable specification-review form. The old separate
+formatter route and format skill are removed. Document production and rendered-
+page review in the unified phase remain pending.
 
 This prototype is separate from the distributed skills plugin. See its README for
 setup, tests, recovery, and current limits, and the

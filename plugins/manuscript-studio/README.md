@@ -8,7 +8,7 @@ An installable skills-only plugin for ChatGPT Work and Codex.
 - Literary Editing
 - Literary Translation
 - Literary Agent Querying
-- Format Manuscript
+- Interior Design
 - Review Approval Sheet
 
 The plugin does not include an MCP server or its own service connection.
@@ -17,7 +17,9 @@ query research may use that host's browser/search tools.
 
 See [runtime support and fallback examples](RUNTIME-SUPPORT.md), the
 [privacy policy](PRIVACY.md), and [support contact](SUPPORT.md) before use.
-Formatting requires an external Documents skill and rendering/inspection tools.
+Interior design returns a structured proposal; it does not generate documents.
+It needs verified preparation but no Documents skill or office renderer.
+Invoke it standalone or as a reusable component; no workflow run is required.
 Interactive approval sheets require the particular Codex inline visualization
 surface; other hosts use validated, revision-bound text decisions.
 
@@ -57,4 +59,4 @@ workspace; it is separate from publishing to the public plugin directory.
 
 Invoke the plugin or a bundled skill explicitly, or ask directly for manuscript preparation, literary
 editing, literary translation, agent research, a query package, manuscript
-formatting, or an interactive approval review.
+interior design, or an interactive literary approval review.

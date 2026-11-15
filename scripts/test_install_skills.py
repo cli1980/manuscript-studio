@@ -76,6 +76,14 @@ class InstallerTests(unittest.TestCase):
             self.install(["literary-editing"])
         self.assertFalse(self.destination.exists())
 
+    def test_interior_design_needs_preparation_but_not_approval_or_documents(self):
+        self.make_skill("interior-design")
+        self.make_skill("prepare-manuscript")
+        self.install(["interior-design"])
+        self.assertTrue((self.destination / "interior-design/SKILL.md").is_file())
+        self.assertTrue((self.destination / "prepare-manuscript/SKILL.md").is_file())
+        self.assertFalse((self.destination / "review-approval-sheet").exists())
+
     def test_missing_preparation_dependency_fails_without_writing(self):
         self.make_skill("literary-translation")
         self.make_skill("review-approval-sheet")
@@ -309,7 +317,7 @@ class RepositoryTests(unittest.TestCase):
             available = installer.available_skills(installer.SKILLS_ROOT)
             self.assertEqual(set(available), {
                 "literary-editing", "literary-translation", "literary-agent-querying",
-                "format-manuscript", "review-approval-sheet", "prepare-manuscript",
+                "interior-design", "review-approval-sheet", "prepare-manuscript",
             })
             self.assertEqual({path.name for path in destination.iterdir()}, set(available))
             for name, source in available.items():

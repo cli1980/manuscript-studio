@@ -3,6 +3,7 @@
 import json
 import re
 import contextlib
+import copy
 import io
 import importlib.util
 import sys
@@ -11,18 +12,18 @@ import unittest
 from unittest.mock import patch
 from pathlib import Path
 
-from ..src import registry
+from ..src import cli, registry
 from ..src.engine import Engine, WorkflowError, result_schema
 from ..src.execution import ExecutionProfile
 from ..src.runtime import CodexRuntime, Request
 from ..src.service import WorkflowService
 from ..src.storage import digest, now
-from ..src.formatting import FormattingEngine, edition_options
 from ..src.translation import TranslationEngine
 from ..src import document_adapters
 from . import run_e2e
 from . import monitor_performance
 from .test_execution import profile_data
+from .interior_fixture import apply_target, proposal_for
 
 TRANSLATION = "literary-translation-v1"
 FORMATTING = "manuscript-formatting-v1"
@@ -122,7 +123,7 @@ class WorkflowTests(unittest.TestCase):
             "workflows": {name: {"status": "not_started", "basis_revision": None, "scope": None,
                                  "operation": None, "state_locator": None, "updated_at": None}
                           for name in ("literary-editing", "literary-translation",
-                                       "literary-agent-querying", "format-manuscript")},
+                                       "literary-agent-querying")},
         }
         for chapter, part in zip(chapters, parts):
             self.write(f"prepared/{self.work_id}/revisions/r0001/" + chapter["file"], part)
@@ -136,6 +137,32 @@ class WorkflowTests(unittest.TestCase):
         if self.engine.state()["workflow"] == "literary-translation":
             self.approve_brief()
             self.translate_chapter()
+
+    def test_language_can_be_unknown_until_preparation_and_sets_passage_defaults(self):
+        for language, settings, maximum in (("en", None, 800), ("zh", None, 1500),
+                                             ("en", {"passage_size": 1200}, 1200)):
+            with self.subTest(language=language, settings=settings):
+                self.engine.close()
+                self.language = language  # Scripted preparation result, not a language-detection benchmark.
+                self.source.write_bytes(b"# Story\n\nHe returned home.\n" if language == "en" else
+                                        "# 故事\n\n他回来了。\n".encode())
+                self.run_id = self.service.create_run(TRANSLATION, upload=self.source, settings=settings)
+                row = self.service._run_row(self.run_id)
+                self.work_id = row["work_id"]
+                self.engine = Engine.open(Path(row["path"]), library=self.service.library(self.work_id))
+                self.workspace = self.engine.workspace
+                initial = self.engine.state()
+                self.assertIsNone(initial["manuscript_language"])
+                self.assertIsNone(self.service.get_work(self.work_id)["manuscript_language"])
+                self.assertIsNone(self.engine.passage_limit(initial))
+                state = self.engine.advance(ScriptedRuntime(self.preparation))
+                self.assertEqual(state["manuscript_language"], language)
+                self.assertEqual(self.engine.passage_limit(state),
+                                 {"max": maximum, "unit": "words" if language == "en" else "cjk_chars"})
+                self.engine.reply(state["gate"]["id"], "confirm metadata")
+                self.service.get_run(self.run_id)  # Refresh the index from the ready preparation.
+                self.service.reindex()
+                self.assertEqual(self.service.get_work(self.work_id)["manuscript_language"], language)
 
     def samples_sheet(self, revision="1", original=True):
         rows = ([{"label": "Location", "value": "story, paragraph 1"}]
@@ -1268,259 +1295,54 @@ class WorkflowTests(unittest.TestCase):
         self.addCleanup(engine.close)
         return engine
 
-    def derive(self, **options):
-        return self.service.create_derived_run(self.work_id, FORMATTING, options=options)
+    def test_removed_formatter_cannot_be_created(self):
+        self.assertNotIn(FORMATTING, registry.templates())
+        with self.assertRaisesRegex(ValueError, "Unknown workflow template"):
+            self.service.create_derived_run(self.work_id, FORMATTING)
 
-    def formatting_job(self):
-        self.finalize_translation()
-        adapter = self.base / "documents"
-        adapter.mkdir()
-        (adapter / "SKILL.md").write_text("# Synthetic Documents adapter for tests\n", encoding="utf-8")
-        return self.open_run(self.derive(documents_skill=adapter)), adapter
+    def test_removed_workflow_history_is_read_only_and_does_not_block_new_runs(self):
+        self.prepare()
+        revision, state = self.engine.store.load()
+        state["template_id"] = FORMATTING
+        state["definition"]["id"] = FORMATTING
+        state["definition"]["engine"] = "workflow.src.formatting:FormattingEngine"
+        state.update(status="WAITING_FOR_HUMAN", gate={
+            "id": "retired-format-gate", "kind": "format_spec", "stage": state["stage"],
+            "chapter_id": None, "message": "Historical format specification.",
+        })
+        self.engine.store.save(revision, state, "fixture.removed_workflow")
+        recorded = self.engine.store.load()
+        view = self.service.get_run(self.run_id)
+        self.assertEqual((view["status"], view["recorded_status"], view["retired"]),
+                         ("RETIRED", "WAITING_FOR_HUMAN", True))
+        self.assertNotIn("gate", view)
+        self.assertEqual(view["available_actions"], [])
+        with self.service.open_run(self.run_id) as archived:
+            with self.assertRaises(WorkflowError) as removed:
+                archived.reply(state["gate"]["id"], "FM001 approve")
+            self.assertEqual(removed.exception.code, "workflow_removed")
+        self.assertEqual(self.engine.store.load(), recorded)
+        self.assertIsNone(self.service.get_work(self.work_id)["unfinished_run"])
+        self.service.reindex()
+        self.assertTrue(self.service.get_run(self.run_id)["retired"])
+        new_run = self.service.create_run(TRANSLATION, work_id=self.work_id)
+        self.assertNotEqual(new_run, self.run_id)
 
-    def format_gate(self, job, *, revision="1", resolved=False):
-        folder = job.workspace / "manuscript-formatting"
-        folder.mkdir(exist_ok=True)
-        (folder / "format-spec.md").write_text("# Proposed format\n- Status: proposed\nReadable fiction edition.\n", encoding="utf-8")
-        (folder / "proposal.md").write_text("# Proposed format\nReadable fiction edition.\n", encoding="utf-8")
-        sheet = self.sheet(revision, resolved)
-        sheet["sheet_id"] = "format-fixture"
-        sheet["items"][0]["id"] = "FM001"
-        sheet["items"][0]["summary"] = "Use the proposed reader-facing edition."
-        sheet["items"][0]["details"] = [{"label": "Design", "value": "Readable fiction edition."}]
-        (folder / "format-review.json").write_text(json.dumps(sheet), encoding="utf-8")
-        output = result("needs_human_input", gate="format_spec",
-                      state_path="manuscript-formatting/format-spec.md",
-                      binding_path="manuscript-formatting/proposal.md",
-                      review_path="manuscript-formatting/format-review.json", qa_path=None)
-        if job.state().get("backend"):
-            (folder / "format-settings.json").write_text(json.dumps(document_adapters.DEFAULT_SETTINGS), encoding="utf-8")
-            output["settings_path"] = "manuscript-formatting/format-settings.json"
-        return output
-
-    def approve_format(self, job):
-        job.advance(ScriptedRuntime(lambda r: self.format_gate(job)))
-        job.reply(job.state()["gate"]["id"], "FM001 approve")
-        job.advance(ScriptedRuntime(lambda r: self.format_gate(job, revision="2", resolved=True)))
-        job.reply(job.state()["gate"]["id"], "confirm final closure")
-
-    def format_result(self, job, *, text="He came back.", pages=True):
-        from zipfile import ZipFile
-        import struct
-        import zlib
-        from xml.sax.saxutils import escape
-        folder = job.workspace / "manuscript-formatting/outputs/docx"
-        folder.mkdir(parents=True, exist_ok=True)
-        document = folder / "manuscript.docx"
-        paragraphs = ["Story", text]  # The translated front matter (title), then the chapter.
-        with ZipFile(document, "w") as archive:
-            archive.writestr("[Content_Types].xml",
-                             '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-                             '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
-                             '</Types>')
-            archive.writestr("_rels/.rels",
-                             '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                             '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
-                             '</Relationships>')
-            archive.writestr("word/document.xml", (
-                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-                '<w:body>' + "".join(f'<w:p><w:r><w:t>{escape(p)}</w:t></w:r></w:p>' for p in paragraphs)
-                + '</w:body></w:document>'
-            ))
-            archive.writestr("word/styles.xml",
-                             '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>')
-        render = folder / "render"
-        render.mkdir(exist_ok=True)
-
-        def chunk(kind, data):
-            return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
-
-        png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
-               + chunk(b"IDAT", zlib.compress(b"\0\xff\xff\xff")) + chunk(b"IEND", b""))
-        (render / "page-1.png").write_bytes(png)
-        qa = {
-            "schema_version": 1, "input_manifest_sha256": job.state()["input_manifest_sha256"],
-            "approved_spec_sha256": (job.state().get("format_approval") or {}).get("sha256", "0" * 64),
-            "docx_sha256": digest(document.read_bytes()), "adapter_skill_sha256": job.state()["adapter_sha256"],
-            "visual_review_passed": True, "specification_matches": True, "page_count": 1,
-            "content_paragraph_indexes": list(range(len(paragraphs))),
-            "pages": [{"page": 1, "image": "manuscript-formatting/outputs/docx/render/page-1.png",
-                       "sha256": digest(png), "reviewed": True, "findings": []}] if pages else [],
-        }
-        (folder / "qa.json").write_text(json.dumps(qa), encoding="utf-8")
-        # Fixtures exercise the contract, not a real render or human visual assessment.
-        return result(state_path="manuscript-formatting/format-spec.md",
-                      output_path="manuscript-formatting/outputs/docx/manuscript.docx",
-                      qa_path="manuscript-formatting/outputs/docx/qa.json")
-
-    def test_formatter_requires_closure_and_preserves_accepted_inputs(self):
-        job, adapter = self.formatting_job()
-        accepted = self.engine.state()["acceptance"]
-        original = self.source.read_bytes()
-        self.approve_format(job)
-        job.advance(ScriptedRuntime(lambda r: self.format_result(job)))
-        state = job.state()
-        self.assertEqual(state["status"], "COMPLETED")
-        self.assertTrue(Path(state["document_path"]).is_file())
-        self.assertEqual(Path(state["document_path"]).name, "manuscript-v001.docx")  # Source version in the name.
-        # The formatted document becomes a new work, ready for further workflows, with basic metadata carried over.
-        handed = self.service.hand_off(state["id"])
-        self.assertEqual(self.service.hand_off(state["id"]), handed)  # Recorded once; repeating is harmless.
-        work = self.service.get_work(handed)
-        # The title comes from the translated front matter; the work is named after it.
-        self.assertEqual((work["manuscript_language"], work["source_name"]), (state["manuscript_language"], "Story.docx"))
-        self.assertEqual(work["origin"]["work_id"], self.work_id)
-        self.assertEqual(work["origin"]["run_id"], state["id"])
-        self.assertEqual(self.service.library(handed).source()[0].read_bytes(), Path(state["document_path"]).read_bytes())
-        metadata = self.service.get_work_metadata(handed)["metadata"]
-        # Derived, not copied: language-neutral facts carry over; text in the original's language does not.
-        self.assertEqual((metadata["title"], metadata["work_type"], metadata["original_language"], metadata["description"]),
-                         ("Story", "fiction", "zh", None))
-        provenance = self.service.get_work_metadata(handed)["provenance"]
-        self.assertIn("translated front matter", provenance["/title"]["rationale"])
-        self.assertNotIn("/genres", provenance)
-        self.assertEqual([w["work_id"] for w in self.service.get_work(self.work_id)["handed_off"]], [handed])
-        self.assertEqual(job.state()["handed_off_work"], handed)
-        self.assertTrue((job.root / "export/manifest.json").is_file())
-        self.assertEqual(self.engine.state()["status"], "COMPLETED")
-        self.assertEqual(self.engine.state()["acceptance"], accepted)
-        self.assertEqual(self.source.read_bytes(), original)
-        self.assertEqual((state["manuscript_language"], state["publication_id"]),
-                         ("en-US", self.service.accepted_publications(self.work_id)[-1]["id"]))
-        reopened = Engine.open(job.root)
-        self.addCleanup(reopened.close)
-        self.assertIsInstance(reopened, FormattingEngine)
-        self.assertEqual(self.derive(documents_skill=adapter), state["id"])  # Unchanged request reuses it.
-        separate = self.service.create_derived_run(self.work_id, FORMATTING, new_edition=True,
-                                                   options={"documents_skill": adapter})
-        self.assertNotEqual(separate, state["id"])
-        # Formatting publishes nothing into the work, so further editions stay possible.
-        self.assertEqual(self.service.get_work(self.work_id)["workflows"]["literary-translation"]["status"], "completed")
-        self.assertNotIn("format-manuscript", self.service.get_work(self.work_id)["workflows"])
-
-    def test_formatter_does_not_publish_before_approval(self):
-        job, _ = self.formatting_job()
-        self.format_gate(job)
-        with self.assertRaisesRegex(ValueError, "not been approved"):
-            job.advance(ScriptedRuntime(lambda r: self.format_result(job)))
-        self.assertFalse((job.root / "export").exists())
-
-    def test_formatter_rejects_prose_changes_even_with_successful_qa_claim(self):
-        job, _ = self.formatting_job()
-        self.approve_format(job)
-        with self.assertRaisesRegex(ValueError, "changes accepted manuscript text"):
-            job.advance(ScriptedRuntime(lambda r: self.format_result(job, text="He returned triumphantly.")))
-        self.assertEqual(job.state()["outputs"], [])
-        self.assertFalse((job.root / "export").exists())
-
-    def test_formatter_rejects_missing_page_evidence_and_stale_specification(self):
-        job, _ = self.formatting_job()
-        job.advance(ScriptedRuntime(lambda r: self.format_gate(job)))
-        (job.workspace / "manuscript-formatting/proposal.md").write_text("Changed proposal", encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "Review changed"):
-            job.reply(job.state()["gate"]["id"], "FM001 approve")
-        job.retry(refresh_gate=True)
-        self.approve_format(job)
-        with self.assertRaisesRegex(ValueError, "page coverage"):
-            job.advance(ScriptedRuntime(lambda r: self.format_result(job, pages=False)))
-
-    def test_formatter_rejects_incomplete_translation_and_missing_adapter(self):
-        adapter = self.base / "documents"
-        adapter.mkdir()
-        (adapter / "SKILL.md").write_text("# Test adapter", encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "no accepted-markdown-chapters/1 publication"):
-            self.derive(documents_skill=adapter)
-        with self.assertRaisesRegex(ValueError, "unavailable"):
-            edition_options(documents_skill=self.base / "missing")
-        self.complete_translation()  # Waiting for acceptance: nothing is published yet.
-        self.assertIsNone(self.engine.accepted_output(self.engine.state()))
-        with self.assertRaisesRegex(ValueError, "no accepted-markdown-chapters/1 publication"):
-            self.derive(documents_skill=adapter)
-
-    def test_optional_formatter_block_does_not_invalidate_translation_result(self):
-        case = self.e2e_case()
-        job, adapter = self.formatting_job()
-        run_e2e.write_report(self.engine, case)
-        runtime = ScriptedRuntime(lambda request: result(
-            "blocked", message="blocked-adapter: renderer unavailable", qa_path=None,
-        ))
-        with contextlib.redirect_stdout(io.StringIO()):  # The launcher reuses the unchanged edition.
-            code = run_e2e.format_document(
-                self.service, self.engine, runtime, documents_skill=adapter, auto_approve_recommended=True,
-            )
-        self.assertEqual(code, 2)
-        self.assertEqual(self.engine.state()["status"], "COMPLETED")
-        self.assertEqual(job.state()["status"], "BLOCKED")
-        report = json.loads((self.engine.root / "e2e-report.json").read_text(encoding="utf-8"))
-        self.assertEqual(report["workflow_status"], "COMPLETED")
-        self.assertEqual(report["formatting_jobs"][job.state()["id"]]["status"], "BLOCKED")
-        self.assertFalse((job.root / "export/manuscript.docx").exists())
-
-    def test_native_formatter_uses_approved_settings_and_waits_for_visual_qa(self):
-        self.finalize_translation()  # Complete the parent translation using synthetic fixtures.
-        with patch.object(document_adapters, "preflight", return_value={"renderer": "word", "version": "test"}):
-            job = self.open_run(self.derive(renderer="word"))
-        self.approve_format(job)
-        self.assertIsNotNone(job.state()["approved_settings"])
-
-        def render(markdown, settings, directory, renderer):
-            self.assertEqual(markdown, "Story\n\nHe came back.\n")
-            self.assertEqual(renderer, "word")
-            directory.mkdir(parents=True)
-            self.format_result(job)
-            folder = job.workspace / "manuscript-formatting/outputs/docx"
-            pdf = folder / "fixture.pdf"
-            pdf.write_bytes(b"%PDF synthetic fixture; not an actual renderer result")
-            image = folder / "render/page-1.png"
-            return {
-                "docx": str(folder / "manuscript.docx"), "pdf": str(pdf),
-                "pages": [{"page": 1, "path": str(image), "sha256": digest(image.read_bytes())}],
-                "renderer": "word", "renderer_version": "fixture", "builder": "python-docx",
-                "builder_version": "fixture", "toc_pages": {}, "layout_passes": 1,
-            }
-
-        with patch.object(document_adapters, "build_and_render", side_effect=render) as renderer:
-            job.advance(None)
-            self.assertEqual(renderer.call_count, 1)
-        self.assertEqual(job.state()["status"], "READY")
-        generated = job.state()["generated"]
-        qa_path = job.file(generated["qa_path"])
-        qa = json.loads(qa_path.read_text(encoding="utf-8"))
-        self.assertFalse(qa["visual_review_passed"])
-        self.assertFalse((job.root / "export/manuscript.docx").exists())
-        self.assertIn("- Status: approved", job.file("manuscript-formatting/format-spec.md").read_text())
-        completion = result(
-            state_path="manuscript-formatting/format-spec.md", output_path=generated["document"]["path"],
-            qa_path=generated["qa_path"], settings_path="manuscript-formatting/format-settings.json",
-        )
-        with self.assertRaisesRegex(ValueError, "Visual/specification QA"):
-            job.advance(ScriptedRuntime(lambda r: completion))
-        job.retry()
-        qa["visual_review_passed"] = qa["specification_matches"] = True
-        for page in qa["pages"]:
-            page.update(reviewed=True, findings=[])
-        qa_path.write_text(json.dumps(qa), encoding="utf-8")
-        job.advance(ScriptedRuntime(lambda r: completion))
-        self.assertEqual(job.state()["status"], "COMPLETED")
-        self.assertTrue(Path(job.state()["document_path"]).is_file())
-
-    def test_native_settings_are_revision_bound_and_renderer_switch_creates_an_edition(self):
-        self.finalize_translation()
-        with patch.object(document_adapters, "preflight", side_effect=lambda name: {"renderer": name, "version": "test"}):
-            cloud = self.derive(renderer="libreoffice")
-            with self.assertRaises(WorkflowError) as busy:  # Formatting counts toward one run per work.
-                self.derive(renderer="word")
-            self.assertEqual(busy.exception.code, "work_busy")
-            self.service.stop(cloud)
-            word = self.open_run(self.derive(renderer="word"))
-        self.assertNotEqual(word.state()["id"], cloud)
-        self.assertNotEqual(word.state()["edition"], self.open_run(cloud).state()["edition"])
-        word.advance(ScriptedRuntime(lambda r: self.format_gate(word)))
-        settings = word.file("manuscript-formatting/format-settings.json")
-        changed = dict(document_adapters.DEFAULT_SETTINGS, font_size=12)
-        settings.write_text(json.dumps(changed), encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "Review changed"):
-            word.reply(word.state()["gate"]["id"], "FM001 approve")
+    def test_metadata_revision_drops_retired_workflow_without_rewriting_history(self):
+        self.prepare()
+        self.engine.cancel()
+        library = self.service.library(self.work_id)
+        head = library.head("work.json")
+        legacy = json.loads(library.read(head))
+        legacy["workflows"]["format-manuscript"] = dict(legacy["workflows"]["literary-editing"])
+        [historical] = library.publish_many([{
+            "artifact": "work.json", "data": (json.dumps(legacy) + "\n").encode(), "expected_head": head["id"],
+        }], run_id=None, workflow=None, stage="fixture")
+        self.service.edit_work_metadata(self.work_id, "/title", "User-confirmed title", "Author's choice")
+        current = json.loads(library.read(library.head("work.json")))
+        self.assertEqual(current["metadata"]["title"], "User-confirmed title")
+        self.assertNotIn("format-manuscript", current["workflows"])
+        self.assertIn("format-manuscript", json.loads(library.read(historical))["workflows"])
 
     # ----- M1: registry, restarts, library, service ---------------------------------------
 
@@ -1739,6 +1561,20 @@ class WorkflowTests(unittest.TestCase):
         library = self.service.library(self.work_id)
         self.assertTrue(list((library.root / "metadata-history").glob("*.json")))
 
+    def test_work_display_uses_published_metadata_instead_of_upload_filename(self):
+        self.engine.advance(ScriptedRuntime(self.prepare_v2))
+        self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+        work = self.service.get_work(self.work_id)
+        self.assertEqual((work["title"], work["manuscript_language"]), ("Story", "zh"))
+        self.assertEqual(next(w for w in self.service.list_works() if w["id"] == self.work_id)["title"], "Story")
+        self.service.stop(self.run_id)
+        self.service.edit_work_metadata(self.work_id, "/title", "Author's title", "Preferred title")
+        self.assertEqual(self.service.get_work(self.work_id)["title"], "Author's title")
+        self.service.reindex()
+        self.assertEqual(self.service.get_work(self.work_id)["title"], "Author's title")
+        self.service.edit_work_metadata(self.work_id, "/title", None, "Leave the actual title unknown")
+        self.assertEqual(self.service.get_work(self.work_id)["title"], self.source.stem)
+
     def test_library_hand_edits_are_recorded_and_conflicting_publishes_refused(self):
         self.engine.advance(ScriptedRuntime(self.prepare_v2))
         self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
@@ -1867,14 +1703,341 @@ class WorkflowTests(unittest.TestCase):
         self.prepare()
         return self.engine.state()
 
+    def design_result(self, request, *, work_record=None):
+        ctx = json.loads(request.prompt[request.prompt.index('{\n  "stage"'):])
+        relative = work_record or ctx["work_record"]
+        proposal = proposal_for(self.workspace / relative)
+        if ctx["previous_proposal"]:
+            proposal = ctx["previous_proposal"]
+            proposal["revision"] += 1
+        apply_target(proposal, ctx["vendor_profile"], ctx["format_target"])
+        self.write(ctx["proposal_path"], proposal)
+        return result(state_path=ctx["proposal_path"], work_record=relative)
+
+    def approve_editing(self):
+        state = self.choose("finish")
+        return self.engine.accept(state["acceptance_id"], confirm_final=True)
+
+    def test_purpose_is_supplied_before_authoring_and_fixed_during_review(self):
+        self.start_editing()
+        state = self.choose("finish")
+        selection = {"purpose": "submission", "vendor_id": None, "binding": "paperback"}
+        state = self.engine.accept(state["acceptance_id"], confirm_final=True, format_target=selection)
+        approval = state["manuscript_approval"]
+
+        def design(request):
+            ctx = json.loads(request.prompt[request.prompt.index('{\n  "stage"'):])
+            self.assertEqual(ctx["format_target"]["purpose"], "submission")
+            self.assertIn("recipient", ctx["purpose_guidance"])
+            self.assertIn("edition_brief.purpose", request.prompt)
+            return self.design_result(request)
+
+        state = self.engine.advance(ScriptedRuntime(design))
+        proposal = self.engine.design_view(state)["proposal"]
+        self.assertEqual(proposal["edition_brief"]["purpose"], "submission")
+        gate = state["gate"]
+        spec = {k: copy.deepcopy(proposal[k]) for k in ("edition_brief", "design_system")}
+        spec["role_styles"] = {r["id"]: r["style_id"] for r in proposal["text_roles"]}
+        spec["edition_brief"]["purpose"] = "print-ready"
+        with self.assertRaisesRegex(ValueError, "selected purpose"):
+            self.engine.review_design(gate["id"], gate["binding"]["sha256"], "save", spec=spec)
+        with self.assertRaisesRegex(ValueError, "Unknown"):
+            self.engine.review_design(gate["id"], gate["binding"]["sha256"], "select-target")
+        state = self.engine.review_design(gate["id"], gate["binding"]["sha256"], "request-revision",
+                                          feedback="Use more annotation space without changing the purpose.")
+        state = self.engine.advance(ScriptedRuntime(self.design_result))
+        self.assertEqual(self.engine.design_view(state)["proposal"]["edition_brief"]["purpose"], "submission")
+        self.assertEqual(state["manuscript_approval"], approval)
+
+    def test_ingramspark_variant_is_pinned_and_entry_fields_are_read_only(self):
+        self.start_editing()
+        state = self.choose("finish")
+        for invalid in ({"purpose": "print-ready", "vendor_id": "ingramspark", "binding": "dust-jacket"},
+                        {"purpose": "print-ready", "vendor_id": "other", "binding": "paperback"},
+                        {"purpose": "print-ready", "vendor_id": "ingramspark", "binding": "paperback", "variant_id": "hardcover"},
+                        {"purpose": [], "vendor_id": None, "binding": "paperback"}):
+            with self.subTest(target=invalid), self.assertRaises(ValueError):
+                self.engine.accept(state["acceptance_id"], confirm_final=True, format_target=invalid)
+        self.assertNotIn("manuscript_approval", self.engine.state())
+        state = self.engine.accept(state["acceptance_id"], confirm_final=True,
+                                   format_target={"purpose": "print-ready", "vendor_id": "ingramspark", "binding": "paperback"})
+        manuscript_approval = state["manuscript_approval"]
+        self.assertEqual(self.engine.selected_vendor_profile(state)["variant_id"], "paperback")
+        state = self.engine.advance(ScriptedRuntime(self.design_result))
+        proposal = self.engine.design_view(state)["proposal"]
+        self.assertEqual(proposal["vendor_profile"]["variant_id"], "paperback")
+        spec = {k: copy.deepcopy(proposal[k]) for k in ("edition_brief", "design_system")}
+        spec["role_styles"] = {r["id"]: r["style_id"] for r in proposal["text_roles"]}
+        spec["design_system"]["page"]["gutter_mm"] = 5
+        gate = state["gate"]
+        state = self.engine.review_design(gate["id"], gate["binding"]["sha256"], "save", spec=spec)
+        gate = state["gate"]
+        for field, value in (("id", "different-target"), ("vendor_id", "other"), ("binding", "hardcover"),
+                             ("vendor_profile_ref", None)):
+            candidate = copy.deepcopy(spec)
+            candidate["edition_brief"]["production_targets"][0][field] = value
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.engine.review_design(gate["id"], gate["binding"]["sha256"], "save", spec=candidate)
+            self.assertEqual(self.engine.state()["gate"]["id"], gate["id"])
+        state = self.engine.review_design(gate["id"], gate["binding"]["sha256"], "request-revision",
+                                          feedback="Refine typography within the selected target.")
+        self.assertEqual(state["manuscript_approval"], manuscript_approval)
+        state = self.engine.advance(ScriptedRuntime(self.design_result))
+        proposal = self.engine.design_view(state)["proposal"]
+        self.assertEqual(proposal["vendor_profile"]["variant_id"], "paperback")
+        self.assertEqual(proposal["edition_brief"]["production_targets"][0]["binding"], "paperback")
+        self.assertEqual(proposal["design_system"]["page"]["gutter_mm"], 5)
+        profile = state["design_vendor_profile"]
+        state = self.engine.restart_stage("interior-design", reason="Recheck design")
+        self.assertEqual(state["design_vendor_profile"], profile)
+        self.assertEqual(state["manuscript_approval"], manuscript_approval)
+
+    def test_design_cannot_replace_user_selected_vendor_variant(self):
+        self.start_editing()
+        state = self.choose("finish")
+        self.engine.accept(state["acceptance_id"], confirm_final=True,
+                           format_target={"purpose": "print-ready", "vendor_id": "ingramspark", "binding": "paperback"})
+
+        def wrong_variant(request):
+            output = self.design_result(request)
+            proposal = json.loads(self.engine.file(output["state_path"]).read_bytes())
+            profile = self.engine.interior_validator.vendor_profiles().resolve("ingramspark", "hardcover")
+            apply_target(proposal, profile, {"purpose": "print-ready", "vendor_id": "ingramspark", "binding": "hardcover"})
+            self.write(output["state_path"], proposal)
+            return output
+
+        with self.assertRaisesRegex(ValueError, "user-selected"):
+            self.engine.advance(ScriptedRuntime(wrong_variant))
+        self.assertNotIn("design_draft", self.engine.state())
+        self.assertIsNone(self.engine.state().get("design_approval"))
+
+    def test_interior_design_zero_pass_edit_save_stale_gate_and_approval(self):
+        state = self.start_editing()
+        prepared = {p: s["sha256"] for p, s in state["prepared"]["files"].items()}
+        with self.assertRaisesRegex(ValueError, "Reply with exactly"):
+            self.choose("proceed to formatting")
+        state = self.choose("finish")
+        self.assertEqual((state["stage"], state["status"]), ("approve-manuscript", "WAITING_FOR_ACCEPTANCE"))
+        self.assertFalse(self.engine.acceptance_details(state)["finalizes"])
+        self.assertEqual(self.engine.acceptance_details(state)["format_target"]["purpose"], "print-ready")
+        with contextlib.redirect_stdout(io.StringIO()) as approval_copy:
+            cli.display(self.engine, state, review=True)
+        self.assertIn("Approval freezes this manuscript", approval_copy.getvalue())
+        self.assertNotIn("manuscript_approval", state)
+        with self.assertRaises(WorkflowError) as unconfirmed:
+            self.engine.accept(state["acceptance_id"])
+        self.assertEqual(unconfirmed.exception.code, "confirmation_required")
+        with self.assertRaisesRegex(ValueError, "Stale"):
+            self.engine.accept("wrong-id", confirm_final=True)
+        state = self.engine.accept(state["acceptance_id"], confirm_final=True)
+        self.assertEqual((state["stage"], state["status"], len(state["passes"])), ("interior-design", "READY", 0))
+        self.assertFalse(self.engine.finalized(state))
+        self.assertEqual(state["manuscript_approval"]["hashes"], [o["sha256"] for o in state["outputs"]])
+        self.assertEqual(self.service.library(self.work_id).finalized(), [])
+
+        def design(request):
+            self.assertIn("interior-design", request.prompt)
+            ctx = json.loads(request.prompt[request.prompt.index('{\n  "stage"'):])
+            self.assertFalse(ctx["preparation_required"])
+            self.assertTrue(all(self.engine.file(c["path"]).is_file() for c in ctx["manuscript"]))
+            return self.design_result(request)
+
+        state = self.engine.advance(ScriptedRuntime(design))
+        gate = state["gate"]
+        self.assertEqual((state["status"], gate["kind"]), ("WAITING_FOR_HUMAN", "interior_design_review"))
+        with self.assertRaisesRegex(ValueError, "form"):
+            self.engine.reply(gate["id"], "approve design")
+        view = self.engine.design_view(state)
+        proposal = view["proposal"]
+        work_before = self.engine._work_path(state).read_bytes()
+        with self.assertRaisesRegex(ValueError, "Restart manuscript approval"):
+            self.engine.edit_metadata("/title", "Changed title", reason="Explicit correction")
+        self.assertEqual(self.engine._work_path(state).read_bytes(), work_before)
+        spec = {k: proposal[k] for k in ("edition_brief", "design_system")}
+        spec["role_styles"] = {r["id"]: r["style_id"] for r in proposal["text_roles"]}
+        spec["design_system"]["page"]["gutter_mm"] = 5
+        spec["design_system"]["styles"][0]["font"]["size_pt"] = 12
+        state = self.engine.review_design(gate["id"], view["sha256"], "save", spec=spec)
+        updated = self.engine.design_view(state)["proposal"]
+        self.assertEqual(updated["revision"], proposal["revision"] + 1)
+        self.assertEqual(updated["design_system"]["page"]["gutter_mm"], 5)
+        self.assertEqual(updated["design_system"]["styles"][0]["font"]["size_pt"], 12)
+        self.assertEqual(updated["basis"], proposal["basis"])
+        self.assertNotEqual(state["gate"]["id"], gate["id"])
+        self.assertEqual(json.loads(self.engine.store.content(gate["binding"]))["design_system"]["page"]["gutter_mm"], 3)
+        with self.assertRaisesRegex(ValueError, "Stale"):
+            self.engine.review_design(gate["id"], view["sha256"], "approve", answers={})
+        gate = state["gate"]
+        with self.assertRaisesRegex(ValueError, "every blocking question"):
+            self.engine.review_design(gate["id"], gate["binding"]["sha256"], "approve", answers={})
+        answers = {q["id"]: "Keep the proposed new-page openings." for q in updated["questions"] if q["blocking"]}
+        state = self.engine.review_design(gate["id"], gate["binding"]["sha256"], "approve", answers=answers)
+        self.assertEqual(state["status"], "BLOCKED")
+        self.assertFalse(self.engine.finalized(state))
+        self.assertEqual(state["design_approval"]["proposal"]["sha256"], gate["binding"]["sha256"])
+        self.assertEqual(len(state["outputs"]), len(state["chapters"]))  # Approved Markdown, not generated documents.
+        self.assertNotIn("acceptance", state)
+        attempts = state["attempts"]
+        self.engine.retry()
+        state = self.engine.advance(None)  # Production cannot accidentally invoke an agent.
+        self.assertEqual((state["status"], state["attempts"]), ("BLOCKED", attempts))
+        for path, sha in prepared.items():
+            self.assertEqual(digest(self.engine.file(path).read_bytes()), sha)
+        self.assertEqual(self.engine.state()["receipts"][-1]["decision_source"], "human")
+        self.engine.cancel()
+        with self.assertRaisesRegex(ValueError, "CANCELLED"):
+            self.engine.advance(None)
+        self.assertEqual(self.engine.state()["status"], "CANCELLED")
+
+    def test_design_without_author_questions_needs_no_technical_acknowledgements(self):
+        self.start_editing()
+        self.approve_editing()
+
+        def design(request):
+            output = self.design_result(request)
+            proposal = json.loads(self.engine.file(output["state_path"]).read_bytes())
+            proposal["questions"] = []
+            self.write(output["state_path"], proposal)
+            return output
+
+        state = self.engine.advance(ScriptedRuntime(design))
+        gate = state["gate"]
+        state = self.engine.review_design(gate["id"], gate["binding"]["sha256"], "approve", answers={})
+        self.assertEqual(state["status"], "BLOCKED")
+        self.assertIn("not integrated", state["error"])
+        self.assertEqual(state["receipts"][-1]["parsed"]["answers"], {})
+        self.assertFalse(self.engine.finalized(state))
+
+    def test_interior_design_refuses_invalid_settings_and_supports_revision(self):
+        self.start_editing()
+        self.approve_editing()
+        state = self.engine.advance(ScriptedRuntime(self.design_result))
+        gate = state["gate"]
+        proposal = self.engine.design_view(state)["proposal"]
+        spec = {k: proposal[k] for k in ("edition_brief", "design_system")}
+        spec["role_styles"] = {r["id"]: r["style_id"] for r in proposal["text_roles"]}
+        spec["design_system"]["page"]["margins_mm"]["inside"] = 200
+        with self.assertRaises(ValueError):
+            self.engine.review_design(gate["id"], gate["binding"]["sha256"], "save", spec=spec)
+        self.assertEqual(self.engine.state()["gate"]["id"], gate["id"])
+        with self.assertRaisesRegex(ValueError, "only"):
+            self.engine.review_design(gate["id"], gate["binding"]["sha256"], "save", spec={"basis": {}})
+        state = self.engine.review_design(gate["id"], gate["binding"]["sha256"], "request-revision",
+                                          feedback="Use a quieter heading and preserve my settings.")
+        self.assertEqual(state["status"], "READY")
+        state = self.engine.advance(ScriptedRuntime(self.design_result))
+        self.assertEqual(self.engine.design_view(state)["proposal"]["revision"], 2)
+        self.assertNotEqual(state["gate"]["id"], gate["id"])
+        metadata_path = self.engine._work_path(state)
+        original_metadata = metadata_path.read_bytes()
+        tampered = json.loads(original_metadata)
+        tampered["metadata"]["title"] = "Changed outside the human review"
+        metadata_path.write_bytes(json.dumps(tampered).encode())
+        with self.assertRaisesRegex(ValueError, "frozen interior-design metadata"):
+            self.engine.review_design(state["gate"]["id"], state["gate"]["binding"]["sha256"], "approve", answers={})
+        metadata_path.write_bytes(original_metadata)
+        self.engine.file(state["manuscript"]["chapter-1"]).write_bytes(b"Tampered manuscript\n")
+        with self.assertRaisesRegex(ValueError, "frozen"):
+            self.engine.review_design(state["gate"]["id"], state["gate"]["binding"]["sha256"], "approve", answers={})
+
+    def test_formatting_approval_freezes_basis_before_agent_and_survives_design_restart(self):
+        self.start_editing()
+        with self.assertRaisesRegex(ValueError, "Approve the manuscript"):
+            self.engine.prepare_design_turn(self.engine.state())
+        state = self.approve_editing()
+        approval = state["manuscript_approval"]
+        path = self.engine.file(state["manuscript"]["chapter-1"])
+        before = path.read_bytes()
+        path.write_bytes(b"Changed after approval\n")
+        with self.assertRaisesRegex(ValueError, "frozen"):
+            self.engine.advance(None)
+        path.write_bytes(before)
+        state = self.engine.restart_stage("interior-design", reason="Propose the layout again")
+        self.assertEqual(state["manuscript_approval"], approval)
+        self.assertTrue(state["design_sources"])
+        state = self.engine.restart_stage("approve-manuscript", reason="Reopen manuscript approval")
+        self.assertNotIn("manuscript_approval", state)
+        self.assertNotIn("design_sources", state)
+        self.assertNotEqual(state["acceptance_id"], approval["id"])
+        with self.assertRaisesRegex(ValueError, "Stale"):
+            self.engine.accept(approval["id"], confirm_final=True)
+
+    def test_interior_design_after_pass_requires_matching_output_preparation(self):
+        self.start_editing()
+        self.choose("run line")
+        for _ in range(4):
+            state = self.approve_empty_job("line")
+        with self.assertRaisesRegex(ValueError, "Reply with exactly"):
+            self.choose("finish")
+        self.choose("accept pass")
+        self.approve_editing()
+        # A deliberately wrong proposal cannot silently bind a different source.
+        def bad(request):
+            response = self.design_result(request)
+            proposal = json.loads(self.engine.file(response["state_path"]).read_bytes())
+            proposal["basis"]["preparation"]["record_revision"] += 1
+            self.write(response["state_path"], proposal)
+            return response
+        with self.assertRaisesRegex(ValueError, "Stale"):
+            self.engine.advance(ScriptedRuntime(bad))
+
+    def test_interior_design_prepares_exact_accepted_edited_text_without_overwriting_original(self):
+        self.start_editing()
+        self.choose("run line")
+        self.approve_empty_job("line")
+        self.apply_change("line", "chapter-1", "## 1\n\nHe returned.\n", "# Approved style\n")
+        self.approve_empty_job("line")
+        self.approve_empty_job("line")
+        self.choose("accept pass")
+        self.approve_editing()
+
+        def stale(request):
+            ctx = json.loads(request.prompt[request.prompt.index('{\n  "stage"'):])
+            self.assertTrue(ctx["preparation_required"])
+            return self.design_result(request)  # Still bound to original preparation: must not pass.
+
+        with self.assertRaisesRegex(ValueError, "exact selected manuscript"):
+            self.engine.advance(ScriptedRuntime(stale))
+        self.engine.retry()
+        original_work = self.engine._work_path(self.engine.state()).read_bytes()
+
+        def reprepare(request):
+            ctx = json.loads(request.prompt[request.prompt.index('{\n  "stage"'):])
+            work = json.loads(original_work)
+            previous = self.engine._work_path(self.engine.state()).parent / "revisions/r0001/manifest.json"
+            manifest = json.loads(previous.read_bytes())
+            work["preparation"]["current_revision"] = "r0002"
+            folder = ctx["output_preparation_root"] + "/accepted"
+            work["discovery"].update(location_kind="directory", location=str(self.workspace / "manuscript/chapters"))
+            manifest.update(revision="r0002", sources=[])
+            for chapter, source in zip(manifest["chapters"], ctx["manuscript"]):
+                data = self.engine.file(source["path"]).read_text(encoding="utf-8")
+                chapter["sha256"] = digest(data.encode())
+                chapter["source_spans"] = [{"source_id": chapter["chapter_id"], "locator": "Whole accepted unit"}]
+                self.write(folder + "/revisions/r0002/" + chapter["file"], data)
+                manifest["sources"].append({"source_id": chapter["chapter_id"],
+                                            "locator": str(self.engine.file(source["path"])), "format": "markdown",
+                                            "identity": {"kind": "sha256", "value": chapter["sha256"]}})
+            self.write(folder + "/revisions/r0002/manifest.json", manifest)
+            relative = self.write(folder + "/work.json", work)
+            return self.design_result(request, work_record=relative)
+
+        state = self.engine.advance(ScriptedRuntime(reprepare))
+        self.assertEqual(state["gate"]["kind"], "interior_design_review")
+        proposal = self.engine.design_view(state)["proposal"]
+        self.assertEqual(proposal["basis"]["preparation"]["revision"], "r0002")
+        self.assertEqual(self.engine._work_path(state).read_bytes(), original_work)
+        self.assertNotEqual(state["design_work_record"], state["prepared"]["work_record"])
+        self.assertEqual(proposal["basis"]["preparation"]["units"][1]["sha256"], digest(b"## 1\n\nHe returned.\n"))
+
     def test_literary_editing_passes_are_chosen_accepted_and_repeatable(self):
         state = self.start_editing()
-        self.assertEqual(self.engine.stage_ids(state), ["prepare", "metadata", "passes", "accept", "export"])
-        # After metadata review the user chooses a pass, or goes straight to final acceptance.
+        self.assertEqual(self.engine.stage_ids(state), ["prepare", "metadata", "passes", "approve-manuscript", "interior-design", "accept", "export"])
+        # After metadata review the user chooses a pass, or proceeds to manuscript approval.
         self.assertEqual((state["stage"], state["status"], state["gate"]["kind"]), ("passes", "WAITING_FOR_HUMAN", "pass_choice"))
         self.assertEqual(self.engine.gate_commands(state, state["gate"]),
                          ["run developmental", "run line", "run copy", "finish"])
-        self.assertEqual(state["gate"]["options"][-1]["title"], "Proceed to final acceptance")
+        self.assertEqual(state["gate"]["options"][-1]["title"], "Review manuscript")
         with self.assertRaisesRegex(ValueError, "Reply with exactly one of"):
             self.choose("run everything")
 
@@ -1981,33 +2144,22 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue((self.workspace / "editorial/passes/001-line/_whole/application-report.md").is_file())
         self.choose("accept pass")
 
-        # Final acceptance: going back to the pass choice is possible until it is confirmed.
+        # Manuscript approval is separate from final publication and may be reopened.
         state = self.choose("finish")
         self.assertEqual(state["status"], "WAITING_FOR_ACCEPTANCE")
         self.assertEqual([o["chapter_id"] for o in state["outputs"]], ["front-matter", "chapter-1", "chapter-2"])
         state = self.engine.restart_stage("passes", reason="One more look")
         self.assertEqual(state["gate"]["kind"], "pass_choice")
         state = self.choose("finish")
-        self.engine.accept(state["acceptance_id"], confirm_final=True)
-        state = self.engine.advance(None)
-        self.assertEqual(state["status"], "COMPLETED")
-        export = Path(state["export_path"])
-        self.assertEqual((export / "0002.md").read_text(encoding="utf-8"), "## 1\n\nHe returned.\n")
-        self.assertTrue((export / "style-sheet.md").is_file())
+        state = self.engine.accept(state["acceptance_id"], confirm_final=True)
+        self.assertEqual((state["stage"], state["status"]), ("interior-design", "READY"))
+        self.assertEqual(self.engine.store.content(state["outputs"][1]), b"## 1\n\nHe returned.\n")
+        self.assertEqual([(p["number"], p["stage"]) for p in state["passes"]], [(1, "line"), (2, "copy"), (3, "line")])
+        self.assertFalse(self.engine.finalized(state))
+        self.assertFalse(state.get("export_path"))
         library = self.service.library(self.work_id)
-        self.assertEqual(library.read(library.head("literary-editing/v001/chapters/0002.md")), b"## 1\n\nHe returned.\n")
-        record = json.loads(library.read(library.head("literary-editing/v001/run.json")))
-        self.assertEqual([(p["number"], p["stage"]) for p in record["passes"]], [(1, "line"), (2, "copy"), (3, "line")])
-        work = self.service.get_work(self.work_id)
-        self.assertEqual(work["workflows"]["literary-editing"]["status"], "completed")
-        summary = json.loads(library.read(library.head("work.json")))["workflows"]["literary-editing"]
-        self.assertEqual((summary["status"], summary["operation"]), ("completed", "literary-edit"))
-        # The edited manuscript feeds the unchanged formatting template.
-        (self.base / "documents").mkdir()
-        (self.base / "documents/SKILL.md").write_text("# Synthetic adapter\n", encoding="utf-8")
-        formatting = self.open_run(self.service.create_derived_run(
-            self.work_id, FORMATTING, options={"documents_skill": self.base / "documents"}))
-        self.assertEqual(formatting.state()["manuscript_language"], "en-US")
+        self.assertEqual(library.finalized(), [])
+        self.assertIsNone(library.head("literary-editing/v001/run.json"))
 
     def test_literary_editing_can_be_accepted_without_any_pass(self):
         state = self.start_editing()
@@ -2015,8 +2167,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["status"], "WAITING_FOR_ACCEPTANCE")
         prepared = [self.engine.store.content(state["prepared"]["files"][c["path"]]) for c in state["chapters"]]
         self.assertEqual([self.engine.store.content(o) for o in state["outputs"]], prepared)
-        self.engine.accept(state["acceptance_id"], confirm_final=True)
-        self.assertEqual(self.engine.advance(None)["status"], "COMPLETED")
+        state = self.engine.accept(state["acceptance_id"], confirm_final=True)
+        self.assertEqual((state["stage"], state["status"]), ("interior-design", "READY"))
+        self.assertFalse(self.engine.finalized(state))
+        self.assertEqual([self.engine.store.content(o) for o in state["outputs"]], prepared)
         template = registry.get("literary-editing-v1")
         template["stages"][2]["options"].append({"stage": "prepare", "title": "Prepare again"})
         with self.assertRaisesRegex(ValueError, "must be an agent stage other than preparation"):
@@ -2027,7 +2181,7 @@ class DocumentAdapterTests(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec("docx"), "Install workflow/requirements-docx.txt for builder tests.")
     def test_builder_preserves_text_emphasis_headings_and_page_fields(self):
         from docx import Document
-        from ..src.formatting import docx_paragraphs
+        from ..src.document_audit import docx_paragraphs
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "manuscript.docx"
             source = "# A Story\n\n## 1\n\nHe **came** *back*.\n\n## 2\n\nShe stayed.\n"

@@ -90,7 +90,17 @@ class WorkflowService:
         row = self.db.execute("SELECT * FROM works WHERE id=?", (work_id,)).fetchone()
         if row is None:
             raise ValueError(f"Unknown work: {work_id}")
-        return dict(row)
+        result = dict(row)
+        if result["manuscript_language"] == "und":
+            result["manuscript_language"] = None
+        library = WorkLibrary(self.root / "works" / work_id)
+        head = library.head("work.json")
+        if head:
+            metadata = json.loads(library.read(head)).get("metadata", {})
+            # The intake filename is only a display fallback, not another metadata authority.
+            result["title"] = metadata.get("title") or result["title"]
+            result["manuscript_language"] = metadata.get("manuscript_language") or result["manuscript_language"]
+        return result
 
     def library(self, work_id):
         self._work_row(work_id)
@@ -98,7 +108,7 @@ class WorkflowService:
 
     def list_works(self, owner=None):
         rows = self.db.execute("SELECT * FROM works WHERE ?1 IS NULL OR owner=?1 ORDER BY created_at", (owner,))
-        return [dict(row) for row in rows]
+        return [self._work_row(row["id"]) for row in rows]
 
     def get_work(self, work_id):
         work = self._work_row(work_id)
@@ -126,7 +136,7 @@ class WorkflowService:
     def verify_work(self, work_id):
         return self.library(work_id).detect_edits()
 
-    def create_work(self, upload, manuscript_language, *, owner=None):
+    def create_work(self, upload, manuscript_language=None, *, owner=None):
         """Intake without a run: store the upload in a new work's library (always a new work)."""
         with self._transaction():
             return self._create_work(upload, manuscript_language, owner or self.owner)
@@ -135,7 +145,9 @@ class WorkflowService:
         upload = plain(Path(upload))
         if not upload.is_file():
             raise ValueError("Designate one regular source file.")
-        if not isinstance(manuscript_language, str) or not LANGUAGE_TAG.fullmatch(manuscript_language):
+        manuscript_language = None if manuscript_language in ("", "und") else manuscript_language
+        if manuscript_language is not None and (
+                not isinstance(manuscript_language, str) or not LANGUAGE_TAG.fullmatch(manuscript_language)):
             raise ValueError("Use a manuscript-language tag such as zh or zh-CN.")
         # Every upload is a new work, even for an identical file.
         work_id = f"{slug(upload.name)}-{uuid.uuid4().hex[:6]}"
@@ -155,8 +167,9 @@ class WorkflowService:
         library.publish_many([{"artifact": "work.json", "data": json_bytes(work), "expected_head": None,
                                "review_status": "unreviewed", "basis": {"metadata_record_revision": 1}}],
                              run_id=None, workflow=None, stage="create")
+        # The index uses BCP-47 "und" for an as-yet undetermined language; metadata/API use null.
         self.db.execute("INSERT INTO works VALUES (?,?,?,?,?,?,?)",
-                        (work_id, info["title"], owner, record["sha256"], upload.name, manuscript_language,
+                        (work_id, info["title"], owner, record["sha256"], upload.name, manuscript_language or "und",
                          info["created_at"]))
         return work_id
 
@@ -176,6 +189,9 @@ class WorkflowService:
     def _record_state(self, run_id, state):
         self.db.execute("UPDATE runs SET status=?, stage=?, updated_at=? WHERE id=?",
                         (state["status"], state["stage"], now(), run_id))
+        if state.get("prepared") and state.get("manuscript_language"):
+            self.db.execute("UPDATE works SET manuscript_language=? WHERE id=?",
+                            (state["manuscript_language"], state["work_id"]))
         if state.get("acceptance"):
             row = self._run_row(run_id)
             self.db.execute("INSERT INTO work_workflows VALUES (?,?,?,?) ON CONFLICT(work_id, workflow) "
@@ -190,11 +206,12 @@ class WorkflowService:
             store.close()
 
     def _unfinished(self, work_id):
+        supported = registry.templates()
         for row in self.db.execute("SELECT id, path FROM runs WHERE work_id=? AND status NOT IN ('COMPLETED', 'CANCELLED')",
                                    (work_id,)).fetchall():
             state = self._load_state(row["path"])  # Per-run state is authoritative; the index is a cache.
             self._record_state(row["id"], state)
-            if state["status"] not in TERMINAL:
+            if state["status"] not in TERMINAL and state.get("template_id") in supported:
                 return row["id"]
         return None
 
@@ -230,7 +247,7 @@ class WorkflowService:
                 info, (_, source) = library.info(), library.source()
                 self.db.execute("INSERT OR IGNORE INTO works VALUES (?,?,?,?,?,?,?)", (
                     info["work_id"], info["title"], info["owner"], source["sha256"], info["source_name"],
-                    info["manuscript_language"], info["created_at"]))
+                    info["manuscript_language"] or "und", info["created_at"]))
             known = {row["id"]: row["path"] for row in self.db.execute("SELECT id, path FROM runs")}
             paths = {**{p.parent.name: str(p.parent) for p in (self.root / "runs").glob("*/state.sqlite3")}, **known}
             for run_id, path in paths.items():
@@ -251,7 +268,7 @@ class WorkflowService:
 
     def create_run(self, template_id, *, upload=None, manuscript_language=None, work_id=None, owner=None,
                    model=None, agent_models=None, settings=None):
-        """Exactly one of: upload (+ manuscript_language) creates a new work; work_id uses an existing work."""
+        """An upload creates a new work with an optional language hint; work_id uses an existing work."""
         template = registry.get(template_id)
         model = self._resolve_models(template, model, agent_models)
         if "consumes" in template:
@@ -261,8 +278,6 @@ class WorkflowService:
         owner = owner or self.owner
         with self._transaction():
             if upload is not None:
-                if manuscript_language is None:
-                    raise ValueError("A new work requires a manuscript language.")
                 work_id = self._create_work(upload, manuscript_language, owner)
             else:
                 if manuscript_language is not None:
@@ -341,18 +356,21 @@ class WorkflowService:
     # ----- run operations -------------------------------------------------------------------
 
     def get_run(self, run_id, *, include_usage=True):
-        row = self._run_row(run_id)
         with self.open_run(run_id) as engine:
-            state = engine.state()
-            result = engine.summary(state)
-            result.update(restart_of=row["restart_of"], path=row["path"],
-                          available_actions=engine.available_actions(state))
-            if include_usage:
-                result["usage"] = run_usage(engine.store)
-            if state.get("gate"):
-                result["gate"] = {key: state["gate"].get(key) for key in
-                                  ("id", "kind", "message", "stage", "chapter_id", "record_revision", "options", "pass")}
-            return result
+            return self.run_view(engine, engine.state(), include_usage=include_usage)
+
+    def run_view(self, engine, state, *, include_usage=True):
+        """Describe one state snapshot; callers may enrich it without re-reading a moving run."""
+        row = self._run_row(state["id"])
+        result = engine.summary(state)
+        result.update(restart_of=row["restart_of"], path=row["path"],
+                      available_actions=engine.available_actions(state))
+        if include_usage:
+            result["usage"] = run_usage(engine.store)
+        if state.get("gate") and not engine.retired:
+            result["gate"] = {key: state["gate"].get(key) for key in
+                              ("id", "kind", "message", "stage", "chapter_id", "record_revision", "options", "pass")}
+        return result
 
     def step(self, run_id, runtime):
         with self.open_run(run_id) as engine:
@@ -404,6 +422,8 @@ class WorkflowService:
         row = self._run_row(run_id)
         with self.open_run(run_id) as engine:
             state = engine.state()
+            if engine.retired:
+                engine._guard(state, "hand_off")
             if state.get("handed_off_work"):
                 return state["handed_off_work"]
             if state["status"] != "COMPLETED" or not state.get("document_path"):
@@ -433,10 +453,16 @@ class WorkflowService:
         with self.open_run(run_id) as engine:
             return engine.summary(engine.reply(gate_id, text, decision_source=decision_source))
 
-    def accept(self, run_id, acceptance_id, *, confirm_final=False, decision_source="human"):
+    def review_interior_design(self, run_id, gate_id, expected_sha256, action, **fields):
+        with self.open_run(run_id) as engine:
+            if not hasattr(engine, "review_design"):
+                raise ValueError("This workflow has no interior-design review phase.")
+            return engine.summary(engine.review_design(gate_id, expected_sha256, action, **fields))
+
+    def accept(self, run_id, acceptance_id, *, confirm_final=False, decision_source="human", format_target=None):
         with self.open_run(run_id) as engine:
             return engine.summary(engine.accept(acceptance_id, confirm_final=confirm_final,
-                                                decision_source=decision_source))
+                                                decision_source=decision_source, format_target=format_target))
 
     def retry(self, run_id, *, confirm_stopped=False, refresh_gate=False):
         with self.open_run(run_id) as engine:
@@ -467,6 +493,8 @@ class WorkflowService:
         row = self._run_row(run_id)
         with self.open_run(run_id) as engine:
             state = engine.state()
+            if engine.retired:
+                engine._guard(state, "restart")
             if engine.finalized(state) or state["status"] == "COMPLETED":
                 raise WorkflowError("run_finalized", "A finalized run cannot be restarted; start a new run on "
                                                      "the work to publish a new version.")
@@ -601,6 +629,9 @@ class WorkflowService:
             helper.record(work, field, "user_edit", actor=actor or self.owner, rationale=rationale, review="confirmed")
             work["record_revision"] += 1
             work["updated_at"] = now()
+            # New metadata revisions omit retired workflows; published history stays intact.
+            workflow_fields = contract.validators()[0].schema["properties"]["workflows"]["properties"]
+            work["workflows"] = {name: value for name, value in work["workflows"].items() if name in workflow_fields}
             contract.schema_check(contract.validators()[0], work, "work")
             [publication] = library.publish_many(
                 [{"artifact": "work.json", "data": json_bytes(work), "expected_head": head["id"],

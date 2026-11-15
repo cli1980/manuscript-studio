@@ -23,9 +23,9 @@ SKILL = Path(__file__).resolve().parents[1]
 FIELDS = contract.load_json(SKILL / "schemas/manuscript-metadata.schema.json")["$defs"]["field"]["enum"]
 # Field groups (see references/manuscript-metadata.md): the user provides AUTHOR fields after intake
 # (initialized empty, never proposed by an agent); agents propose SUGGESTED fields with evidence for the
-# user to confirm; COMPUTED fields are fixed at intake or measured from the prepared revision.
+# user to confirm; language may be inferred during preparation and extent is measured from its revision.
 AUTHOR = {
-    "/title", "/subtitle", "/contributors", "/audience", "/edition/label", "/edition/status",
+    "/contributors", "/audience", "/edition/label", "/edition/status",
     "/series/name", "/series/position", "/series/relationship",
 }
 COMPUTED = {"/manuscript_language", "/extent"}
@@ -74,7 +74,7 @@ def record(work, field, origin, *, actor, rationale, basis=None, evidence=None,
 
 
 def blank(work_id, manuscript_language, *, location, actor):
-    """A newly added work: every user-provided and suggested field empty; only the manuscript language set."""
+    """A new work, optionally carrying a language hint; unknown language has no locked provenance."""
     work = {
         "schema_version": 2, "work_id": work_id, "record_revision": 1, "updated_at": now(),
         "metadata": {
@@ -90,11 +90,11 @@ def blank(work_id, manuscript_language, *, location, actor):
         "preparation": {"status": "not_started", "current_revision": None, "blockers": []},
         "workflows": {name: {"status": "not_started", "basis_revision": None, "scope": None, "operation": None,
                              "state_locator": None, "updated_at": None}
-                      for name in ("literary-editing", "literary-translation", "literary-agent-querying",
-                                   "format-manuscript")},
+                      for name in ("literary-editing", "literary-translation", "literary-agent-querying")},
     }
-    record(work, "/manuscript_language", "user_edit", actor=actor, review="confirmed",
-           rationale="Set when the manuscript was added.")
+    if manuscript_language is not None:
+        record(work, "/manuscript_language", "user_edit", actor=actor, review="confirmed",
+               rationale="Set when the manuscript was added.")
     return work
 
 
@@ -174,9 +174,13 @@ def enrich(work, manifest, texts, proposals, actor):
         }, "Proposal fields must match the metadata contract.")
         field = proposal["field"]
         contract.require(field in FIELDS and field != "/extent", "Invalid proposal field.")
-        contract.require(field not in AUTHOR, f"{field} is provided by the user, not proposed by an agent.")
         contract.require(field not in seen, f"Duplicate proposal for {field}.")
         seen.add(field)
+        previous = work["metadata_provenance"].get(field)
+        if previous and (previous["review_status"] == "confirmed" or previous["origin"] in ("provided", "user_edit")):
+            skipped.append(field)
+            continue
+        contract.require(field not in AUTHOR, f"{field} is provided by the user, not proposed by an agent.")
         contract.require(proposal["origin"] in ("extracted", "inferred"), "Invalid proposal origin.")
         if proposal["origin"] == "inferred":
             contract.require(field in INFERABLE, f"{field} requires explicit source information, not inference.")
@@ -196,8 +200,19 @@ def enrich(work, manifest, texts, proposals, actor):
                              and isinstance(quote, str) and quote.strip()
                              and quote in texts.get(evidence["chapter_id"], ""),
                              "Proposal quote is absent from its cited chapter.")
-        # Validate even proposals that will be skipped; never silently accept an
-        # invalid field value or forged provenance.
+        if field in {"/title", "/subtitle"}:
+            title_sources = {
+                unit["chapter_id"]: (texts[unit["chapter_id"]].partition("\n")[2] if unit.get("supplied_title")
+                                     else texts[unit["chapter_id"]])
+                for unit in manifest["chapters"]
+            }
+            value = proposal["value"]
+            contract.require(isinstance(value, str) and value.strip() and any(
+                evidence["quote"] in title_sources[evidence["chapter_id"]]
+                and " ".join(value.split()).casefold() in " ".join(evidence["quote"].split()).casefold()
+                for evidence in proposal["evidence"]
+            ), "An extracted title or subtitle must appear in quoted source text, not a supplied title heading.")
+        # Validate unconfirmed agent proposals even when an existing value will be kept.
         candidate = copy.deepcopy(work)
         put(candidate["metadata"], field, proposal["value"])
         record(candidate, field, proposal["origin"], actor=actor,

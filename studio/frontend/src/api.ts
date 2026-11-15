@@ -43,6 +43,37 @@ export interface Gate {
   // Engine-owned choices (e.g. accepting an editing pass, then choosing the next): each option is an exact reply.
   options?: GateOption[] | null;
   pass?: number | null;
+  design_review?: { proposal: InteriorProposal; sha256: string; schema: JsonSchema;
+    format_target: FormatTarget | null; vendor_warnings: string[] };
+}
+
+export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+export interface JsonSchema {
+  $ref?: string;
+  type?: string | string[];
+  properties?: Record<string, JsonSchema>;
+  $defs?: Record<string, JsonSchema>;
+  items?: JsonSchema;
+  enum?: JsonValue[];
+  const?: JsonValue;
+  minimum?: number;
+  maximum?: number;
+}
+export interface InteriorProposal {
+  proposal_id: string;
+  revision: number;
+  vendor_profile: VendorProfile | null;
+  edition_brief: JsonValue;
+  design_system: JsonValue;
+  reading: { essence: string; genres: string[]; synopsis: string; mood: string[] };
+  text_roles: { id: string; name: string; function: string; style_id: string; occurrences: unknown[] }[];
+  questions: { id: string; question: string; kind: string; blocking: boolean; options: string[] }[];
+  recommendations: { id: string; path: string; rationale: string; alternatives: string[] }[];
+}
+export interface InteriorSpec {
+  edition_brief: JsonValue;
+  design_system: JsonValue;
+  role_styles: Record<string, string>;
 }
 
 export interface GateOption { command: string; title: string; description?: string | null; stage?: string; finish?: boolean }
@@ -64,9 +95,12 @@ export interface MetadataField { field: string; group: "author" | "suggested" | 
 export interface RunSummary {
   id: string;
   execution?: ExecutionIdentity | null;
+  retired: boolean;
+  recorded_status?: string;
+  acceptance_title?: string;
   settings?: { passage_size?: number } | null;
   handed_off_work?: string | null;
-  manuscript_language: string;
+  manuscript_language: string | null;
   template_id: string;
   workflow: string;
   work_id: string;
@@ -107,13 +141,34 @@ export interface ExecutionCatalog {
   models: (ExecutionIdentity & { workflows: string[] })[];
 }
 
+export interface FormatTarget {
+  purpose: "print-ready" | "submission" | "editorial-review";
+  vendor_id: string | null; binding: "paperback" | "hardcover";
+}
+export interface VendorProfile {
+  profile_id: string; version: string; variant_id: "paperback" | "hardcover"; sha256: string;
+  data: {
+    name: string;
+    source: { title: string; edition: string; url: string; sha256: string; reviewed_at: string };
+    docx_guidance: { recommended_safety_mm: number; gutter: string; page_size: string; delivery: string };
+    variant: { name: string; vendor_binding: string; notes: string[] };
+    rules: { id: string; classification: string; phase: string; pages: number[]; applies_to: string; statement: string }[];
+  };
+}
+export interface VendorProfileOption {
+  id: string; name: string; version: string;
+  variants: { id: string; name: string; binding: string; profile: VendorProfile }[];
+}
+
 export interface RunDetail extends RunSummary {
   usage?: TokenUsage;
   available_actions: Action[];
   gate?: Gate;
   metadata?: MetadataView;
   metadata_fields?: MetadataField[];
-  acceptance?: { acceptance_id: string; notice: string; outputs: { chapter_id: string; sha256: string; bytes: number }[] };
+  acceptance?: { acceptance_id: string; title: string; action_label: string; finalizes: boolean; notice: string;
+    vendor_profiles?: VendorProfileOption[]; format_target?: FormatTarget | null;
+    outputs: { chapter_id: string; sha256: string; bytes: number }[] };
   stages: string[];
   stage_titles: Record<string, string>;
   template_title: string | null;
@@ -141,7 +196,7 @@ export interface WorkSummary {
   id: string;
   title: string;
   owner: string;
-  manuscript_language: string;
+  manuscript_language: string | null;
   source_name: string;
   created_at: string;
   workflows: Record<string, { status: string; finalized_run_id: string | null; version?: string | null }>;
@@ -232,9 +287,14 @@ export const api = {
   chapter: (id: string, chapter: string) => request<ChapterDetail>(`/api/runs/${id}/chapters/${encodeURIComponent(chapter)}`),
   create: (payload: unknown) => post<RunDetail>("/api/runs", payload),
   editWorkMetadata: (id: string, payload: { field: string; value: unknown; rationale: string }) => post<WorkDetail>(`/api/works/${encodeURIComponent(id)}/metadata`, payload),
-  createWork: (payload: { upload: { name: string; data: string }; manuscript_language: string }) => post<WorkDetail>("/api/works", payload),
+  createWork: (payload: { upload: { name: string; data: string }; manuscript_language?: string }) => post<WorkDetail>("/api/works", payload),
   reply: (id: string, gate_id: string, text: string) => post<RunDetail>(`/api/runs/${id}/reply`, { gate_id, text }),
-  accept: (id: string, acceptance_id: string, confirm_final: boolean) => post<RunDetail>(`/api/runs/${id}/accept`, { acceptance_id, confirm_final }),
+  reviewInteriorDesign: (id: string, payload: {
+    gate_id: string; expected_sha256: string; action: "save" | "approve" | "request-revision";
+    spec?: InteriorSpec; answers?: Record<string, string>; feedback?: string;
+  }) => post<RunDetail>(`/api/runs/${id}/interior-design`, payload),
+  accept: (id: string, acceptance_id: string, confirm_final: boolean, format_target?: FormatTarget) =>
+    post<RunDetail>(`/api/runs/${id}/accept`, { acceptance_id, confirm_final, format_target }),
   editMetadata: (id: string, payload: { field: string; value: unknown; rationale: string; gate_id?: string }) => post<RunDetail>(`/api/runs/${id}/metadata`, payload),
   confirmMetadata: (id: string, gate_id: string, record_revision: number) => post<RunDetail>(`/api/runs/${id}/metadata/confirm`, { gate_id, record_revision }),
   action: (id: string, name: string, payload: unknown = {}) => post<RunDetail>(`/api/runs/${id}/${name}`, payload),

@@ -2,6 +2,7 @@
 
 import base64
 import contextlib
+import copy
 import importlib.util
 import io
 import json
@@ -13,8 +14,9 @@ from unittest.mock import patch
 
 from workflow.src.execution import ExecutionProfile
 from workflow.src.service import WorkflowService
-from workflow.src.storage import digest, now
+from workflow.src.storage import Store, digest, now
 from workflow.tests.test_execution import profile_data
+from workflow.tests.interior_fixture import apply_target, proposal_for
 
 HAS_WEB = importlib.util.find_spec("fastapi") and importlib.util.find_spec("httpx")
 ORIGIN = "http://127.0.0.1:8765"
@@ -112,8 +114,7 @@ def prepare(request):
             "preparation": {"status": "ready", "current_revision": "r0001", "blockers": []},
             "workflows": {name: {"status": "not_started", "basis_revision": None, "scope": None, "operation": None,
                                  "state_locator": None, "updated_at": None}
-                          for name in ("literary-editing", "literary-translation", "literary-agent-querying",
-                                       "format-manuscript")}}
+                          for name in ("literary-editing", "literary-translation", "literary-agent-querying")}}
     return result(work_record=write(request.cwd, base + "work.json", work))
 
 
@@ -260,6 +261,19 @@ def translate(request):
                   output_path=write(cwd, "translation/translated_english/story.md", "He came back.\n"))
 
 
+def interior_design(request):
+    ctx = context(request)
+    if ctx["stage"] == "prepare":
+        return prepare(request)
+    if ctx["stage"] != "interior-design":
+        raise AssertionError("The zero-pass design route must not call an editorial agent.")
+    proposal = ctx["previous_proposal"] or proposal_for(Path(request.cwd) / ctx["work_record"])
+    if ctx["previous_proposal"]:
+        proposal["revision"] += 1
+    apply_target(proposal, ctx["vendor_profile"], ctx["format_target"])
+    return result(state_path=write(request.cwd, ctx["proposal_path"], proposal), work_record=ctx["work_record"])
+
+
 class Scripted:
     def __init__(self, action):
         self.action = action
@@ -314,6 +328,129 @@ class WebApiTests(unittest.TestCase):
                 self.assertFalse(usage["partial"])
             self.assertEqual(len(list(engine.store.events())), before)
         self.assertNotIn("usage", self.client.get("/api/runs").json()[0])
+
+    def test_literary_editing_interior_design_form_save_revision_and_approval(self):
+        calls = []
+
+        def runtime(request):
+            calls.append(context(request)["stage"])
+            return interior_design(request)
+
+        self.app.state.workers.runtime_factory = lambda: Scripted(runtime)
+        added = self.post("/api/works", {"upload": {"name": "story.md",
+                           "data": base64.b64encode(self.source.read_bytes()).decode()}, "manuscript_language": "zh"})
+        run = self.post("/api/runs", {"template_id": "literary-editing-v1", "work_id": added.json()["id"]}).json()
+        run_id = run["id"]
+        run = self.settle(run_id)
+        self.post(f"/api/runs/{run_id}/metadata/confirm", {
+            "gate_id": run["gate"]["id"], "record_revision": run["metadata"]["record_revision"]})
+        run = self.settle(run_id)
+        response = self.post(f"/api/runs/{run_id}/reply", {
+            "gate_id": run["gate"]["id"], "text": "proceed to formatting"})
+        self.assertEqual(response.status_code, 400, response.text)
+        response = self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"], "text": "finish"})
+        self.assertEqual(response.status_code, 200, response.text)
+        run = self.settle(run_id)
+        self.assertEqual(run["status"], "WAITING_FOR_ACCEPTANCE")
+        self.assertFalse(run["acceptance"]["finalizes"])
+        self.assertEqual(calls, ["prepare"])
+        self.assertEqual(run["acceptance"]["title"], "Approve manuscript for formatting")
+        self.assertFalse(self.client.get(f"/api/works/{added.json()['id']}").json()["workflows"])
+        response = self.post(f"/api/runs/{run_id}/accept", {
+            "acceptance_id": run["acceptance"]["acceptance_id"], "confirm_final": True})
+        self.assertEqual(response.status_code, 200, response.text)
+        run = self.settle(run_id)
+        self.assertEqual((run["status"], run["gate"]["kind"]), ("WAITING_FOR_HUMAN", "interior_design_review"))
+        view = run["gate"]["design_review"]
+        self.assertEqual(view["schema"]["properties"]["status"], {"const": "proposed"})
+        spec = {key: view["proposal"][key] for key in ("edition_brief", "design_system")}
+        spec["role_styles"] = {role["id"]: role["style_id"] for role in view["proposal"]["text_roles"]}
+        spec["design_system"]["page"]["margins_mm"]["inside"] = 23
+        payload = {"gate_id": run["gate"]["id"], "expected_sha256": view["sha256"], "action": "save", "spec": spec}
+        saved = self.post(f"/api/runs/{run_id}/interior-design", payload)
+        self.assertEqual(saved.status_code, 200, saved.text)
+        run = saved.json()
+        self.assertEqual(run["gate"]["design_review"]["proposal"]["design_system"]["page"]["margins_mm"]["inside"], 23)
+        self.assertEqual(self.post(f"/api/runs/{run_id}/interior-design", payload).status_code, 400)
+        current = {"gate_id": run["gate"]["id"], "expected_sha256": run["gate"]["design_review"]["sha256"]}
+        revised = self.post(f"/api/runs/{run_id}/interior-design", {
+            **current, "action": "request-revision", "feedback": "Keep my inside margin; reconsider the typeface."})
+        self.assertEqual(revised.status_code, 200, revised.text)
+        run = self.settle(run_id)
+        self.assertEqual(run["gate"]["design_review"]["proposal"]["design_system"]["page"]["margins_mm"]["inside"], 23)
+        current = {"gate_id": run["gate"]["id"], "expected_sha256": run["gate"]["design_review"]["sha256"]}
+        answers = {q["id"]: "Keep the proposed new-page openings." for q in run["gate"]["design_review"]["proposal"]["questions"]
+                   if q["blocking"]}
+        approved = self.post(f"/api/runs/{run_id}/interior-design", {**current, "action": "approve", "answers": answers})
+        self.assertEqual(approved.status_code, 200, approved.text)
+        self.assertEqual((approved.json()["status"], approved.json()["finalized"]), ("BLOCKED", False))
+        self.assertEqual(calls, ["prepare", "interior-design", "interior-design"])
+
+    def test_removed_formatting_route_and_read_only_history(self):
+        work_id = self.post("/api/works", {"upload": {"name": "story.md",
+                            "data": base64.b64encode(self.source.read_bytes()).decode()}}).json()["id"]
+        template = "manuscript-formatting-v1"
+        templates = self.client.get("/api/templates").json()
+        self.assertNotIn(template, [item["id"] for item in templates])
+        for fields in ({}, {"derived": True, "options": {"renderer": "word"}}):
+            rejected = self.post("/api/runs", {"template_id": template, "work_id": work_id, **fields})
+            self.assertEqual(rejected.status_code, 400 if fields else 404, rejected.text)
+        run = self.post("/api/runs", {"template_id": "literary-editing-v1",
+                        "work_id": work_id, "start": False}).json()
+        store = Store(Path(run["path"]))
+        self.addCleanup(store.close)
+        revision, state = store.load()
+        state.update(template_id=template, workflow="format-manuscript", status="WAITING_FOR_HUMAN")
+        state["definition"]["engine"] = "workflow.src.formatting:FormattingEngine"
+        state["gate"] = {"id": "archived-format", "kind": "format_spec", "stage": state["stage"],
+                         "chapter_id": None, "message": "Historical format review."}
+        store.save(revision, state, "fixture.retired")
+        recorded = store.load()
+        detail = self.client.get(f"/api/runs/{run['id']}").json()
+        self.assertEqual(detail["status"], "RETIRED")
+        self.assertTrue(detail["retired"])
+        self.assertNotIn("gate", detail)
+        self.assertEqual(detail["available_actions"], [])
+        reply = self.post(f"/api/runs/{run['id']}/reply", {"gate_id": "archived-format", "text": "FM001 approve"})
+        self.assertEqual(reply.status_code, 409, reply.text)
+        restart = self.post(f"/api/runs/{run['id']}/restart", {"reason": "Try the removed workflow"})
+        self.assertEqual(restart.status_code, 409, restart.text)
+        self.assertIsNone(self.client.get(f"/api/works/{work_id}").json()["unfinished_run"])
+        self.assertEqual(store.load(), recorded)
+
+    def test_upload_without_language_is_prepared_before_downstream_language_is_set(self):
+        added = self.post("/api/works", {"upload": {"name": "story.md",
+                           "data": base64.b64encode(self.source.read_bytes()).decode()}})
+        self.assertEqual(added.status_code, 200, added.text)
+        self.assertIsNone(added.json()["manuscript_language"])
+        run = self.post("/api/runs", {"template_id": "literary-translation-v1",
+                                     "work_id": added.json()["id"]})
+        self.assertEqual(run.status_code, 200, run.text)
+        prepared = self.settle(run.json()["id"])
+        self.assertEqual(prepared["gate"]["kind"], "metadata_review")
+        self.assertEqual(prepared["manuscript_language"], "zh")
+        self.assertEqual(prepared["settings"]["passage_size"], 1500)
+        work = self.client.get("/api/works/" + added.json()["id"]).json()
+        self.assertEqual(work["manuscript_language"], "zh")
+
+    def test_run_details_do_not_mix_state_snapshots_when_a_gate_appears(self):
+        from workflow.src.engine import Engine
+        from workflow.src.service import WorkflowService
+
+        added = self.post("/api/works", {"upload": {"name": "story.md",
+                           "data": base64.b64encode(self.source.read_bytes()).decode()}, "manuscript_language": "zh"})
+        with WorkflowService(self.app.state.workers.server_root, owner="tester") as service:
+            run_id = service.create_run("literary-editing-v1", work_id=added.json()["id"])
+            with service.open_run(run_id) as engine:
+                waiting = engine.advance(Scripted(prepare))
+        running = copy.deepcopy(waiting)
+        running.update(status="RUNNING", gate=None)
+        # A worker can publish the gate between reads. A response must describe one snapshot.
+        with patch.object(Engine, "state", side_effect=[running, waiting]):
+            response = self.client.get(f"/api/runs/{run_id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "RUNNING")
+        self.assertNotIn("gate", response.json())
 
     def test_translation_runs_through_every_gate_from_the_browser_api(self):
         upload = {"name": "original.md", "data": base64.b64encode(self.source.read_bytes()).decode()}

@@ -145,14 +145,17 @@ class TranslationEngine(PreparedManuscriptEngine):
             raise ValueError(f"Unknown run settings for this template: {', '.join(sorted(unknown or settings))}.")
         if "passage_size" not in template:
             return {}
-        value = settings.get("passage_size", template["passage_size"][cls.size_unit(manuscript_language)])
+        if manuscript_language is None and "passage_size" not in settings:
+            return {}
+        value = (settings["passage_size"] if "passage_size" in settings
+                 else template["passage_size"][cls.size_unit(manuscript_language)])
         if type(value) is not int or not 100 <= value <= 100000:
             raise ValueError("passage_size must be a whole number from 100 to 100000.")
         return {"passage_size": value}
 
     def passage_limit(self, state):
         value = (state.get("settings") or {}).get("passage_size")
-        return {"max": value, "unit": self.size_unit(state["manuscript_language"])} if value else None
+        return {"max": value, "unit": self.size_unit(state["manuscript_language"])} if value and state["manuscript_language"] else None
 
     def stage_prompt(self, state, stage):
         agent = state["definition"]["agents"][stage["agent"]]

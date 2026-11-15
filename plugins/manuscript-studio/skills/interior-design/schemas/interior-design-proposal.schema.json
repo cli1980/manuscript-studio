@@ -1,0 +1,318 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://manuscript-studio.example/schemas/interior-design-proposal/1",
+  "title": "Interior design proposal",
+  "description": "An evidence-bound standalone or reusable design proposal, never approval or production QA.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "schema_version", "proposal_id", "revision", "status", "basis", "vendor_profile", "reading", "author_preferences", "edition_brief", "design_system", "text_roles", "evidence", "recommendations", "questions"],
+  "properties": {
+    "contract": {"const": "interior-design-proposal/1"},
+    "schema_version": {"const": 1},
+    "proposal_id": {"$ref": "#/$defs/id"},
+    "revision": {"type": "integer", "minimum": 1},
+    "status": {"const": "proposed"},
+    "vendor_profile": {
+      "description": "Exact selected vendor/binding snapshot, or null. The semantic validator checks bundled data and its canonical hash.",
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["profile_id", "version", "variant_id", "sha256", "data"],
+          "properties": {
+            "profile_id": {"const": "ingramspark"},
+            "version": {"$ref": "#/$defs/text"},
+            "variant_id": {"enum": ["paperback", "hardcover"]},
+            "sha256": {"$ref": "#/$defs/hash"},
+            "data": {"type": "object"}
+          }
+        }
+      ]
+    },
+    "basis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["preparation", "reading_ref", "author_brief_ref", "capabilities_ref"],
+      "properties": {
+        "preparation": {
+          "type": "object", "additionalProperties": false,
+          "required": ["work_id", "record_revision", "work_sha256", "revision", "manifest_sha256", "language", "scope", "units"],
+          "properties": {
+            "work_id": {"$ref": "#/$defs/id"},
+            "record_revision": {"type": "integer", "minimum": 1},
+            "work_sha256": {"$ref": "#/$defs/hash"},
+            "revision": {"type": "string", "pattern": "^r[0-9]{4,}$"},
+            "manifest_sha256": {"$ref": "#/$defs/hash"},
+            "language": {"type": "string", "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"},
+            "scope": {
+              "type": "object", "additionalProperties": false,
+              "required": ["kind", "chapter_ids"],
+              "properties": {
+                "kind": {"enum": ["whole_work", "selected_chapters"]},
+                "chapter_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}}
+              }
+            },
+            "units": {
+              "type": "array", "minItems": 1,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["chapter_id", "sha256"],
+                "properties": {"chapter_id": {"$ref": "#/$defs/id"}, "sha256": {"$ref": "#/$defs/hash"}}
+              }
+            }
+          }
+        },
+        "reading_ref": {"$ref": "#/$defs/nullable_artifact"},
+        "author_brief_ref": {"$ref": "#/$defs/nullable_artifact"},
+        "capabilities_ref": {"$ref": "#/$defs/nullable_artifact"}
+      }
+    },
+    "reading": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "essence", "genres", "synopsis", "themes", "voice", "mood", "audience", "symbols", "characters", "important_excerpts", "structure_notes", "confidence", "uncertainties", "evidence_refs"],
+      "properties": {
+        "source": {"enum": ["supplied", "agent-analysis"]},
+        "essence": {"$ref": "#/$defs/nullable_text"},
+        "genres": {"$ref": "#/$defs/texts"},
+        "synopsis": {"$ref": "#/$defs/nullable_text"},
+        "themes": {"$ref": "#/$defs/texts"},
+        "voice": {"$ref": "#/$defs/nullable_text"},
+        "mood": {"$ref": "#/$defs/texts"},
+        "audience": {"$ref": "#/$defs/nullable_text"},
+        "symbols": {"$ref": "#/$defs/texts"},
+        "characters": {"$ref": "#/$defs/texts"},
+        "important_excerpts": {"type": "array", "items": {"$ref": "#/$defs/occurrence"}},
+        "structure_notes": {"$ref": "#/$defs/texts"},
+        "confidence": {"enum": ["low", "medium", "high"]},
+        "uncertainties": {"$ref": "#/$defs/texts"},
+        "evidence_refs": {"$ref": "#/$defs/refs"}
+      }
+    },
+    "author_preferences": {
+      "type": "object", "additionalProperties": false,
+      "required": ["imprint", "isbn", "expected_changes", "series_direction", "prior_design_ref", "likes", "avoid", "reference_designs", "evidence_refs"],
+      "properties": {
+        "imprint": {"$ref": "#/$defs/nullable_text"},
+        "isbn": {"$ref": "#/$defs/nullable_text"},
+        "expected_changes": {"enum": ["unknown", "none", "minor", "major"]},
+        "series_direction": {"enum": ["unknown", "consistent", "varied", "hybrid", "not-applicable"]},
+        "prior_design_ref": {"$ref": "#/$defs/nullable_artifact"},
+        "likes": {"$ref": "#/$defs/texts"},
+        "avoid": {"$ref": "#/$defs/texts"},
+        "reference_designs": {"$ref": "#/$defs/texts"},
+        "evidence_refs": {"$ref": "#/$defs/refs"}
+      }
+    },
+    "edition_brief": {
+      "type": "object", "additionalProperties": false,
+      "required": ["purpose", "production_targets"],
+      "properties": {
+        "purpose": {"enum": ["submission", "editorial-review", "print-ready"]},
+        "production_targets": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["id", "format", "vendor_id", "binding", "paper", "ink", "trim_mm", "vendor_profile_ref"],
+            "properties": {
+              "id": {"$ref": "#/$defs/id"},
+              "format": {"enum": ["editable-docx", "print-interior-pdf", "epub", "audiobook"]},
+              "vendor_id": {"$ref": "#/$defs/nullable_text"},
+              "binding": {"enum": [null, "paperback", "hardcover", "dust-jacket"]},
+              "paper": {"$ref": "#/$defs/nullable_text"},
+              "ink": {"enum": [null, "black-and-white", "color"]},
+              "trim_mm": {"anyOf": [{"$ref": "#/$defs/size"}, {"type": "null"}]},
+              "vendor_profile_ref": {"$ref": "#/$defs/nullable_artifact"}
+            }
+          }
+        }
+      }
+    },
+    "design_system": {
+      "type": "object", "additionalProperties": false,
+      "required": ["page", "styles", "navigation", "furniture"],
+      "properties": {
+        "page": {
+          "type": "object", "additionalProperties": false,
+          "required": ["trim_mm", "margins_mm", "gutter_mm", "bleed_mm", "chapter_start", "blank_policy"],
+          "properties": {
+            "trim_mm": {"$ref": "#/$defs/size"},
+            "margins_mm": {
+              "type": "object", "additionalProperties": false,
+              "required": ["inside", "outside", "top", "bottom"],
+              "properties": {
+                "inside": {"type": "number", "minimum": 0},
+                "outside": {"type": "number", "minimum": 0},
+                "top": {"type": "number", "minimum": 0},
+                "bottom": {"type": "number", "minimum": 0}
+              }
+            },
+            "gutter_mm": {"type": "number", "minimum": 0},
+            "bleed_mm": {"type": "number", "minimum": 0},
+            "chapter_start": {"enum": ["new-page", "recto", "continuous"]},
+            "blank_policy": {"enum": ["no-added-blanks", "allow-declared-recto-blanks", "preserve-source"]}
+          }
+        },
+        "styles": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/style"}},
+        "navigation": {
+          "type": "object", "additionalProperties": false,
+          "required": ["include_toc", "toc_depth", "scene_break", "ornament"],
+          "properties": {
+            "include_toc": {"type": "boolean"},
+            "toc_depth": {"type": "integer", "minimum": 0, "maximum": 6},
+            "scene_break": {"enum": ["preserve-source", "blank-space", "ornament"]},
+            "ornament": {"$ref": "#/$defs/nullable_text"}
+          }
+        },
+        "furniture": {
+          "type": "object", "additionalProperties": false,
+          "required": ["running_heads", "folio_position", "front_matter_numbering", "body_numbering_start"],
+          "properties": {
+            "running_heads": {"enum": ["none", "chapter-title", "work-title", "work-and-author"]},
+            "folio_position": {"enum": ["none", "center-footer", "outside-footer"]},
+            "front_matter_numbering": {"enum": ["none", "roman", "arabic"]},
+            "body_numbering_start": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    },
+    "text_roles": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "name", "kind", "function", "style_id", "occurrences", "evidence_refs"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "name": {"$ref": "#/$defs/text"},
+          "kind": {"enum": ["body", "heading", "special"]},
+          "function": {"$ref": "#/$defs/text"},
+          "style_id": {"$ref": "#/$defs/id"},
+          "occurrences": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/occurrence"}},
+          "evidence_refs": {"$ref": "#/$defs/refs"}
+        }
+      }
+    },
+    "evidence": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "source", "locator", "sha256", "detail"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "source": {"enum": ["prepared-text", "metadata", "reading", "author", "capabilities", "reference"]},
+          "locator": {"$ref": "#/$defs/text"},
+          "sha256": {"anyOf": [{"$ref": "#/$defs/hash"}, {"type": "null"}]},
+          "detail": {"$ref": "#/$defs/text"}
+        }
+      }
+    },
+    "recommendations": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "path", "rationale", "evidence_refs", "alternatives"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "path": {"type": "string", "pattern": "^/design_system/"},
+          "rationale": {"$ref": "#/$defs/text"},
+          "evidence_refs": {"allOf": [{"$ref": "#/$defs/refs"}], "minItems": 1},
+          "alternatives": {"$ref": "#/$defs/texts"}
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "path", "kind", "question", "options", "blocking"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "path": {"type": ["string", "null"], "pattern": "^/"},
+          "kind": {"enum": ["author-input", "design-choice"]},
+          "question": {"$ref": "#/$defs/text"},
+          "options": {"$ref": "#/$defs/texts"},
+          "blocking": {"type": "boolean"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+    "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "text": {"type": "string", "minLength": 1},
+    "nullable_text": {"type": ["string", "null"], "minLength": 1},
+    "texts": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+    "refs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "nullable_artifact": {
+      "anyOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["locator", "sha256"],
+          "properties": {"locator": {"$ref": "#/$defs/text"}, "sha256": {"$ref": "#/$defs/hash"}}
+        },
+        {"type": "null"}
+      ]
+    },
+    "size": {
+      "type": "object", "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": {"type": "number", "exclusiveMinimum": 0},
+        "height": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "style": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "role", "heading_level", "font", "paragraph"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"},
+        "role": {"enum": ["body", "title", "heading", "quote", "special", "folio", "toc"]},
+        "heading_level": {"type": ["integer", "null"], "minimum": 1, "maximum": 6},
+        "font": {
+          "type": "object", "additionalProperties": false,
+          "required": ["family", "fallback_families", "size_pt", "weight", "italic", "color", "line_spacing"],
+          "properties": {
+            "family": {"$ref": "#/$defs/text"},
+            "fallback_families": {"$ref": "#/$defs/texts"},
+            "size_pt": {"type": "number", "minimum": 5, "maximum": 96},
+            "weight": {"enum": ["regular", "bold"]},
+            "italic": {"type": "boolean"},
+            "color": {"type": "string", "pattern": "^#[A-Fa-f0-9]{6}$"},
+            "line_spacing": {
+              "type": "object", "additionalProperties": false,
+              "required": ["mode", "value"],
+              "properties": {
+                "mode": {"enum": ["multiple", "exact-pt"]},
+                "value": {"type": "number", "exclusiveMinimum": 0}
+              }
+            }
+          }
+        },
+        "paragraph": {
+          "type": "object", "additionalProperties": false,
+          "required": ["model", "first_line_indent_mm", "space_before_pt", "space_after_pt", "alignment", "indent_opening_paragraph", "keep_with_next", "widow_lines", "orphan_lines"],
+          "properties": {
+            "model": {"enum": ["first-line", "block", "source-controlled"]},
+            "first_line_indent_mm": {"type": "number", "minimum": 0},
+            "space_before_pt": {"type": "number", "minimum": 0},
+            "space_after_pt": {"type": "number", "minimum": 0},
+            "alignment": {"enum": ["left", "center", "right", "justified"]},
+            "indent_opening_paragraph": {"type": "boolean"},
+            "keep_with_next": {"type": "boolean"},
+            "widow_lines": {"type": "integer", "minimum": 1, "maximum": 4},
+            "orphan_lines": {"type": "integer", "minimum": 1, "maximum": 4}
+          }
+        }
+      }
+    },
+    "occurrence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["chapter_id", "chapter_sha256", "start_byte", "end_byte", "text_sha256"],
+      "properties": {
+        "chapter_id": {"$ref": "#/$defs/id"},
+        "chapter_sha256": {"$ref": "#/$defs/hash"},
+        "start_byte": {"type": "integer", "minimum": 0},
+        "end_byte": {"type": "integer", "minimum": 1},
+        "text_sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  }
+}
