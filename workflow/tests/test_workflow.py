@@ -8,11 +8,13 @@ import io
 import importlib.util
 import sys
 import tempfile
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 from pathlib import Path
 
-from ..src import cli, registry
+from ..src import cli, prepared, registry
 from ..src.engine import Engine, WorkflowError, result_schema
 from ..src.execution import ExecutionProfile
 from ..src.runtime import CodexRuntime, Request
@@ -46,6 +48,28 @@ class ScriptedRuntime:
         on_thread("test-thread")
         on_event("test.turn", {"model": request.model})
         return self.action(request)
+
+
+class MetadataHelperTests(unittest.TestCase):
+    def test_concurrent_helpers_keep_their_contract_and_restore_the_module_alias(self):
+        contracts = [object() for _ in range(16)]
+        absent = object()
+        original = sys.modules.get("validate_preparation", absent)
+
+        def import_helper(path):
+            time.sleep(0.01)
+            return sys.modules.get("validate_preparation")
+
+        try:
+            with patch.object(prepared, "module_at", side_effect=import_helper), ThreadPoolExecutor(4) as pool:
+                loaded = list(pool.map(lambda contract: prepared.load_metadata_helper(Path("unused"), contract), contracts))
+            self.assertEqual(loaded, contracts)
+            self.assertIs(sys.modules.get("validate_preparation", absent), original)
+        finally:
+            if original is absent:
+                sys.modules.pop("validate_preparation", None)
+            else:
+                sys.modules["validate_preparation"] = original
 
 
 class WorkflowTests(unittest.TestCase):
@@ -137,6 +161,16 @@ class WorkflowTests(unittest.TestCase):
         if self.engine.state()["workflow"] == "literary-translation":
             self.approve_brief()
             self.translate_chapter()
+
+    def test_preparation_rejects_generated_html_before_metadata_or_manuscript_approval(self):
+        self.parts = ["# Story\n\nFirst paragraph.\n\n<br />\n\nSecond paragraph.\n"]
+        with self.assertRaisesRegex(ValueError, r"story .*:line 5: Raw HTML"):
+            self.engine.advance(ScriptedRuntime(self.preparation))
+        state = self.engine.state()
+        self.assertEqual(state["stage"], "prepare")
+        self.assertIsNone(state["prepared"])
+        self.assertIsNone(state["metadata_approval"])
+        self.assertIsNone(state["gate"])
 
     def test_language_can_be_unknown_until_preparation_and_sets_passage_defaults(self):
         for language, settings, maximum in (("en", None, 800), ("zh", None, 1500),
@@ -1517,7 +1551,7 @@ class WorkflowTests(unittest.TestCase):
             self.service.restart_workflow(old_id, reason="again")
         self.assertEqual(refused.exception.code, "run_cancelled")
 
-    def test_engine_update_allows_only_reading_and_restarting_the_workflow(self):
+    def test_engine_update_allows_reading_stopping_and_restarting_not_execution(self):
         self.prepare()
         with self.engine.store.locked():
             revision, state = self.engine.store.load()
@@ -1526,19 +1560,37 @@ class WorkflowTests(unittest.TestCase):
         for operation in (lambda: self.engine.advance(ScriptedRuntime(self.map_gate)),
                           lambda: self.engine.retry(refresh_gate=True),
                           lambda: self.engine.restart_stage("translate", reason="x"),
-                          lambda: self.engine.edit_metadata("/title", "x"),
-                          lambda: self.service.stop(self.run_id)):
+                          lambda: self.engine.edit_metadata("/title", "x")):
             with self.assertRaises(WorkflowError) as refused:
                 operation()
             self.assertEqual(refused.exception.code, "engine_updated")
         run = self.service.get_run(self.run_id)
         self.assertFalse(run["engine_current"])
         enabled = [a["action"] for a in run["available_actions"] if a["enabled"]]
-        self.assertEqual(enabled, ["restart_workflow"])
+        self.assertEqual(enabled, ["restart_workflow", "stop"])
         new_id = self.service.restart_workflow(self.run_id, reason="Engine updated")
         new = self.service.get_run(new_id)
         self.assertTrue(new["engine_current"])
         self.assertEqual(new["work_id"], self.work_id)
+
+    def test_stopping_an_outdated_run_releases_the_work_without_deleting_history(self):
+        self.prepare()
+        with self.engine.store.locked():
+            revision, state = self.engine.store.load()
+            state["engine"]["sha256"] = "0" * 64
+            self.engine.store.save(revision, state, "test.engine_changed")
+        with self.assertRaises(WorkflowError) as busy:
+            self.service.create_run(TRANSLATION, work_id=self.work_id)
+        self.assertEqual(busy.exception.code, "work_busy")
+        before = self.engine.state()
+        stopped = self.service.stop(self.run_id)
+        self.assertEqual(stopped["status"], "CANCELLED")
+        after = self.engine.state()
+        for field in ("outputs", "receipts", "gate", "prepared"):
+            self.assertEqual(after.get(field), before.get(field))
+        new_id = self.service.create_run(TRANSLATION, work_id=self.work_id)
+        self.assertNotEqual(new_id, self.run_id)
+        self.assertEqual(self.service.get_run(self.run_id)["status"], "CANCELLED")
 
     def test_work_level_metadata_edits_are_published_and_versioned(self):
         self.engine.advance(ScriptedRuntime(self.prepare_v2))
@@ -1691,9 +1743,9 @@ class WorkflowTests(unittest.TestCase):
     def choose(self, command):
         return self.engine.reply(self.engine.state()["gate"]["id"], command)
 
-    def start_editing(self):
+    def start_editing(self, parts=None):
         english = self.base / "to-kill.en.md"
-        self.parts = ["## 1\n\nHe came back.\n", "## 2\n\nShe left.\n"]
+        self.parts = parts or ["## 1\n\nHe came back.\n", "## 2\n\nShe left.\n"]
         english.write_text("".join(self.parts), encoding="utf-8")
         self.engine.close()
         self.source, self.language = english, "en-US"
@@ -1717,6 +1769,203 @@ class WorkflowTests(unittest.TestCase):
     def approve_editing(self):
         state = self.choose("finish")
         return self.engine.accept(state["acceptance_id"], confirm_final=True)
+
+    def approved_docx_design(self):
+        self.start_editing(["# One\n\nHe came back.\n", "# Two\n\nShe left.\n"])
+        self.approve_editing()
+        state = self.engine.advance(ScriptedRuntime(self.design_result))
+        gate = state["gate"]
+        proposal = self.engine.design_view(state)["proposal"]
+        return self.engine.review_design(gate["id"], gate["binding"]["sha256"], "approve",
+            answers={q["id"]: "Keep the proposal." for q in proposal["questions"] if q["blocking"]})
+
+    def test_docx_plan_authorization_candidate_and_final_delivery_survive_reopen(self):
+        self.approved_docx_design()
+        attempts = self.engine.state()["attempts"]
+        state = self.engine.advance(None)
+        self.assertEqual(state["gate"]["kind"], "docx_generation_review")
+        job = state["production"]
+        self.assertEqual(self.service.library(self.work_id).finalized(), [])
+        with self.assertRaisesRegex(ValueError, "Stale"):
+            self.engine.authorize_docx(state["gate"]["id"], "0" * 64)
+        with self.assertRaisesRegex(ValueError, "form"):
+            self.engine.reply(state["gate"]["id"], "approve")
+        gate_id, plan_sha = state["gate"]["id"], job["plan_sha256"]
+        self.reopen()
+        self.engine.authorize_docx(gate_id, plan_sha)
+        self.reopen()
+        state = self.engine.advance(None)
+        self.assertEqual((state["status"], state["attempts"]), ("WAITING_FOR_ACCEPTANCE", attempts))
+        artifact = state["production"]["result"]["docx"]
+        data, sha = self.service.docx_candidate(self.run_id, job["id"])
+        self.assertEqual((digest(data), sha), (artifact["sha256"], artifact["sha256"]))
+        self.assertEqual(self.service.library(self.work_id).finalized(), [])
+        with self.assertRaises(WorkflowError):
+            self.engine.accept(state["acceptance_id"])
+        state = self.engine.accept(state["acceptance_id"], confirm_final=True)
+        self.assertEqual(state["acceptance"]["docx"]["sha256"], sha)
+        state = self.engine.advance(None)
+        self.assertEqual(state["status"], "COMPLETED")
+        self.assertEqual((Path(state["export_path"]) / "document.docx").read_bytes(), data)
+        published = self.service.library(self.work_id).head("literary-editing/v001/document.docx")
+        self.assertEqual(self.service.library(self.work_id).read(published), data)
+
+    def test_docx_failure_is_retryable_and_restart_invalidates_candidate_download(self):
+        self.approved_docx_design()
+        state = self.engine.advance(None)
+        self.engine.authorize_docx(state["gate"]["id"], state["production"]["plan_sha256"])
+        with patch("book_formatter.build", side_effect=OSError("Synthetic disk failure")):
+            with self.assertRaisesRegex(OSError, "Synthetic"):
+                self.engine.advance(None)
+        state = self.engine.state()
+        self.assertEqual(state["status"], "BLOCKED")
+        self.assertIsNone(state["production"]["result"])
+        with self.assertRaisesRegex(ValueError, "No current DOCX"):
+            self.service.docx_candidate(self.run_id, state["production"]["id"])
+        self.engine.retry()
+        self.reopen()
+        state = self.engine.advance(None)
+        build_id = state["production"]["id"]
+        self.assertEqual(state["production"]["attempts"], 2)
+        self.engine.restart_stage("interior-design", reason="Revise the proposed layout")
+        with self.assertRaisesRegex(ValueError, "No current DOCX"):
+            self.service.docx_candidate(self.run_id, build_id)
+
+    def test_docx_changed_before_sealing_is_never_offered_as_a_verified_candidate(self):
+        self.approved_docx_design()
+        state = self.engine.advance(None)
+        self.engine.authorize_docx(state["gate"]["id"], state["production"]["plan_sha256"])
+        snapshot = self.engine.store.snapshot
+
+        def change_before_snapshot(path, role):
+            if role == "editable_docx":
+                path.write_bytes(b"External change after native verification")
+            return snapshot(path, role)
+
+        with patch.object(self.engine.store, "snapshot", side_effect=change_before_snapshot):
+            with self.assertRaisesRegex(ValueError, "between formatter verification and sealing"):
+                self.engine.advance(None)
+        state = self.engine.state()
+        self.assertIsNone(state["production"]["result"])
+        self.assertEqual(self.service.library(self.work_id).finalized(), [])
+
+    def test_docx_changed_effective_plan_requires_new_authorization_without_building(self):
+        self.approved_docx_design()
+        state = self.engine.advance(None)
+        old_job, old_gate = state["production"], state["gate"]
+        self.engine.authorize_docx(old_gate["id"], old_job["plan_sha256"])
+        data = json.loads(self.engine.store.content(old_job["plan"]))["plan"]
+        data["policy"]["test_policy_change"] = True
+
+        class ChangedPlan:
+            sha256 = digest(json.dumps(data, sort_keys=True).encode())
+
+            def to_dict(self):
+                return copy.deepcopy(data)
+
+        with patch("book_formatter.prepare", return_value=ChangedPlan()), patch("book_formatter.build") as build:
+            state = self.engine.advance(None)
+            build.assert_not_called()
+        self.assertEqual(state["gate"]["kind"], "docx_generation_review")
+        self.assertNotEqual(state["production"]["id"], old_job["id"])
+        self.assertIsNone(state["production"]["authorization"])
+        with self.assertRaisesRegex(ValueError, "Stale"):
+            self.engine.authorize_docx(old_gate["id"], old_job["plan_sha256"])
+
+    def test_docx_cli_authorizes_and_builds_without_constructing_an_agent_runtime(self):
+        self.approved_docx_design()
+        prefix = ["--server-root", str(self.service.root), "--owner", "tester"]
+        with patch.object(cli, "CodexRuntime", side_effect=AssertionError("No runtime for native production")), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(prefix + ["step", self.run_id]), 0)
+            state = self.engine.state()
+            self.assertEqual(cli.main(prefix + ["authorize-docx", self.run_id, "--gate", state["gate"]["id"],
+                                                "--plan-sha256", state["production"]["plan_sha256"]]), 0)
+            self.assertEqual(cli.main(prefix + ["step", self.run_id]), 0)
+        self.assertEqual(self.engine.state()["status"], "WAITING_FOR_ACCEPTANCE")
+
+    def test_docx_unsupported_content_blocks_without_silent_partial_delivery(self):
+        self.start_editing(["# One\n\n- A list item is outside the POC.\n"])
+        self.approve_editing()
+        state = self.engine.advance(ScriptedRuntime(self.design_result))
+        gate = state["gate"]
+        proposal = self.engine.design_view(state)["proposal"]
+        self.engine.review_design(gate["id"], gate["binding"]["sha256"], "approve",
+            answers={q["id"]: "Keep the proposal." for q in proposal["questions"] if q["blocking"]})
+        with self.assertRaisesRegex(ValueError, "unsupported_content"):
+            self.engine.advance(None)
+        state = self.engine.state()
+        self.assertEqual(state["status"], "BLOCKED")
+        self.assertNotIn("production", state)
+        self.assertEqual(self.service.library(self.work_id).finalized(), [])
+
+    def test_workflow_rejects_pdf_bundle_instead_of_partial_docx_success(self):
+        self.start_editing()
+        self.approve_editing()
+
+        def bundle(request):
+            outcome = self.design_result(request)
+            path = self.workspace / outcome["state_path"]
+            proposal = json.loads(path.read_bytes())
+            pdf = copy.deepcopy(proposal["edition_brief"]["production_targets"][0])
+            pdf.update(id="pdf", format="print-interior-pdf")
+            proposal["edition_brief"]["production_targets"].append(pdf)
+            self.write(outcome["state_path"], proposal)
+            return outcome
+
+        with self.assertRaisesRegex(ValueError, "exactly one editable-DOCX"):
+            self.engine.advance(ScriptedRuntime(bundle))
+
+    def test_design_roles_bind_whole_paragraphs_and_preserve_inline_markers(self):
+        self.start_editing(["## 1\n\nHe *came* **back**.\n", "## 2\n\nShe *left*.\n"])
+        self.approve_editing()
+
+        def design(request):
+            self.assertIn("--list-paragraphs", request.prompt)
+            self.assertIn("Do not generate inline roles", request.prompt)
+            self.assertIn("book-title", request.prompt)
+            self.assertIn("page-x-of-y", request.prompt)
+            return self.design_result(request)
+
+        state = self.engine.advance(ScriptedRuntime(design))
+        proposal = self.engine.design_view(state)["proposal"]
+        self.assertEqual(proposal["contract"], "interior-design-proposal/4")
+        occurrence = proposal["text_roles"][0]["occurrences"][0]
+        self.assertEqual(occurrence["paragraph_index"], 2)
+        self.assertEqual(occurrence["paragraph_sha256"], digest(b"She *left*."))
+        self.assertNotIn("start_byte", occurrence)
+        for index, source in enumerate(self.parts, 1):
+            item = state["design_sources"][f"chapter-{index}"]
+            self.assertEqual(self.engine.file(item["path"]).read_text(encoding="utf-8"), source)
+
+    def test_design_review_preserves_zero_and_nonzero_widow_orphan_inputs(self):
+        self.start_editing()
+        self.approve_editing()
+        state = self.engine.advance(ScriptedRuntime(self.design_result))
+        for widow, orphan in ((0, 7), (0, 0)):
+            view = self.engine.design_view(state)
+            spec = {key: copy.deepcopy(view["proposal"][key]) for key in ("edition_brief", "design_system")}
+            spec["role_styles"] = {role["id"]: role["style_id"] for role in view["proposal"]["text_roles"]}
+            spec["design_system"]["styles"][0]["paragraph"].update(widow_lines=widow, orphan_lines=orphan)
+            state = self.engine.review_design(state["gate"]["id"], view["sha256"], "save", spec=spec)
+            saved = self.engine.design_view(state)["proposal"]["design_system"]["styles"][0]["paragraph"]
+            self.assertEqual((saved["widow_lines"], saved["orphan_lines"]), (widow, orphan))
+
+    def test_design_cannot_submit_inline_role_ranges(self):
+        self.start_editing()
+        self.approve_editing()
+
+        def inline_role(request):
+            output = self.design_result(request)
+            proposal = json.loads(self.engine.file(output["state_path"]).read_bytes())
+            proposal["text_roles"][0]["occurrences"][0].update(start_byte=8, end_byte=10)
+            self.write(output["state_path"], proposal)
+            return output
+
+        with self.assertRaisesRegex(ValueError, "Additional properties"):
+            self.engine.advance(ScriptedRuntime(inline_role))
+        self.assertNotIn("design_draft", self.engine.state())
+        self.assertIsNone(self.engine.state().get("design_approval"))
 
     def test_purpose_is_supplied_before_authoring_and_fixed_during_review(self):
         self.start_editing()
@@ -1812,7 +2061,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNone(self.engine.state().get("design_approval"))
 
     def test_interior_design_zero_pass_edit_save_stale_gate_and_approval(self):
-        state = self.start_editing()
+        state = self.start_editing(["# One\n\nHe came back.\n", "# Two\n\nShe left.\n"])
         prepared = {p: s["sha256"] for p, s in state["prepared"]["files"].items()}
         with self.assertRaisesRegex(ValueError, "Reply with exactly"):
             self.choose("proceed to formatting")
@@ -1822,7 +2071,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.engine.acceptance_details(state)["format_target"]["purpose"], "print-ready")
         with contextlib.redirect_stdout(io.StringIO()) as approval_copy:
             cli.display(self.engine, state, review=True)
-        self.assertIn("Approval freezes this manuscript", approval_copy.getvalue())
+        self.assertIn("Approval freezes the manuscript", approval_copy.getvalue())
         self.assertNotIn("manuscript_approval", state)
         with self.assertRaises(WorkflowError) as unconfirmed:
             self.engine.accept(state["acceptance_id"])
@@ -1872,15 +2121,15 @@ class WorkflowTests(unittest.TestCase):
             self.engine.review_design(gate["id"], gate["binding"]["sha256"], "approve", answers={})
         answers = {q["id"]: "Keep the proposed new-page openings." for q in updated["questions"] if q["blocking"]}
         state = self.engine.review_design(gate["id"], gate["binding"]["sha256"], "approve", answers=answers)
-        self.assertEqual(state["status"], "BLOCKED")
+        self.assertEqual((state["stage"], state["status"]), ("produce-docx", "READY"))
         self.assertFalse(self.engine.finalized(state))
         self.assertEqual(state["design_approval"]["proposal"]["sha256"], gate["binding"]["sha256"])
         self.assertEqual(len(state["outputs"]), len(state["chapters"]))  # Approved Markdown, not generated documents.
         self.assertNotIn("acceptance", state)
         attempts = state["attempts"]
-        self.engine.retry()
         state = self.engine.advance(None)  # Production cannot accidentally invoke an agent.
-        self.assertEqual((state["status"], state["attempts"]), ("BLOCKED", attempts))
+        self.assertEqual((state["status"], state["attempts"]), ("WAITING_FOR_HUMAN", attempts))
+        self.assertEqual(state["gate"]["kind"], "docx_generation_review")
         for path, sha in prepared.items():
             self.assertEqual(digest(self.engine.file(path).read_bytes()), sha)
         self.assertEqual(self.engine.state()["receipts"][-1]["decision_source"], "human")
@@ -1903,8 +2152,8 @@ class WorkflowTests(unittest.TestCase):
         state = self.engine.advance(ScriptedRuntime(design))
         gate = state["gate"]
         state = self.engine.review_design(gate["id"], gate["binding"]["sha256"], "approve", answers={})
-        self.assertEqual(state["status"], "BLOCKED")
-        self.assertIn("not integrated", state["error"])
+        self.assertEqual((state["stage"], state["status"]), ("produce-docx", "READY"))
+        self.assertIsNone(state["error"])
         self.assertEqual(state["receipts"][-1]["parsed"]["answers"], {})
         self.assertFalse(self.engine.finalized(state))
 
@@ -2032,7 +2281,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_literary_editing_passes_are_chosen_accepted_and_repeatable(self):
         state = self.start_editing()
-        self.assertEqual(self.engine.stage_ids(state), ["prepare", "metadata", "passes", "approve-manuscript", "interior-design", "accept", "export"])
+        self.assertEqual(self.engine.stage_ids(state), ["prepare", "metadata", "passes", "approve-manuscript", "interior-design", "produce-docx", "accept", "export"])
         # After metadata review the user chooses a pass, or proceeds to manuscript approval.
         self.assertEqual((state["stage"], state["status"], state["gate"]["kind"]), ("passes", "WAITING_FOR_HUMAN", "pass_choice"))
         self.assertEqual(self.engine.gate_commands(state, state["gate"]),

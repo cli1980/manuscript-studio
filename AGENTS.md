@@ -24,6 +24,12 @@ integration, read the
 [high-level design](tools/formattor/docs/interior-design-and-production.md), including
 its requirement traceability and open-decision register.
 
+`tools/formattor` is a pinned submodule from `cli1980/book-formatter`. If its
+documents are absent, run
+`git submodule update --init --recursive tools/formattor` first. Edit tool-owned
+files in that repository and update the parent's gitlink; do not recreate a
+second tracked copy in this repository.
+
 Keep owner-confirmed requirements separate from draft recommendations. Preserve
 stable requirement/decision IDs; record subsequent direction and its effects in
 the design. Do not silently resolve open product decisions or claim implementation

@@ -1,7 +1,8 @@
 # Manuscript Studio web application
 
 ```text
-.venv-workflow/Scripts/python.exe -m pip install -r studio/requirements.txt
+git submodule update --init --recursive tools/formattor
+.venv-workflow/Scripts/python.exe -m pip install -r studio/requirements.txt -e tools/formattor
 cd studio/frontend && npm ci && npm run build && cd ../..
 .venv-workflow/Scripts/python.exe -m studio.server --server-root .workflow-runs --port 8765 --codex PATH-TO-CODEX
 ```
@@ -12,7 +13,7 @@ when given with `--allow-origin` (for a local preview proxy).
 
 - **Works** is the place for intake and outcomes: add a manuscript (each upload
   creates a new work), browse every work's library, metadata, and publication
-  log without opening a run, and start derived formatting.
+  log without opening a run, and download accepted editable DOCX editions.
   Language is optional at intake and has no default. Leave the hint blank for
   preparation to infer it from the manuscript; the work displays a pending
   language until then. Translation's default passage limit and counting unit
@@ -25,7 +26,7 @@ when given with `--allow-origin` (for a local preview proxy).
   intentional clearing, and a generated filename heading is not a source title.
 - **Workflows** starts a workflow on an existing work (preparation is its first
   stage) and lists runs with what each needs. A background worker runs agent
-  turns until a human is needed; Pause stops after the current turn. The run page
+  turns or deterministic production steps until a human is needed; Pause stops after the current step. The run page
   shows controls from `available_actions` and native gate forms: approval-sheet
   items and the separate closure, exact command replies, metadata edits and
   revision-bound confirmation, and final acceptance behind an explicit
@@ -317,18 +318,45 @@ PDF checks are not part of design approval. If there are no author questions,
 no answer fields or acknowledgement are required. Approval still does not
 verify production or print compliance.
 
-This is a proposal-review slice, not the complete formatting pipeline. Profile
-selection and geometry advisories are implemented; exact product availability,
-effective producer capabilities, deterministic production and rendered-page
-review remain unverified/unimplemented.
-Proposal approval stops the run as BLOCKED with that explanation; it does not
-publish or generate DOCX/PDF. Design-only restarts keep the manuscript approval;
-reopen `approve-manuscript` to revise the approved basis, which invalidates
-downstream design decisions. Final publication/page review remain pending.
+### Editable-DOCX production POC
+
+After design approval, the `produce-docx` step calls the separately installed
+`book_formatter` public API. New workflow proposals must request exactly one
+`editable-docx` target. PDF/multi-format bundles are refused, not silently reduced.
+Print-ready purpose and vendor-guided geometry do not certify the DOCX for print.
+
+1. Review the **DOCX generation plan**: source counts, named styles, exact plan
+   hash, prototype policies and vendor advisories. The complete plan, including
+   manuscript text/local paths, stays in private run storage, not the gate payload.
+2. Confirm the exact plan and choose **Generate editable DOCX**. A persisted,
+   retryable job binds the current human design approval, prepared inputs and
+   formatter/runtime identity. Construction and reopen checks use no agent,
+   Word automation or renderer. A changed plan requires new authorization.
+3. **Download DOCX candidate** and inspect it in Word. Generated `BF.*` styles
+   are Quick Styles for post-generation editing. Downloaded edits are not
+   synchronized back; acceptance always identifies the original checked bytes.
+4. **Accept DOCX and finish** records the candidate/manifest/plan hashes,
+   finalizes the editable-document edition and publishes `document.docx`,
+   `docx-build.json` and `design-proposal.json` alongside the accepted Markdown.
+   The work's versioned library and run page retain checksum-verified download
+   links; the export contains the same files.
+
+This is DOCX construction/content/structure verification, not rendered-page
+approval. No PDF, calculated pagination, field refresh, page images, actual font
+resolution or print certification is supplied. Translation's finishing phase and
+the full print-production/page-review pipeline remain unchanged/pending.
+
+Retry uses a new owned output path without overwriting an interrupted candidate.
+Design-only restarts invalidate old generation/candidate bindings and download
+IDs while retaining the manuscript approval and archived evidence. Reopen
+`approve-manuscript` to revise the basis and invalidate downstream decisions.
+Older runs/approvals are not migrated or rewritten; restart an outdated run
+explicitly to use the new engine.
+
 The legacy work-page/completed-run formatter actions, separate template and old
 format skill are removed. Existing legacy runs show read-only history rather
 than an active six-item sheet; they do not block new supported workflows. See the
-[tracked design](../tools/formattor/docs/interior-design-and-production.md).
+[tracked design](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/docs/interior-design-and-production.md).
 
 Run commands from the repository root. `npm run dev` (in `studio/frontend`) serves the frontend on port 5173 and proxies `/api` to the server.
 
@@ -370,8 +398,9 @@ It checks that comments and general feedback do not carry into the next review
 without a page reload, and that failed submissions preserve the current draft.
 
 The embedded interior-design browser check uses the real API/engine with a
-scripted skill, not a live model. It covers form population, a saved edit, desktop
-and 390 px mobile layout, and approval stopping before production:
+scripted skill, not a live model. It covers form edits, desktop/390 px mobile
+layout, exact-plan authorization, real DOCX candidate download, final editable
+acceptance and the accepted work-library download:
 
 ```text
 STUDIO_BROWSER=1 .venv-workflow/Scripts/python.exe -m unittest studio.tests.test_cases.StudioCaseTests.test_editable_interior_design_gate -v

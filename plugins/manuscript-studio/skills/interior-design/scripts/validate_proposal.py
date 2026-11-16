@@ -11,11 +11,14 @@ import math
 import re
 import sys
 from pathlib import Path
+from string import Formatter
 
 from jsonschema import Draft202012Validator
+from markdown_it import MarkdownIt
 
 SKILL = Path(__file__).resolve().parents[1]
 SCHEMA = SKILL / "schemas/interior-design-proposal.schema.json"
+FURNITURE_TOKENS = {"work_title", "chapter_title", "author", "page", "page_count"}
 
 
 def require(condition, message):
@@ -97,22 +100,113 @@ def preparation_helper():
     return helper
 
 
-def occurrences(proposal):
-    yield from proposal["reading"]["important_excerpts"]
-    for role in proposal["text_roles"]:
-        yield from role["occurrences"]
+@functools.lru_cache(maxsize=1)
+def furniture_presets():
+    return load_json(SCHEMA)["$defs"]["furniture_content"]["x-preset-templates"]
 
 
-def check_preparation(proposal, work_path):
+def furniture_template(content):
+    """Resolve the closed preset selection before token and metadata validation."""
+    return content["template"] if content["preset"] == "custom" else furniture_presets()[content["preset"]]
+
+
+def furniture_tokens(text):
+    fields = set()
+    try:
+        for _, name, spec, conversion in Formatter().parse(text):
+            require(name is None or name in FURNITURE_TOKENS, f"Unknown header/footer token: {name}")
+            require(not spec and conversion is None, "Header/footer format specifiers/conversions are not allowed.")
+            if name is not None:
+                fields.add(name)
+    except ValueError as exc:
+        raise ValueError(f"Invalid header/footer template: {exc}") from exc
+    return fields
+
+
+def furniture_sections(proposal):
+    furniture = proposal["design_system"]["furniture"]
+    overrides = {item["chapter_id"]: item["settings"] for item in furniture["section_overrides"]}
+    return [(unit["chapter_id"], overrides.get(unit["chapter_id"], furniture["default_section"]))
+            for unit in proposal["basis"]["preparation"]["units"]]
+
+
+def check_furniture(proposal, styles):
+    furniture = proposal["design_system"]["furniture"]
+    unit_ids = {unit["chapter_id"] for unit in proposal["basis"]["preparation"]["units"]}
+    overrides = [item["chapter_id"] for item in furniture["section_overrides"]]
+    require(len(overrides) == len(set(overrides)), "Duplicate header/footer section override.")
+    require(set(overrides) <= unit_ids, "Header/footer override refers to an unknown prepared unit.")
+    sections = [furniture["default_section"]] + [item["settings"] for item in furniture["section_overrides"]]
+    height = proposal["design_system"]["page"]["trim_mm"]["height"]
+    for settings in sections:
+        require(settings["header_distance_mm"] < height and settings["footer_distance_mm"] < height,
+                "Header/footer distance must be less than page height.")
+        for group in ("headers", "footers"):
+            for variant, part in settings[group].items():
+                require(not part["link_to_previous"] or not part["paragraphs"],
+                        "Linked header/footer parts cannot also define local paragraphs.")
+                active = (variant == "default" or variant == "even" and furniture["different_odd_even"]
+                          or variant == "first" and settings["different_first_page"])
+                require(active or not part["paragraphs"] and not part["link_to_previous"],
+                        f"Inactive {variant} header/footer variants must be blank and unlinked.")
+                for paragraph in part["paragraphs"]:
+                    require(paragraph["style_id"] in styles, "Unknown header/footer style.")
+                    furniture_tokens(furniture_template(paragraph["content"]))
+    for group in ("headers", "footers"):
+        require(not any(part["link_to_previous"] for part in furniture_sections(proposal)[0][1][group].values()),
+                "The first section cannot link headers/footers to a previous section.")
+
+
+def paragraphs(data):
+    """Catalog whole CommonMark text blocks; never recover inline byte offsets."""
+    tokens = MarkdownIt("commonmark").parse(data.decode("utf-8"))
+    result = []
+    for offset, token in enumerate(tokens):
+        if token.type not in ("paragraph_open", "heading_open"):
+            continue
+        markdown = tokens[offset + 1].content
+        result.append({
+            "paragraph_index": len(result) + 1,
+            "paragraph_sha256": hashlib.sha256(markdown.encode("utf-8")).hexdigest(),
+            "kind": "heading" if token.type == "heading_open" else "paragraph",
+            "markdown": markdown,
+        })
+    return result
+
+
+def prepared_context(work_path):
     helper = preparation_helper()
     work_path = helper.plain_path(work_path)
     helper.validate(work_path, check_sources=True)
     work = helper.load_json(work_path)
     require(work["preparation"]["status"] == "ready", "Preparation must be ready.")
-    basis = proposal["basis"]["preparation"]
     revision = work["preparation"]["current_revision"]
     manifest_path = helper.local_file(work_path.parent, f"revisions/{revision}/manifest.json")
     manifest = helper.load_json(manifest_path)
+    return helper, work_path, work, manifest_path, manifest
+
+
+def paragraph_catalog(work_path):
+    helper, _, _, manifest_path, manifest = prepared_context(work_path)
+    return {
+        "contract": "interior-design-paragraphs/1",
+        "units": [{
+            "chapter_id": unit["chapter_id"], "chapter_sha256": unit["sha256"],
+            "paragraphs": paragraphs(prepared_unit(helper, manifest_path, unit)),
+        } for unit in manifest["chapters"]],
+    }
+
+
+def prepared_unit(helper, manifest_path, unit):
+    data = helper.local_file(manifest_path.parent, unit["file"]).read_bytes()
+    require(hashlib.sha256(data).hexdigest() == unit["sha256"], "Prepared unit changed.")
+    return data
+
+
+def check_preparation(proposal, work_path):
+    helper, work_path, work, manifest_path, manifest = prepared_context(work_path)
+    basis = proposal["basis"]["preparation"]
+    revision = work["preparation"]["current_revision"]
     expected = {
         "work_id": work["work_id"], "record_revision": work["record_revision"],
         "work_sha256": helper.digest(work_path), "revision": revision,
@@ -134,10 +228,40 @@ def check_preparation(proposal, work_path):
                     and evidence["locator"].startswith("/metadata/"),
                     "Metadata evidence must bind work.json and a metadata pointer.")
             pointer(work, evidence["locator"])
-    for occurrence in occurrences(proposal):
-        unit = units[occurrence["chapter_id"]]
-        data = helper.local_file(manifest_path.parent, unit["file"]).read_bytes()
-        require(hashlib.sha256(data).hexdigest() == unit["sha256"], "Prepared unit changed.")
+    metadata = work["metadata"]
+    authors = [person["name"] for person in metadata["contributors"] if "author" in person["roles"]]
+    for chapter_id, settings in furniture_sections(proposal):
+        available = {"work_title": metadata["title"], "chapter_title": units[chapter_id]["title"],
+                     "author": ", ".join(authors)}
+        for group in ("headers", "footers"):
+            for part in settings[group].values():
+                for paragraph in part["paragraphs"]:
+                    tokens = furniture_tokens(furniture_template(paragraph["content"]))
+                    if (units[chapter_id]["role"] == "front_matter"
+                            and proposal["design_system"]["furniture"]["front_matter_numbering"] == "none"):
+                        require("page" not in tokens, "Unnumbered front matter cannot display a {page} field.")
+                    for token in tokens - {"page", "page_count"}:
+                        require(available[token], f"Missing {token} metadata for header/footer in {chapter_id}.")
+    data_by_unit = {}
+
+    def unit_data(chapter_id):
+        if chapter_id not in data_by_unit:
+            data_by_unit[chapter_id] = prepared_unit(helper, manifest_path, units[chapter_id])
+        return data_by_unit[chapter_id]
+
+    catalogs = {}
+    for role in proposal["text_roles"]:
+        for occurrence in role["occurrences"]:
+            chapter_id = occurrence["chapter_id"]
+            if chapter_id not in catalogs:
+                catalogs[chapter_id] = paragraphs(unit_data(chapter_id))
+            catalog = catalogs[chapter_id]
+            number = int(occurrence["paragraph_index"])
+            require(number <= len(catalog), f"Paragraph {number} exceeds prepared unit {chapter_id}.")
+            require(catalog[number - 1]["paragraph_sha256"] == occurrence["paragraph_sha256"],
+                    f"Paragraph hash does not match catalog entry {chapter_id}/{number}.")
+    for occurrence in proposal["reading"]["important_excerpts"]:
+        data = unit_data(occurrence["chapter_id"])
         start, end = occurrence["start_byte"], occurrence["end_byte"]
         require(end <= len(data), "Text span exceeds its prepared unit.")
         # Decode prefixes as well, so neither endpoint can split a UTF-8 character.
@@ -207,9 +331,17 @@ def validate(proposal, *, work_path=None):
         if paragraph["model"] == "block":
             require(paragraph["first_line_indent_mm"] == 0, "Block paragraphs cannot have first-line indentation.")
     require(len(levels) == len(set(levels)), "Duplicate heading level.")
+    check_furniture(proposal, styles)
+    assigned = set()
     for role in proposal["text_roles"]:
         require(role["style_id"] in styles, "Unknown text-role style.")
-    for occurrence in occurrences(proposal):
+        for occurrence in role["occurrences"]:
+            require(units.get(occurrence["chapter_id"]) == occurrence["chapter_sha256"],
+                    "Paragraph refers to an unknown or changed prepared unit.")
+            key = occurrence["chapter_id"], occurrence["paragraph_index"]
+            require(key not in assigned, "A paragraph may have only one role assignment.")
+            assigned.add(key)
+    for occurrence in proposal["reading"]["important_excerpts"]:
         require(units.get(occurrence["chapter_id"]) == occurrence["chapter_sha256"],
                 "Text span refers to an unknown or changed prepared unit.")
         require(occurrence["start_byte"] < occurrence["end_byte"], "Text range must not be empty/reversed.")
@@ -232,11 +364,19 @@ def validate(proposal, *, work_path=None):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("proposal", type=Path)
+    parser.add_argument("proposal", type=Path, nargs="?")
     parser.add_argument("--work", type=Path)
+    parser.add_argument("--list-paragraphs", action="store_true",
+                        help="List whole-paragraph role anchors from --work; no proposal is required.")
     args = parser.parse_args(argv)
+    if args.list_paragraphs and (not args.work or args.proposal):
+        parser.error("--list-paragraphs requires --work and no proposal path.")
+    if not args.list_paragraphs and not args.proposal:
+        parser.error("Provide a proposal path, or --work WORK --list-paragraphs.")
     try:
-        print(json.dumps(validate(load_json(args.proposal), work_path=args.work), indent=2))
+        result = (paragraph_catalog(args.work) if args.list_paragraphs
+                  else validate(load_json(args.proposal), work_path=args.work))
+        print(json.dumps(result, indent=2))
         return 0
     except (ValueError, OSError, UnicodeError) as exc:
         print(f"interior-design validation failed: {exc}", file=sys.stderr)

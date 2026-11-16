@@ -5,6 +5,7 @@ import { GatePanel } from "./GatePanel";
 import { workflowUI } from "../workflows";
 import { runEvents, runState, useLive } from "../live";
 import { TokenUsage } from "./TokenUsage";
+import { DocxDelivery } from "./DocxDelivery";
 
 export function RunView({ runId }: { runId: string }) {
   const { data: run, error, reload, setData } = useLoad(() => api.run(runId), [runId], useLive(runState(runId)));
@@ -44,11 +45,12 @@ export function RunView({ runId }: { runId: string }) {
         <div className="banner final">This run is final: its output is an accepted version of {run.workflow} on this work and cannot change. Start a new run on the work to publish the next version.</div>
       )}
       {!run.retired && !run.engine_current && run.status !== "COMPLETED" && run.status !== "CANCELLED" && (
-        <div className="banner warn">The workflow engine changed after this run was created. Only reading and restarting the workflow are available.</div>
+        <div className="banner warn">The workflow engine changed after this run was created. You can read, stop or restart this workflow, but cannot resume it with the updated engine.</div>
       )}
       {run.superseded_by && <div className="banner">Restarted as <a href={`#/runs/${run.superseded_by}`}>{run.superseded_by.slice(0, 8)}</a>.</div>}
       <div className="facts">
-        <div><span>Status</span><Status value={run.status} />{live && <span className="tag busy">agent working</span>}{run.worker.paused && <span className="tag">paused</span>}</div>
+        <div><span>Status</span><Status value={run.status} />{live && <span className="tag busy">
+          {run.stage === "produce-docx" ? "formatter working" : "agent working"}</span>}{run.worker.paused && <span className="tag">paused</span>}</div>
         <div><span>Stage</span>{run.stage}{run.chapter_id ? ` · ${run.chapter_id === "_whole" ? "whole-book review" : run.chapter_id}` : ""}</div>
         <div><span>Progress</span>{run.progress ? `${run.progress.completed}/${run.progress.total} chapters` : "—"}</div>
         {run.whole_book_status && <div><span>Whole book</span>{run.whole_book_status.replaceAll("_", " ")}</div>}
@@ -68,6 +70,8 @@ export function RunView({ runId }: { runId: string }) {
       </div>
       {run.error && <div className="error"><strong>Last error:</strong> {run.error}</div>}
       {run.worker.error && <div className="error"><strong>Worker:</strong> {run.worker.error}</div>}
+      {run.production && run.status !== "WAITING_FOR_ACCEPTANCE" && run.gate?.kind !== "docx_generation_review"
+        && <DocxDelivery key={run.production.id} run={run} perform={perform} />}
       {run.document_path && <p>Formatted document: <span className="mono">{run.document_path}</span></p>}
       {run.handed_off_work && <div className="banner final">The formatted document is now a work of its own, ready for further
         workflows: <a href={`#/works/${encodeURIComponent(run.handed_off_work)}`}>{run.handed_off_work}</a>.</div>}

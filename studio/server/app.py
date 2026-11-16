@@ -224,7 +224,8 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                 view["answer_to"] = ({"text": previous["text"], "created_at": previous["created_at"]}
                                      if previous and previous["parsed"].get("type") == "feedback" else None)
                 view["binding_text"] = None
-                if gate.get("binding") and gate["kind"] != "metadata_review" and gate["binding"]["bytes"] <= MAX_TEXT:
+                if gate.get("binding") and gate["kind"] not in ("metadata_review", "docx_generation_review") \
+                        and gate["binding"]["bytes"] <= MAX_TEXT:
                     try:
                         view["binding_text"] = engine.store.content(gate["binding"]).decode("utf-8")
                     except UnicodeDecodeError:
@@ -336,7 +337,30 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         return act(svc, run_id, lambda: svc.review_interior_design(
             run_id, payload["gate_id"], payload["expected_sha256"], action,
             spec=payload.get("spec"), answers=payload.get("answers"), feedback=payload.get("feedback")),
-            resume=action == "request-revision")
+            resume=action in ("request-revision", "approve"))
+
+    @app.post("/api/runs/{run_id}/docx/authorize")
+    def authorize_docx(run_id: str, payload: dict = Body(...), svc: WorkflowService = Depends(service)):
+        return act(svc, run_id, lambda: svc.authorize_docx(
+            run_id, payload["gate_id"], payload["expected_plan_sha256"]))
+
+    @app.get("/api/runs/{run_id}/docx/{build_id}")
+    def download_docx(run_id: str, build_id: str, svc: WorkflowService = Depends(service)):
+        data, sha = svc.docx_candidate(run_id, build_id)
+        return Response(data, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        headers={"Content-Disposition": 'attachment; filename="manuscript.docx"',
+                                 "X-Content-SHA256": sha})
+
+    @app.get("/api/works/{work_id}/docx/{publication_id}")
+    def download_published_docx(work_id: str, publication_id: str, svc: WorkflowService = Depends(service)):
+        library = svc.library(work_id)
+        record = library.publication(publication_id)
+        if not record["artifact"].endswith("/document.docx"):
+            raise ValueError("This publication is not an editable-DOCX delivery.")
+        return Response(library.read(record),
+                        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        headers={"Content-Disposition": 'attachment; filename="manuscript.docx"',
+                                 "X-Content-SHA256": record["sha256"]})
 
     @app.post("/api/runs/{run_id}/metadata")
     def metadata(run_id: str, payload: dict = Body(...), svc: WorkflowService = Depends(service)):

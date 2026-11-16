@@ -6,6 +6,7 @@ import copy
 import json
 import re
 import sys
+import threading
 import uuid
 from pathlib import Path
 
@@ -18,17 +19,22 @@ NOT_STARTED = {"status": "not_started", "basis_revision": None, "scope": None, "
                "state_locator": None, "updated_at": None}
 
 
+_METADATA_IMPORT_LOCK = threading.RLock()
+
+
 def load_metadata_helper(skill_root, contract):
     """Load prepare_metadata.py bound to a specific validate_preparation module."""
-    previous = sys.modules.get("validate_preparation")
-    sys.modules["validate_preparation"] = contract
-    try:
-        return module_at(skill_root / "scripts/prepare_metadata.py")
-    finally:
-        if previous is None:
-            sys.modules.pop("validate_preparation", None)
-        else:
-            sys.modules["validate_preparation"] = previous
+    # The temporary module alias is process-global, including across API requests.
+    with _METADATA_IMPORT_LOCK:
+        previous = sys.modules.get("validate_preparation")
+        sys.modules["validate_preparation"] = contract
+        try:
+            return module_at(skill_root / "scripts/prepare_metadata.py")
+        finally:
+            if previous is None:
+                sys.modules.pop("validate_preparation", None)
+            else:
+                sys.modules["validate_preparation"] = previous
 
 
 def language_key(work):
@@ -406,6 +412,7 @@ class PreparedManuscriptEngine(Engine):
         files["manifest.json"] = json_bytes({"run_id": state["id"], "work_id": state["work_id"],
                                              "acceptance": state["acceptance"], "source": state["source"],
                                              "chapters": state["outputs"], "continuity": state["continuity"]})
+        files.update(self.delivery_files(state))
         return files
 
     def accepted_output(self, state):
@@ -450,6 +457,9 @@ class PreparedManuscriptEngine(Engine):
                         "expected_head": None, "basis": basis})
         entries.append({"artifact": f"{prefix}/manifest.json", "data": json_bytes(accepted),
                         "expected_head": None, "basis": basis, "contract": accepted["contract"]})
+        for name, data in self.delivery_files(state).items():
+            entries.append({"artifact": f"{prefix}/{name}", "data": data,
+                            "expected_head": None, "basis": basis})
         summary = {"status": "completed", "basis_revision": accepted["prepared_revision"],
                    "scope": {"kind": "whole_work", "chapter_ids": [c["chapter_id"] for c in accepted["chapters"]]},
                    "operation": self.operation, "state_locator": f"run:{state['id']}", "updated_at": now()}

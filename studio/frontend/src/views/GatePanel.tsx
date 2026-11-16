@@ -10,6 +10,7 @@ import { SamplePoll } from "./SamplePoll";
 import type { ReviewedText } from "../reviewText";
 import { InteriorDesignReview } from "./InteriorDesignReview";
 import { VendorTargetFields } from "./VendorTargetFields";
+import { DocxDelivery } from "./DocxDelivery";
 
 type Perform = (op: () => Promise<RunDetail>) => void;
 // Sends an exact reply; `sent` runs only after the server accepted it (e.g. to clear drafted comments).
@@ -44,6 +45,9 @@ export function GatePanel({ run, perform, inViewer = false, comments, commentLab
   if (run.status === "WAITING_FOR_ACCEPTANCE" && run.acceptance) return <Acceptance run={run} perform={perform} />;
   if (run.status !== "WAITING_FOR_HUMAN" || !run.gate) return null;
   const gate = run.gate;
+  if (gate.kind === "docx_generation_review") {
+    return <DocxDelivery key={gate.id} run={run} perform={perform} />;
+  }
   const copy = ui.decisionCopy(gate);
   const reply: Reply = (text, sent) => perform(async () => {
     const next = await api.reply(run.id, gate.id, text);
@@ -168,7 +172,10 @@ function Acceptance({ run, perform }: { run: RunDetail; perform: Perform }) {
   return (
     <div className="panel gate">
       <h2>{acceptance.title}</h2>
-      <p>Read every chapter before accepting:</p>
+      {run.production?.docx && <DocxDelivery run={run} perform={perform} />}
+      <p>{run.production?.docx
+        ? "Download and inspect the DOCX candidate before accepting. Acceptance records its exact hash."
+        : "Read every chapter before accepting:"}</p>
       <ul>{acceptance.outputs.map((o) => <li key={o.chapter_id}>{workflowUI(run.workflow).hasChapterViewer
         ? <a href={`#/runs/${run.id}/chapters/${encodeURIComponent(o.chapter_id)}`}>{o.chapter_id}</a> : o.chapter_id}{" "}
         <span className="mono muted">{o.sha256.slice(0, 12)}</span></li>)}</ul>

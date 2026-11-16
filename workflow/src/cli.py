@@ -58,6 +58,10 @@ def display(engine, state, *, review=False):
         elif gate["kind"] == "metadata_review":
             print("\nEdit: python -m workflow metadata RUN --gate GATE-ID --field /PATH --value-file VALUE.json"
                   "\nEach edit presents a new gate ID. Confirm with a reply containing exactly 'confirm metadata'.")
+        elif gate["kind"] == "docx_generation_review":
+            print("\n" + state["gate"]["message"])
+            print("Authorize the displayed exact plan with: python -m workflow authorize-docx RUN "
+                  "--gate GATE-ID --plan-sha256 " + state["production"]["plan_sha256"])
     if state["status"] == "WAITING_FOR_ACCEPTANCE":
         print("\nReview these immutable outputs against the source before accepting.")
         for artifact in state["outputs"]:
@@ -137,7 +141,7 @@ def parser():
     history = sub.add_parser("metadata-history", help="List a run's metadata versions or show one.")
     history.add_argument("run")
     history.add_argument("--version", type=int)
-    for command in ("step", "status", "review", "reply", "accept", "retry", "stop", "events",
+    for command in ("step", "status", "review", "reply", "accept", "authorize-docx", "retry", "stop", "events",
                     "restart-stage", "restart-chapter", "restart"):
         child = sub.add_parser(command)
         child.add_argument("run")
@@ -147,6 +151,9 @@ def parser():
         elif command == "reply":
             child.add_argument("--gate", required=True)
             child.add_argument("--response-file", required=True, type=Path)
+        elif command == "authorize-docx":
+            child.add_argument("--gate", required=True)
+            child.add_argument("--plan-sha256", required=True)
         elif command == "accept":
             child.add_argument("--acceptance-id", required=True)
             child.add_argument("--confirm-final", action="store_true",
@@ -243,14 +250,18 @@ def run(service, args):
                 kind = engine._stage_or_empty(engine.state()).get("kind")
             if not profile and kind == "agent" and shutil.which(args.codex) is None:
                 raise ValueError("Codex executable not found. Install/sign in to Codex or pass --codex PATH.")
-            service.step(args.run, profile.runtime() if profile else
-                         CodexRuntime([args.codex, "app-server"], args.timeout))
+            runtime = None
+            if kind == "agent":
+                runtime = profile.runtime() if profile else CodexRuntime([args.codex, "app-server"], args.timeout)
+            service.step(args.run, runtime)
         elif command == "metadata":
             value = json.loads(args.value_file.read_text(encoding="utf-8-sig"))
             service.edit_metadata(args.run, args.field, value, args.reason, gate_id=args.gate)
             review = True
         elif command == "reply":
             service.reply(args.run, args.gate, args.response_file.read_text(encoding="utf-8"))
+        elif command == "authorize-docx":
+            service.authorize_docx(args.run, args.gate, args.plan_sha256)
         elif command == "accept":
             service.accept(args.run, args.acceptance_id, confirm_final=args.confirm_final)
         elif command == "retry":

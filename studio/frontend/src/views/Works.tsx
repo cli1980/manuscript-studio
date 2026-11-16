@@ -164,6 +164,7 @@ export function WorkView({ workId }: { workId: string }) {
               {/* The original upload is downloaded, not viewed; its verified text is in each run's chapter viewer. */}
               {path.startsWith("sources/")
                 ? <a href={api.sourceUrl(workId)} download>{path}</a>
+                : path.endsWith("/document.docx") ? <a href={api.publishedDocxUrl(workId, head.id)} download>{path}</a>
                 : <button className="link" onClick={() => void open(path)}>{path}</button>}
               <span className="muted"> v{head.version} · {head.status}{head.review_status === "unreviewed" ? " (unreviewed)" : ""}</span>
             </li>
@@ -226,8 +227,10 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
     }
   }
 
-  // While a run is unfinished the Runs section already shows it; the start panel simply stays hidden.
-  if (unfinishedRun) return null;
+  if (unfinishedRun) return <div className="banner warn">
+    A workflow is still unfinished on this work. <a href={`#/runs/${unfinishedRun}`}>Open the unfinished workflow</a>
+    {" "}and finish or stop it before starting another.
+  </div>;
   return (
     <div className="panel">
       <h2>Start a workflow</h2>

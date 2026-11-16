@@ -1,0 +1,4 @@
+[submodule "tools/formattor"]
+	path = tools/formattor
+	url = https://github.com/cli1980/book-formatter.git
+	branch = main

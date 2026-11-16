@@ -70,7 +70,7 @@ class Workers:
                     return
                 self.last[run_id] = {"stopped": None, "turn_started": now()}
                 try:
-                    service.step(run_id, self.runtime_factory())
+                    service.step(run_id, self.runtime_factory() if state.get("requires_runtime", True) else None)
                 except Exception as exc:  # The run records FAILED/PAUSED itself; stop and surface it.
                     self.last[run_id] = {"stopped": "error", "error": str(exc), "at": now()}
                     return

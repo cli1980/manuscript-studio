@@ -1,7 +1,7 @@
 # Interior-design proposal contract
 
 [Schema](../schemas/interior-design-proposal.schema.json): JSON Schema draft
-2020-12, contract interior-design-proposal/1. See the [example](proposal.example.json).
+2020-12, contract interior-design-proposal/4. See the [example](proposal.example.json).
 The example is synthetic: its illustrative hashes are not real preparation proof.
 
 ## Authority and form groups
@@ -21,7 +21,7 @@ or stored in the proposal; callers keep their own execution lineage separately.
 | author_preferences | Supplied imprint/ISBN, revisions, series, liked references and things to avoid |
 | edition_brief | Purpose and requested deliverables/vendor/product/trim |
 | design_system | Geometry, named font/paragraph styles, hierarchy, navigation and page furniture |
-| text_roles | Semantic roles, narrative function, exact prepared occurrences and proposed style mapping |
+| text_roles | Whole-paragraph semantic roles, narrative function, catalogued occurrences and paragraph-style mapping; may be empty |
 | evidence | Stable-ID sources for facts, analysis and recommendations |
 | recommendations | Stable-ID rationale/evidence addressing design groups through JSON Pointer |
 | questions | Necessary author-input or design-choice questions only; may be empty |
@@ -44,17 +44,157 @@ consumed metadata: no second metadata authority is introduced. External referenc
 carry supplied locator/hash or null; never invent a hash for inaccessible data.
 The validator does not automatically open these locators or fetch URLs.
 
-Occurrences use zero-based UTF-8 byte offsets into exact chapter Markdown:
-start_byte inclusive, end_byte exclusive, both at character boundaries.
-text_sha256 hashes the span; chapter_sha256 binds the whole unit. This is a
-proposal-side locator, not an extension to preparation manifests. Valid ranges
-still do not prove that a semantic classification is correct.
+### DOCX widow/orphan policy
+
+`widow_lines` and `orphan_lines` accept non-negative integers, including zero.
+For DOCX, IDP-C28 explicitly accepts this conversion:
+
+```text
+widow_control = bool(widow_lines or orphan_lines)
+```
+
+Both zero disables the combined control; either nonzero enables it. Thus `1/1`,
+`3/2`, `0/3` and `7/0` all enable the same native DOCX protection. They do not
+promise their numeric first/last-line thresholds, and a mixed pair cannot
+independently disable just one side. This is an approved backend-specific
+normalization policy, not an unsupported-value error or a silent approximation.
+The effective native plan must record the boolean and policy identity.
+
+Other backends may have different declared mappings; InDesign's future numeric
+behavior is not implemented or promised here. Other unsupported settings still
+require explicit diagnostics. The proposal validator checks the input domain,
+not native construction, pagination or rendered output.
+
+### Whole-paragraph roles; source-owned inline formatting
+
+Each role occurrence identifies exactly one whole paragraph:
+
+```json
+{
+  "chapter_id": "chapter-one",
+  "chapter_sha256": "<exact unit hash>",
+  "paragraph_index": 2,
+  "paragraph_sha256": "<hash copied from paragraph catalog>"
+}
+```
+
+Obtain these values with `validate_proposal.py --work WORK.json --list-paragraphs`.
+Catalog contract `interior-design-paragraphs/1` numbers CommonMark
+`paragraph_open` and `heading_open` blocks together, one-based in source order
+within each unit, including paragraphs inside quotes/lists. Headings are whole
+paragraph blocks for structural styles. Blank lines, thematic breaks, HTML
+blocks and fenced/indented code blocks are not numbered paragraphs.
+
+The catalog uses `MarkdownIt("commonmark")` without extensions. Its `markdown`
+is the block's inline-token content, retaining inline markers, escapes, entities
+and internal line breaks after CommonMark's container/line-ending processing.
+`paragraph_sha256` hashes that content encoded as UTF-8, not rendered/plain text.
+`chapter_sha256` still binds the original, unchanged unit bytes. Copy both hashes
+from the helper; do not search by content or count physical lines. A paragraph
+can span lines, and identical paragraphs have distinct indices.
+
+A multi-paragraph role lists one occurrence per paragraph. A paragraph may have
+only one role assignment, including across roles. Ordinary unassigned paragraphs
+use body/structural heading defaults, so no invented special role is necessary.
+Byte/character ranges and inline roles are not accepted in `text_roles`.
+
+Inline emphasis and other supported inline constructs come from the original
+Markdown syntax, not model-generated role assignments. Preserve those markers;
+do not invent wrappers or widen a marked phrase into a paragraph classification.
+Native construction must preserve explicit source emphasis and otherwise inherit
+the approved paragraph style. This contract does not implement that producer.
+
+`reading.important_excerpts` remain evidence-only zero-based UTF-8 byte ranges:
+`start_byte` inclusive, `end_byte` exclusive, with `text_sha256` over exact bytes.
+They are not formatting assignments and do not restore inline roles.
 
 Canonical semantic roles belong to preparation, with editing/translation owning
-their output mappings. This proposal-v1 contract currently has local role IDs
-and ranges only, not canonical annotation references or transfer lineage.
+their output mappings. This proposal-v4 contract has local role IDs and paragraph
+references only, not canonical annotation references or transfer lineage.
 Upstream annotation tooling and downstream propagation require coordinated
-schema/workflow changes. Do not claim they are implemented by span validation.
+schema/workflow changes. Verified identities do not prove a classification correct.
+
+### Explicit headers and footers
+
+`design_system.furniture` replaces the former `running_heads`/`folio_position`
+switches with native-capability-based definitions:
+
+- `different_odd_even` is document-wide.
+- `default_section` supplies complete section settings: header/footer distances
+  in mm, `different_first_page`, and `headers`/`footers`.
+- Each group defines `default`, `even` and `first` parts. Default applies to
+  odd pages when odd/even differs, otherwise both. First applies to the first
+  page of a Word section, not arbitrary source paragraphs or physical blank pages.
+- Each part has `link_to_previous` and `paragraphs`. A linked part inherits the
+  preceding section's corresponding part and must have no local paragraphs.
+  An unlinked empty list deliberately creates a blank part, not inheritance.
+  The first effective section cannot link to a previous one.
+- Each paragraph names an existing `style_id`, explicit `alignment` and `content`.
+  Styles may use the new `header`/`footer` roles. Font/spacing come from that
+  named paragraph style; local alignment takes precedence over style alignment.
+- Inactive even/first parts must be empty and unlinked. There is no silent
+  preservation of requested content in a disabled variant.
+- `section_overrides` contains unique, preparation-bound `chapter_id` selectors
+  and complete replacement `settings`, not partial merges. A native section
+  boundary must exist at the selected unit; do not use final paragraph indices
+  or section ordinal guesses. Common defaults apply to units without overrides.
+
+Content is selected explicitly, with no competing raw text on a named preset:
+
+```json
+{"style_id": "running-head", "alignment": "left", "content": {"preset": "book-title"}}
+```
+
+| `content.preset` | Effective template |
+| --- | --- |
+| `book-title` | `{work_title}` |
+| `chapter-name` | `{chapter_title}` |
+| `author` | `{author}` |
+| `page-number` | `{page}` |
+| `page-x-of-y` | `Page {page} of {page_count}` |
+| `custom` | Required `content.template` |
+
+The schema's `furniture_content.x-preset-templates` is the canonical expansion
+table shared by review and formatter. A named preset must not carry `template`.
+Custom templates must be nonblank and safe. None means
+`{"link_to_previous": false, "paragraphs": []}`, not an empty paragraph, a
+`none` paragraph preset or inherited content. Selecting content does not set an
+automatic book-layout, font or numbering policy; those settings stay explicit.
+
+Proposal `/4` replaces `/3` paragraph `text` with `content`. Older proposals
+need regeneration and review, not a guessed migration. Preset expansion happens
+before metadata, unnumbered-front-matter and field checks. Missing consumed
+metadata still fails. The exact selected content and resolved template enter
+the authorized formatter plan.
+
+Text is literal, not Markdown. The only custom-template placeholders are:
+
+| Token | Binding |
+| --- | --- |
+| `{work_title}` | Exact prepared metadata title |
+| `{chapter_title}` | Selected prepared unit's title |
+| `{author}` | Prepared contributors with role `author`, names in source order joined with `, ` |
+| `{page}` | DOCX `PAGE` field instruction |
+| `{page_count}` | DOCX `NUMPAGES` field instruction, total document pages |
+
+Doubled braces escape literals: `{{page}}` prints `{page}`. No positional names,
+attribute/index access, conversions, format specifiers, tabs or control characters
+are allowed. Use multiple paragraph objects for multiple lines. Missing consumed
+metadata fails validation with `--work`; an inherited part keeps the predecessor's
+content rather than rebinding it to the new chapter.
+
+`front_matter_numbering` and `body_numbering_start` remain sequence settings.
+For `none`, front-matter parts must not display `{page}`: author an explicit
+blank/text-only override rather than silently remove a field. Roman/Arabic
+definitions and body restarts are written as DOCX settings, not verified numbers.
+Distances must be non-negative and less than page height; those checks do not
+prove that rendered furniture fits or does not overlap body text.
+
+The POC constructs definitions only. It does not refresh fields, paginate, render
+PDF or certify suppression on renderer-generated blank pages. This contract does
+not support arbitrary positioned objects, images, tables or executable fields.
+Contracts `/1` and `/2` require regenerated proposals; no compatibility aliases
+or conversion of the old coarse switches are provided.
 
 Prepared-text evidence uses the manifest-relative unit locator, for example
 revisions/r0001/chapters/0002.md, and its complete unit hash. Metadata evidence
@@ -77,16 +217,17 @@ external references within authorized storage boundaries.
 Vendor IDs, formats and bindings describe requests, not implemented capabilities.
 IngramSpark profile resolution belongs to intake. Unsupported ebook/audio or
 special-form intentions must be surfaced, not silently enabled or discarded.
-An ordinary PDF/DOCX is not certified print-ready by this form. Page count is a
-preference until rendering, never permission to omit or compress literary text.
+An ordinary PDF/DOCX is not certified print-ready by this form. Page count is an
+observed output after rendering, never permission to omit or compress literary text.
 
 ## Validation boundary
 
 Install requirements.txt in the active environment. The helper rejects schema
 errors, duplicate JSON keys/IDs, dangling references/pointers, inconsistent
-heading/TOC/paragraph settings and invalid span relationships. --work also runs
+heading/TOC/paragraph settings and duplicate paragraph assignments. --work also runs
 the sibling preparation validator with local source verification, requires ready
-preparation and checks exact basis/span bytes without writing inputs. Remote
+preparation and checks exact basis/unit bytes, paragraph identities/bounds and
+reading-excerpt bytes without writing inputs. Remote
 sources require host/provider verification outside this local helper.
 
 Shape validation is not source validation. Source validation is not approval,

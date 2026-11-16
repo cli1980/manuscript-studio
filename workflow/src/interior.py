@@ -9,10 +9,12 @@ import sys
 import uuid
 
 from .engine import module_at
+from .production import DOCX_NOTICE, PRODUCTION_GATE, DocxProductionPhase
 from .storage import digest, json_bytes, now, read_bytes, write_new
 
 DESIGN_STAGE = "interior-design"
 DESIGN_GATE = "interior_design_review"
+MANUSCRIPT_APPROVAL = "approve-manuscript"
 DEFAULT_FORMAT_TARGET = {"purpose": "print-ready", "vendor_id": None, "binding": "paperback"}
 PURPOSE_GUIDANCE = {
     "print-ready": "Propose a finished reader edition for intended print production, considering the selected "
@@ -21,13 +23,7 @@ PURPOSE_GUIDANCE = {
                   "Ask about missing recipient requirements rather than inventing them.",
     "editorial-review": "Prioritize commenting, proofreading and navigation while reviewing the manuscript.",
 }
-PRODUCTION_PENDING = (
-    "Interior design approved. Deterministic document production and human review of rendered pages "
-    "are not integrated yet. No document has been generated or published."
-)
-
-
-class InteriorDesignPhase:
+class InteriorDesignPhase(DocxProductionPhase):
     """Reusable phase hooks; orchestration stays outside the standalone skill."""
 
     @functools.cached_property
@@ -53,12 +49,70 @@ class InteriorDesignPhase:
         return profile
 
     def freeze_design_basis(self, state):
-        self._ensure_manuscript(state)
         if not state.get("design_sources"):
-            state["design_sources"] = {
-                cid: self.checkpoint(path, "interior_source") for cid, path in state["manuscript"].items()
-            }
+            state["design_sources"] = {item["chapter_id"]: dict(item) for item in state["outputs"]}
             state["design_metadata"] = self.checkpoint(state["prepared"]["work_record"], "interior_metadata")
+
+    def acceptance_details(self, state):
+        if state["stage"] == MANUSCRIPT_APPROVAL:
+            return {"title": "Approve manuscript for formatting", "action_label": "Approve manuscript and continue",
+                    "finalizes": False, "vendor_profiles": self.interior_validator.vendor_profiles().catalog(),
+                    "format_target": state.get("format_target") or dict(DEFAULT_FORMAT_TARGET),
+                    "notice": "Approval freezes the manuscript and metadata for interior design, exact-plan "
+                              "authorization and editable-DOCX generation. " + DOCX_NOTICE}
+        if state.get("production"):
+            return {"title": "Accept editable DOCX", "action_label": "Accept DOCX and finish", "finalizes": True,
+                    "notice": "Accept this exact DOCX candidate and publish the editable-document edition. "
+                              "This finalizes the run. " + DOCX_NOTICE}
+        return super().acceptance_details(state)
+
+    def before_metadata_edit(self, state):
+        if state.get("design_sources"):
+            raise ValueError("Restart manuscript approval before editing its frozen metadata.")
+        return super().before_metadata_edit(state)
+
+    def parse_free_reply(self, state, gate, text):
+        if gate["kind"] in (DESIGN_GATE, PRODUCTION_GATE):
+            raise ValueError("Use the design or DOCX generation form for this exact approval.")
+        return super().parse_free_reply(state, gate, text)
+
+    def reset_stage(self, state, stage):
+        super().reset_stage(state, stage)
+        ids = self.stage_ids(state)
+        before_design = bool(stage.get("iterate")) or stage["id"] in ids[:ids.index(MANUSCRIPT_APPROVAL) + 1]
+        if before_design:
+            state.pop("manuscript_approval", None)
+        if stage["id"] == DESIGN_STAGE or before_design:
+            for key in list(state):
+                if key.startswith("design_") and (before_design or key not in
+                                                  ("design_sources", "design_metadata", "design_vendor_profile")):
+                    state.pop(key)
+        if before_design or stage["id"] in (DESIGN_STAGE, "produce-docx"):
+            if state.get("production"):
+                state.setdefault("production_history", []).append(state.pop("production"))
+
+    def prepare_acceptance(self, state, format_target):
+        if state["stage"] == MANUSCRIPT_APPROVAL:
+            target = dict(DEFAULT_FORMAT_TARGET) if format_target is None else format_target
+            self.resolve_format_target(target)
+            state["format_target"] = target
+            return
+        return super().prepare_acceptance(state, format_target)
+
+    def record_acceptance(self, state, receipt):
+        if state["stage"] == MANUSCRIPT_APPROVAL:
+            state["manuscript_approval"] = receipt
+            profile = self.pin_vendor_profile(state, state["format_target"])
+            receipt.update(format_target=state["format_target"],
+                           vendor_profile_sha256=profile["sha256"] if profile else None)
+            self.freeze_design_basis(state)
+            return
+        if state.get("production"):
+            job = self.verify_docx_candidate(state)
+            receipt["docx"] = {"build_id": job["id"], "sha256": job["result"]["docx"]["sha256"],
+                               "manifest_sha256": job["result"]["manifest"]["sha256"],
+                               "plan_sha256": job["plan_sha256"], "proposal_sha256": job["proposal_sha256"]}
+        return super().record_acceptance(state, receipt)
 
     def prepare_design_turn(self, state):
         if not state.get("manuscript_approval"):
@@ -89,7 +143,9 @@ class InteriorDesignPhase:
             "skills": [str(self.root / "skills" / name / "SKILL.md")
                        for name in state["definition"]["agents"]["interior-design"]["skills"]],
             "work_record": state["prepared"]["work_record"],
-            "metadata": json.loads(self._work_path(state).read_text(encoding="utf-8"))["metadata"],
+            "metadata": json.loads(self._work_path(state).read_bytes())["metadata"],
+            "production_capabilities": {"formats": ["editable-docx"], "rendering": False,
+                                        "print_certification": False},
             "format_target": state.get("format_target"),
             "purpose_guidance": PURPOSE_GUIDANCE[state["format_target"]["purpose"]],
             "vendor_profile": self.selected_vendor_profile(state),
@@ -115,6 +171,16 @@ class InteriorDesignPhase:
             "must bind those files by absolute path and SHA-256. Never alter the original package or manuscript. "
             "Carry the supplied metadata verbatim except for recomputing extent. "
             "Author the proposal against this exact package, not the original unedited book. "
+            "Request exactly one production target, editable-docx. PDF and other formats are unavailable "
+            "in this integration and must not appear as promised outputs, even for print-ready purpose. "
+            "After preparation, run the interior-design validator with --work WORK --list-paragraphs. "
+            "Generate text_roles only for whole catalogued paragraphs; copy their indices and hashes. "
+            "Do not generate inline roles or partial-paragraph assignments. Inline formatting must come "
+            "from the original Markdown markers, not new role classifications or rewritten manuscript text. "
+            "Select header/footer content with the proposal's named presets: book-title, chapter-name, author, "
+            "page-number or page-x-of-y. Use custom with a safe template only when needed. "
+            "None is an empty unlinked part, not inherited content or an empty paragraph. "
+            "Keep styles, alignment and section variants explicit; never fabricate metadata or page values. "
             "Preserve the previous proposal's human-edited choices unless the receipt requests a change; "
             "increment revision for a new proposal. Use a fresh reading if the manuscript changed. "
             "Set edition_brief.purpose to format_target.purpose, the user's pre-authoring choice. "
@@ -151,7 +217,7 @@ class InteriorDesignPhase:
         actual = [(c["chapter_id"], c["order"], c["role"], c["sha256"]) for c in manifest["chapters"]]
         if expected != actual or manifest["scope"]["kind"] != "whole_work":
             raise ValueError("Design preparation does not match the exact selected manuscript and order.")
-        original = json.loads(self._work_path(state).read_text(encoding="utf-8"))
+        original = json.loads(self._work_path(state).read_bytes())
         if {k: v for k, v in work["metadata"].items() if k != "extent"} != \
                 {k: v for k, v in original["metadata"].items() if k != "extent"}:
             raise ValueError("Design preparation changed the reviewed shared metadata.")
@@ -199,6 +265,10 @@ class InteriorDesignPhase:
         return json.loads(self.store.content(snapshot)) if snapshot else None
 
     def verify_proposal_profile(self, state, proposal):
+        targets = proposal["edition_brief"]["production_targets"]
+        if len(targets) != 1 or targets[0]["format"] != "editable-docx":
+            raise ValueError("This workflow produces exactly one editable-DOCX target. PDF and multi-format "
+                             "bundles are unsupported; revise and review the proposal, not a partial delivery.")
         if proposal["vendor_profile"] != self.selected_vendor_profile(state):
             raise ValueError("Proposal must retain the exact user-selected vendor profile and binding.")
         target = state.get("format_target")
@@ -258,7 +328,8 @@ class InteriorDesignPhase:
                         or any(not isinstance(v, str) or not v.strip() for v in answers.values()):
                     raise ValueError("Record a response for every blocking question before design approval.")
                 text, parsed = "Approve interior design.", {"type": "design-approval", "answers": answers}
-                state.update(status="BLOCKED", gate=None, next_input=None, error=PRODUCTION_PENDING)
+                state.update(gate=None, next_input=None, error=None)
+                self._advance_stage(state)
             else:
                 raise ValueError("Unknown interior-design review action.")
             receipt = {"id": str(uuid.uuid4()), "created_at": now(), "gate": gate, "text": text,

@@ -22,6 +22,15 @@ their remaining work is not removed by this priority change.
 
 ## Cross-cutting decisions
 
+- **Outdated-run cancellation unblock (2026-11-15):** engine changes no longer
+  disable Stop on unfinished, unfinalized, idle runs. Execution with outdated
+  code remains refused, while cancellation retains artifacts/history and releases
+  the work for a new run. The work page explains the unfinished-run blocker and
+  links directly to it. Verified 76 workflow/API tests, including outdated-run
+  stop/new-run regressions, and the frontend build. Restarted Studio on the same
+  data root; confirmed the remaining waiting run now exposes Stop. No live run
+  was cancelled automatically; the user must confirm that irreversible action.
+
 Agreed in the 2026-10-26 planning session:
 
 - **Licensing** (owner decision, 2026-10-27; applies from the next commit). The
@@ -179,8 +188,8 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     last completed chapter, and translates only that chapter again; restarting a
     stage or an unfinished workflow keeps receipts and events.
   - After final acceptance, the run's own chapters and stages cannot be restarted (new runs on the work publish the next version), and
-    are refused; after an engine update, unfinished runs allow only reading and
-    restarting the workflow.
+    are refused; after an engine update, unfinished runs allow reading, stopping
+    and restarting the workflow, but not resuming outdated stage execution.
 - **Progress:** the metadata review gate was implemented first (2026-10-26).
   On 2026-10-27 the remaining scope was implemented: the template registry and
   `template.json` files, the split into
@@ -1121,15 +1130,16 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 - **Status:** `in_progress` (requested by the owner on 2026-11-08 after a
   feasibility review; prioritized on 2026-11-13; proposal-only skill conversion
-  implemented; embedded editing proposal-review form implemented; vendor-aware
-  intake and native production integration not yet implemented)
+  implemented; embedded editing proposal-review form and bounded editable-DOCX
+  production/delivery integrated; full vendor-ready intake, translation
+  composition and rendered-page/print production remain pending)
 - **Owner:** `cli1980`
 - **Priority:** highest current priority (owner decision, 2026-11-13);
   takes precedence over other planned or unfinished work.
 - **Branch:** `feature/deterministic-docx-formatting`.
 - **Milestone assignment:** not yet decided.
 - **Analysis (2026-11-13):**
-  [requirement and implementation gaps](tools/formattor/docs/deterministic-docx-gap-analysis.md)
+  [requirement and implementation gaps](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/docs/deterministic-docx-gap-analysis.md)
   traced across the engine, document adapters, service, API, and UI. Fifteen
   existing formatting/builder/API tests pass. Native human page review,
   agent-free lifecycle, rendered-layout QA, and renderer serialization remain
@@ -1147,13 +1157,13 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   component. Its proposal carries no workflow/run IDs. Embedded formatting
   and zero-pass editing routes remain orchestration rules, not skill requirements
   (IDP-R13/IDP-C08 in the design).
-- **High-level design:** [interior design and deterministic production](tools/formattor/docs/interior-design-and-production.md)
+- **High-level design:** [interior design and deterministic production](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/docs/interior-design-and-production.md)
   (draft). Detailed component contracts, cross-component flow, vendor-source
   findings, lifecycle choices, and open questions live there. Its stable
   `IDP-R` requirement IDs distinguish owner-confirmed direction from the open
   `IDP-D` decisions; implementation and validation must be traced explicitly.
 - **Skill reference (owner supplied, 2026-11-13):**
-  [author-brief mapping and proposed refinements](tools/formattor/docs/interior-design-skill-brief-mapping.md)
+  [author-brief mapping and proposed refinements](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/docs/interior-design-skill-brief-mapping.md)
   captures the reference's author intent, reading, series/preferences, production
   targets, and semantic text-role implications. This is design input, not approval
   of every questionnaire field, service, or new renderer capability.
@@ -1163,7 +1173,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 - **Semantic roles (owner clarification, 2026-11-13):** preparation skill and
   workflow require annotation/modification support, and downstream workflows,
   including translation, must preserve/transfer roles. See
-  [upstream ownership and role hand-off](tools/formattor/docs/semantic-role-handoff.md)
+  [upstream ownership and role hand-off](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/docs/semantic-role-handoff.md)
   and IDP-R10 through IDP-R12. These contracts/tools are not implemented by the
   current proposal-only schema or its byte-range validator.
 - **Skill implementation (2026-11-13):** converted `format-manuscript` to
@@ -1208,7 +1218,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   single-snapshot run-detail read fixes the gate-arrival race exposed by that
   check. Typecheck/build pass; no new live-model run or document rendering is
   claimed. See IDP-R14/IDP-C10 and the implemented slice in the
-  [design](tools/formattor/docs/interior-design-and-production.md).
+  [design](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/docs/interior-design-and-production.md).
   Vendor-aware effective-spec compilation, translation composition, production
   and page review remain pending. The separate editing content-only finish is removed; manuscript
   approval is not final publication. Design restarts preserve the approved basis;
@@ -1289,7 +1299,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   live inch conversion, the new heading, hidden internal fields and mobile
   layout. Browser authoring is scripted; no live-model or production test ran.
 - **Proposal-to-DOCX assessment (2026-11-15, IDP-C20):** completed a
-  [current field-level gap analysis](tools/formattor/docs/proposal-to-docx-gap-analysis.md)
+  [current field-level gap analysis](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/docs/proposal-to-docx-gap-analysis.md)
   before implementation. It distinguishes compiler/capability approval,
   missing DOCX behavior, underspecified role/page/font semantics and native
   build/QA/page-review delivery. A temporary synthetic DOCX probe confirms that
@@ -1303,7 +1313,7 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   structure is proposal intake, an
   implementation-independent format engine, and format implementations with
   DOCX default and potential InDesign. The
-  [design evaluation](tools/formattor/docs/formattor-package-design.md) maps the gaps
+  [design evaluation](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/docs/formattor-package-design.md) maps the gaps
   to component owners, proposes neutral contracts/capability negotiation,
   separates native composition from orchestration, and identifies migration
   of skill-local validation/profile authority without breaking standalone use.
@@ -1318,20 +1328,222 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   This supersedes C21's initial `workflow/src/formattor` location without
   changing its three-part architecture or default DOCX implementation.
   All seven related design/gap documents now live under the tool's `docs/`,
-  indexed by [the tool README](tools/formattor/README.md); instructions and
+  indexed by [the tool README](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/README.md); instructions and
   cross-references point to the new canonical location. IDP-D09 is resolved.
   Only documentation/project directories are present: no executable package,
   CLI, dependency installation or generator behavior has been implemented.
   Verified all seven relocations and 60 relative document links; no stale
   incoming references remain. LF and whitespace checks pass. No application
   tests or server restart were needed for this documentation-only change.
+- **Formatter repository extraction (2026-11-15, IDP-C24):** the owner selected
+  [cli1980/book-formatter](https://github.com/cli1980/book-formatter) as the
+  standalone repository. The existing README and all seven design/gap documents
+  were migrated and published at `237be7d`; `tools/formattor` is now a pinned
+  Git submodule instead of parent-tracked files. The tool preserves the source's
+  applicable MIT notice and has its own LF/contributor instructions.
+  Cross-repository document links use pinned commits, with provenance to host
+  baseline `ce7a55e`; host-source permalinks require that parent commit to be
+  published. Parent changes remain local. No skill/runtime code, generator
+  implementation, package installation or production behavior was moved/added.
+  Verified a fresh clone from the published formatter repository, all 27
+  internal links without a parent checkout, 33 source references against the
+  pinned host commit, and 12 incoming links against the published child commit.
+  The parent gitlink is mode 160000; the child is clean. Whitespace checks pass.
+- **Standalone language/design research (2026-11-15, IDP-C25):** drafted the
+  [research report](tools/formattor/docs/standalone-design-and-language-research.md)
+  and primary-source register in the formatter working tree. It compares
+  Python, TypeScript, Rust and C++, recommends Python conditionally, and maps
+  source/style/page/font/print/job gaps to explicit validation gates. A
+  reproducible construction/parser probe passes using installed libraries;
+  no real renderer, PDF/X check or performance benchmark ran. Language remains
+  open (IDP-D10); earlier Python-API wording is not treated as owner approval.
+  Research changes are uncommitted/unpublished; the parent gitlink remains
+  pinned to the published migration commit.
+- **Paragraph-only design roles (2026-11-15, IDP-C26):** refactored the host
+  skill/schema/helper to proposal contract `/2`. Roles reference whole CommonMark
+  paragraph/heading blocks by chapter ID/hash and catalog index/hash; inline
+  formatting remains the original Markdown markers. Added a standalone catalog
+  command, exact-identity/bounds/duplicate checks and workflow authoring guidance.
+  Empty role lists use ordinary body/heading defaults. Reading excerpts remain
+  byte-bound evidence, not formatting assignments. Updated the review wording
+  and standalone design/research records; upstream canonical annotations,
+  document generation and language selection remain pending. Old `/1` proposals
+  must be regenerated, not silently converted. Verified 23 proposal tests and
+  72 workflow/API cases, including a targeted rerun after correcting a new test's
+  front-matter assumption. Frontend build, 85 relative links, LF and whitespace
+  checks pass. No existing run/proposal has been rewritten or server restarted;
+  no formatter production or renderer/PDF verification is implied.
+- **Early formatter POC scope (2026-11-15, IDP-C27):** leave a saved minimally
+  formatted intermediate DOCX outside the early POC. The intended route is
+  verified Markdown + paragraph roles + approved design directly to DOCX, with
+  parsing and construction separated in code. Revisit an intermediate only if
+  later evidence warrants it, not as a committed follow-on feature. Scope/docs
+  only; no producer, new approval gate or deliverable/readiness promise added.
+- **DOCX widow/orphan policy (2026-11-15, IDP-C28):** accepted explicit lowering
+  `bool(widow_lines or orphan_lines)`, not exact DOCX line thresholds. Both zero
+  disables the combined control; either nonzero enables it. The proposal accepts
+  non-negative integers including zero, without an artificial four-line cap.
+  Updated skill/contract/schema and review guidance; native plans must record the
+  resolved boolean/policy. Other unsupported features still need diagnostics.
+  Verified 24 proposal tests, a design-review save regression (zero and mixed
+  values), six serialized DOCX flag cases, and the frontend build. No generator,
+  renderer or InDesign behavior has been implemented or certified.
+- **DOCX-only early POC (2026-11-15, IDP-C29):** defer PDF export and all
+  renderer-driven pagination, including Word/LibreOffice automation,
+  pagination-dependent field/TOC updates, page-count convergence, page images,
+  rendered-page checks/review and print preflight. The POC constructs editable
+  DOCX and checks input identity, content/structure and native settings; page
+  geometry/styles/sections/field definitions do not certify rendered behavior.
+  This is not a publication or print-readiness gate waiver. Scope/docs only;
+  no producer implemented and no existing run or artifact changed.
+- **Paragraph-based POC content boundary (2026-11-15, IDP-C30):** no images,
+  ordered/unordered lists or poetry-specific layout. Use paragraphs and the
+  agreed structural headings/source inline formatting. Unsupported constructs
+  or declared requirements must fail explicitly with source-located diagnostics,
+  not be omitted, flattened or accepted as partial success. Full block/inline
+  validation is required; cataloguing a paragraph does not establish support for
+  its containers/content. No semantic poetry detector is implied. Scope/docs
+  only; producer enforcement and its regression fixtures remain unimplemented.
+- **Explicit header/footer contract and DOCX map (2026-11-15, IDP-C31/R21):**
+  proposal `/3` replaces coarse furniture switches with document odd/even
+  behavior, default and unit-bound override section settings, header/footer
+  distances, first-page behavior, all six part variants, independent links,
+  paragraph styles/alignment and safe metadata/PAGE/NUMPAGES templates.
+  Schema/helper and review controls validate/edit these fields; old `/1` and
+  `/2` proposals need regeneration. Added the
+  [proposal-to-DOCX map](tools/formattor/docs/proposal-to-docx-map.md), separating
+  direct APIs, OOXML extensions, rules, open decisions and deferred behavior.
+  Verified 28 proposal tests, 74 workflow/API tests, desktop/mobile browser
+  editing/save/approval, the frontend build, and DOCX package construction
+  including all six furniture variants, distances, links and page fields.
+  Coverage checks account for all 92 design-system schema leaf paths; 91 relative
+  links, LF and whitespace checks pass. Browser verification also exposed a
+  concurrent metadata-import alias race: serialized that temporary global binding
+  and added a regression. No production compiler, field refresh, rendering,
+  server restart, commit or publication is implied.
+- **First standalone formatter POC started (2026-11-15, IDP-C32):**
+  restarted the existing Studio server at `http://127.0.0.1:8765` using the same
+  `.workflow-runs/studio-clean-20261114-190430` data root; seven runs remain and
+  no workers were active at restart. Implemented the provisional Python
+  `book-formatter` distribution/CLI and `book_formatter` API in the child repo.
+  Includes independent versioned interchange snapshots, exact preparation/source
+  and paragraph bindings, immutable effective plan, explicit plan-hash operation
+  authorization, direct DOCX construction and reopen checks before no-overwrite
+  publication. Headers/footers, sparse source emphasis, geometry/styles,
+  section starts and numbering instructions are in the bounded subset.
+  The [POC contract](tools/formattor/docs/poc.md) lists all explicit prototype
+  policies and unsupported constructs; policies are not additional owner-approved
+  product defaults. Verified 17 standalone tests in the project environment and
+  all 17 again after wheel installation into a clean temporary environment,
+  with copied fixtures/API/CLI execution outside the checkout. Wheel includes
+  all four schemas and the vendor profile; five interchange resources match
+  the host byte-for-byte. Source/resource LF, Python parsing, 90 child-document
+  relative links and whitespace checks pass. Studio still serves all seven runs.
+  Studio production wiring, persistent jobs, final artifact approval, full
+  resource-authority migration and all renderer/PDF work remain pending.
+  No existing run/proposal was rewritten, user artifact published or commit created.
+- **Header/footer content presets (2026-11-15, IDP-C33 / R22):**
+  proposal `/4` replaces paragraph `text` with structured `content`, selecting
+  book title, chapter name, author, page number, Page X of Y, or a custom
+  template. The schema's expansion table is shared by proposal validation,
+  review selectors and the standalone formatter; named choices cannot carry a
+  conflicting template. None is an explicitly blank, unlinked part. Existing
+  styles, alignment, section links and first/even-page settings stay separate.
+  The authoring skill/coordinator use the new choices; the exact selection,
+  resolved template and text/native-field chunks enter the authorized plan.
+  Verified 29 proposal tests, 76 workflow/API tests, all 18 formatter tests from
+  a clean wheel installation outside the checkout, and desktop/mobile browser
+  preset/custom/None save-and-approval checks. Frontend build, schema/fixture
+  parity, all 104 field-map leaves, Python/LF and whitespace checks pass.
+  Restarted Studio on its existing configuration with no active workers; all
+  eight recorded runs are preserved. No existing proposal or approval was
+  migrated or rewritten. Older proposals require regeneration/review.
+  Page fields remain uncalculated; no PDF, rendering or automatic two-sided
+  layout default is added. No commit or publication.
+- **Approved-proposal standalone test (2026-11-16 UTC, IDP-C34):**
+  verified the human design-approval receipt and exact proposal object, then
+  tested the standalone API without workflow integration. The original requested
+  DOCX plus print PDF and correctly failed `unsupported_target`. With explicit
+  user confirmation, a separate test proposal retained only its existing DOCX
+  target and received a distinct test identity; all layout/manuscript choices
+  remained unchanged. Native construction and an independent reopen check pass:
+  238 source paragraphs match in order across six sections, with five named
+  styles, requested blank headers and body PAGE field definitions without
+  fabricated cached values. Source/approval hashes and workflow revision/event
+  history remain unchanged. Private inputs, effective plan, candidate and audit
+  report stay under ignored `.workflow-runs/`, not in the source repository.
+  This is a successful DOCX-only construction test, not completion of the
+  approved bundle, workflow publication, rendering or print validation.
+- **Title-header follow-up test (2026-11-16 UTC, IDP-C35):** regenerated a
+  separate private DOCX-only candidate using the book-title preset in all five
+  body-section headers. The test uses an explicit centered Georgia 9 pt header
+  style copied from existing footer typography; front matter stays blank.
+  Reopen checks confirm exact title text, unchanged 238 manuscript paragraphs
+  and their styles, six sections, unchanged page geometry and identical footer
+  XML. Original approval, previous candidate, workflow state and events remain
+  unchanged. Header fit/rendering and print verification are not claimed.
+- **Quick Styles for post-generation editing (2026-11-16 UTC, IDP-C36 / R23):**
+  the standalone DOCX formatter now marks every generated BF.* paragraph style
+  as a Quick Style, including body, heading, special-role, header and footer
+  styles. The effective policy/capabilities expose `quick_styles: true`, and
+  reopened candidate verification rejects a missing flag before publication.
+  Verified all 19 standalone tests locally and again from a rebuilt wheel in a
+  clean environment outside the checkout, including API/CLI checks and a
+  negative candidate-publication regression. Existing artifacts and workflow
+  state stay unchanged. No schema option, rendering claim or automatic sync of
+  subsequent Word edits is introduced; Word's gallery preferences still apply.
+- **Workflow/Studio editable-DOCX integration (2026-11-16 UTC, IDP-C37 / R24):**
+  literary editing's existing approved-design flow now reaches a persisted
+  `produce-docx` step consuming only the installed formatter's public API.
+  A safe plan-summary gate authorizes the exact plan/prototype policies;
+  generation rechecks inputs/runtime and seals the actual verified DOCX and
+  build manifest before exposing a candidate. Native steps construct no agent
+  runtime or renderer. Explicit final editable acceptance binds the document,
+  plan, manifest and approved proposal before versioned library publication
+  and export. Studio supports candidate/accepted downloads on run/chapter
+  pages and accepted-object downloads from Works; Word edits are not synced.
+  New proposals must request only editable DOCX; PDF/mixed bundles are refused,
+  not rewritten. Retry owns a new path; changed plans require fresh consent;
+  design restarts invalidate stale candidates and retain archived evidence.
+  Evidence: [host adapter](workflow/src/production.py),
+  [workflow regressions](workflow/tests/test_workflow.py),
+  [API/download regressions](studio/tests/test_web.py) and
+  [real browser flow](studio/tests/test_cases.py). The 95-case combined suite
+  passes with six expected browser/live skips; separate changed-plan and
+  no-runtime CLI regressions also pass. All 19 standalone tests and the real
+  API/engine browser flow pass, including desktop/390 px layout, candidate hash,
+  final acceptance and library download. Frontend typecheck/build passes.
+  Restarted the idle Studio server on the same port/data root and verified all
+  nine raw run revisions/state hashes unchanged, with no worker auto-start.
+  Existing approved bundles/runs are not migrated; outdated execution still
+  requires an explicit workflow restart. Translation composition, PDF,
+  field refresh, font resolution, rendered pages and print certification remain
+  deferred/unimplemented. This does not close the full production milestone.
+- **HTML-free preparation with literal source preservation (2026-11-16 UTC,
+  IDP-C38 / R25):** corrected the preparation boundary exposed by a blocked
+  DOCX build. Empty DOCX paragraphs use ordinary blank-line spacing, never
+  generated `<br />` or placeholder/ornamental content. HTML-looking text
+  actually present in the original remains literal through Markdown escaping;
+  it is neither interpreted as formatting, stripped nor given invented code
+  styling. The shared preparation validator rejects parsed HTML blocks/inline
+  tags with chapter/file/block-start-line diagnostics before readiness. Literal
+  escaped text, existing code, autolinks and angle comparisons remain valid
+  under the general preparation contract; the DOCX POC's narrower content
+  limits remain unchanged. Verified 32 preparation, 29 proposal, 25 preparation-
+  evaluation and 20 standalone formatter tests, plus two focused workflow
+  regressions covering early rejection and successful DOCX delivery. Reopen
+  checks confirm original escaped tag/comment characters appear literally in
+  DOCX with no HTML styling. No live manuscripts, approved prepared revisions,
+  proposals or run records were rewritten. Existing faulty extractions require
+  a fresh revision using the updated skill and fresh dependent approval.
+  [Preparation contract](plugins/manuscript-studio/skills/prepare-manuscript/references/preparation-contract.md).
 - **Retained construction foundations:** the low-level
   [workflow/src/document_adapters.py](workflow/src/document_adapters.py)
   validates the settings, checks fonts, builds the DOCX, renders it with Word or
   LibreOffice, converges TOC page numbers, and rasterizes pages.
   [workflow/src/document_audit.py](workflow/src/document_audit.py) retains
   workflow-independent DOCX inspection. These utilities do not expose a legacy
-  formatter or complete the pending production integration.
+  formatter or complete the remaining print/translation production integration.
 - **Scope:**
   - An interior-design skill takes verified preparation, metadata, and agent
     reading (genre, synopsis, vibe, and related evidence) and emits a proposed

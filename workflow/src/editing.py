@@ -6,7 +6,7 @@ import json
 import sys
 import uuid
 
-from .interior import DEFAULT_FORMAT_TARGET, DESIGN_GATE, DESIGN_STAGE, PRODUCTION_PENDING, InteriorDesignPhase
+from .interior import DESIGN_STAGE, MANUSCRIPT_APPROVAL, InteriorDesignPhase
 from .prepared import WHOLE, PreparedManuscriptEngine
 from .storage import digest, now, plain, read_bytes
 
@@ -87,9 +87,6 @@ RETURN = (
 )
 
 
-MANUSCRIPT_APPROVAL = "approve-manuscript"
-
-
 class EditingEngine(InteriorDesignPhase, PreparedManuscriptEngine):
     chapter_folder = "chapters"
     operation = "literary-edit"
@@ -105,58 +102,6 @@ class EditingEngine(InteriorDesignPhase, PreparedManuscriptEngine):
         if state["stage"] == "passes":
             return self._enter_stage(state, MANUSCRIPT_APPROVAL)
         return super()._advance_stage(state)
-
-    def acceptance_details(self, state):
-        if state["stage"] != MANUSCRIPT_APPROVAL:
-            return super().acceptance_details(state)
-        return {"title": "Approve manuscript for formatting", "action_label": "Approve manuscript and continue", "finalizes": False,
-                "vendor_profiles": self.interior_validator.vendor_profiles().catalog(),
-                "format_target": state.get("format_target") or dict(DEFAULT_FORMAT_TARGET),
-                "notice": "Approval freezes this manuscript and its metadata for the final formatting phase. "
-                          "Interior design and its editable specification review start next. "
-                          "This does not publish or finalize the run, or approve any rendered pages. "
-                          "Restart manuscript approval to revise its basis."}
-
-    def prepare_acceptance(self, state, format_target):
-        if state["stage"] != MANUSCRIPT_APPROVAL:
-            return super().prepare_acceptance(state, format_target)
-        if format_target is None:
-            format_target = dict(DEFAULT_FORMAT_TARGET)
-        self.resolve_format_target(format_target)
-        state["format_target"] = format_target
-
-    def record_acceptance(self, state, receipt):
-        if state["stage"] != MANUSCRIPT_APPROVAL:
-            return super().record_acceptance(state, receipt)
-        state["manuscript_approval"] = receipt
-        target = state.get("format_target")
-        profile = self.pin_vendor_profile(state, target)
-        receipt["format_target"] = target
-        receipt["vendor_profile_sha256"] = profile["sha256"] if profile else None
-        self.freeze_design_basis(state)
-
-    def parse_free_reply(self, state, gate, text):
-        if gate["kind"] == DESIGN_GATE:
-            raise ValueError("Use the interior-design form to edit, approve or request a revision.")
-        return super().parse_free_reply(state, gate, text)
-
-    def before_metadata_edit(self, state):
-        if state.get("design_sources"):
-            raise ValueError("Restart manuscript approval before editing its frozen metadata.")
-
-    def advance(self, runtime):
-        if self.state().get("design_approval"):
-            with self.store.locked():
-                revision, state = self.store.load()
-                self._guard(state, "step")
-                if state["status"] != "READY":
-                    raise ValueError(f"Run is {state['status']}; resolve or retry it before advancing.")
-                self.verify(state)
-                if state.get("design_approval") and state["stage"] == DESIGN_STAGE:
-                    state.update(status="BLOCKED", error=PRODUCTION_PENDING)
-                    self.store.save(revision, state, "interior_design.production_unavailable")
-                    return state
-        return super().advance(runtime)
 
     @staticmethod
     def manuscript_path(chapter):
@@ -208,14 +153,6 @@ class EditingEngine(InteriorDesignPhase, PreparedManuscriptEngine):
 
     def reset_stage(self, state, stage):
         super().reset_stage(state, stage)
-        resets_approval = stage["id"] == MANUSCRIPT_APPROVAL or stage.get("preparation") or stage["id"] == "passes" or stage.get("iterate")
-        if resets_approval:
-            state.pop("manuscript_approval", None)
-        if stage["id"] == DESIGN_STAGE or resets_approval:
-            for key in list(state):
-                if key.startswith("design_") and (resets_approval or key not in (
-                        "design_sources", "design_metadata", "design_vendor_profile")):
-                    state.pop(key)
         if stage.get("preparation"):
             state.update(manuscript=None, stage_baseline={}, files_baseline={})
         elif stage["kind"] == "acceptance":

@@ -4,6 +4,15 @@ import { Markdown } from "./Markdown";
 
 const label = (name: string) => name.replaceAll("_", " ").replaceAll("-", " ");
 const internalFields = ["id", "vendor_id", "binding", "vendor_profile_ref"];
+const presetLabels: Record<string, string> = {
+  "book-title": "Book title", "chapter-name": "Chapter name", author: "Author",
+  "page-number": "Page number", "page-x-of-y": "Page X of Y", custom: "Custom template",
+};
+interface FieldChoices {
+  styles: { id: string; role: string }[];
+  units: string[];
+  sectionDefaults: JsonValue;
+}
 
 export function InteriorDesignReview({ run, gate, perform }: {
   run: RunDetail; gate: Gate; perform: (op: () => Promise<RunDetail>) => void;
@@ -19,7 +28,11 @@ export function InteriorDesignReview({ run, gate, perform }: {
   const [feedback, setFeedback] = useState("");
   const dirty = JSON.stringify(spec) !== JSON.stringify(initial);
   const blocking = proposal.questions.filter((q) => q.blocking);
-  const styles = (spec.design_system as { styles: { id: string }[] }).styles;
+  const styles = (spec.design_system as { styles: { id: string; role: string }[] }).styles;
+  const choices: FieldChoices = {
+    styles, units: proposal.basis.preparation.units.map((unit) => unit.chapter_id),
+    sectionDefaults: (spec.design_system as { furniture: { default_section: JsonValue } }).furniture.default_section,
+  };
   const { purpose, ...briefFields } = spec.edition_brief as Record<string, JsonValue>;
 
   function submit(action: "save" | "approve" | "request-revision") {
@@ -67,13 +80,20 @@ export function InteriorDesignReview({ run, gate, perform }: {
       <p>Proposal purpose: {purpose === "print-ready" ? "Print-ready" : label(String(purpose))}.
         This is read-only.</p>
       <SchemaFields name="Edition brief" value={briefFields} schema={schema.properties?.edition_brief ?? {}}
-        root={schema} onChange={(edition_brief) => setSpec({
+        root={schema} choices={choices} onChange={(edition_brief) => setSpec({
           ...spec, edition_brief: { ...edition_brief as Record<string, JsonValue>, purpose },
         })} />
       <SchemaFields name="Design system" value={spec.design_system} schema={schema.properties?.design_system ?? {}}
-        root={schema} onChange={(design_system) => setSpec({ ...spec, design_system })} />
+        root={schema} choices={choices} onChange={(design_system) => setSpec({ ...spec, design_system })} />
+      <p className="muted">Choose a header/footer content preset, None, or a custom template. Custom templates accept {"{work_title}"}, {"{chapter_title}"}, {"{author}"},
+        {" {page}"} and {"{page_count}"}. Page fields are not calculated in this POC.
+        An empty, unlinked part is blank; a linked part inherits and must have no local paragraphs.
+        Even/first variants need their corresponding different-page option enabled.
+        Section overrides replace all furniture settings for the selected unit.</p>
+      <p className="muted">For DOCX, widow/orphan values are switches, not exact line counts:
+        both zero turns protection off; either nonzero turns the combined protection on.</p>
       <details open>
-        <summary>Special text roles</summary>
+        <summary>Paragraph roles</summary>
         {proposal.text_roles.map((role) => <div key={role.id} className="design-field">
           <label>{role.name}: style
             <select aria-label={`${role.name} style`} value={spec.role_styles[role.id] ?? ""}
@@ -81,10 +101,10 @@ export function InteriorDesignReview({ run, gate, perform }: {
               {styles.map((style) => <option key={style.id} value={style.id}>{label(style.id)}</option>)}
             </select>
           </label>
-          <p className="muted">{role.function} ({role.occurrences.length} bound occurrences)</p>
+          <p className="muted">{role.function} ({role.occurrences.length} bound paragraphs)</p>
         </div>)}
         <p className="muted">Scope and literary classification stay bound to the manuscript. This form edits their style
-          mapping, not the text or occurrence boundaries.</p>
+          mapping, not the text or paragraph boundaries. Inline formatting comes from the original Markdown markers.</p>
       </details>
     </fieldset>
     <div className="controls">
@@ -112,17 +132,51 @@ export function InteriorDesignReview({ run, gate, perform }: {
   </div>;
 }
 
-function SchemaFields({ name, value, schema, root, onChange, geometry = false }: {
+function SchemaFields({ name, value, schema, root, onChange, choices, geometry = false, furnitureKind }: {
   name: string; value: JsonValue; schema: JsonSchema; root: JsonSchema; onChange: (v: JsonValue) => void;
-  geometry?: boolean;
+  choices: FieldChoices; geometry?: boolean; furnitureKind?: string;
 }) {
   if (internalFields.includes(name)) return null;
   const mm = geometry || name.endsWith("_mm");
+  const definition = schema.$ref?.split("/").at(-1);
   if (schema.$ref) {
     const key = schema.$ref.split("/").at(-1)!;
     schema = root.$defs?.[key] ?? {};
   }
   const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+  const kind = name === "headers" || name === "footers" ? name : furnitureKind;
+  const context = { choices, furnitureKind: kind };
+  const templates = root.$defs?.furniture_content?.["x-preset-templates"] ?? {};
+  if (definition === "furniture_content" && value && typeof value === "object" && !Array.isArray(value)) {
+    const preset = String(value.preset);
+    return <div className="design-field">
+      <label>Content preset
+        <select aria-label="Content preset" value={preset} onChange={(e) => {
+          const next = e.target.value;
+          onChange(next === "custom"
+            ? { preset: next, template: templates[preset] ?? String(value.template ?? "Custom text") }
+            : { preset: next });
+        }}>
+          {[...Object.keys(templates), "custom"].map((p) => <option key={p} value={p}>{presetLabels[p] ?? label(p)}</option>)}
+        </select>
+      </label>
+      {preset === "custom" ? <label>Custom template
+        <input aria-label="Custom template" value={String(value.template ?? "")}
+          onChange={(e) => onChange({ preset: "custom", template: e.target.value })} />
+      </label> : <span className="muted">Template: {templates[preset]}</span>}
+    </div>;
+  }
+  if (name === "style_id" || name === "chapter_id") {
+    const options = name === "style_id" ? choices.styles.map((style) => style.id) : choices.units;
+    return <label className="design-field">{name === "style_id" ? "Style" : "Section for prepared unit"}
+      <select aria-label={name === "style_id" ? "Style" : "Section for prepared unit"}
+        value={String(value)} onChange={(e) => onChange(e.target.value)}>
+        {options.map((option, i) => <option key={option} value={option}>
+          {name === "chapter_id" ? `${i + 1}: ${label(option)}` : label(option)}
+        </option>)}
+      </select>
+    </label>;
+  }
   if (schema.enum || schema.const !== undefined) {
     const options = schema.enum ?? [schema.const!];
     return <label className="design-field">{label(name)}
@@ -140,18 +194,68 @@ function SchemaFields({ name, value, schema, root, onChange, geometry = false }:
   }
   let field;
   if (Array.isArray(value)) {
+    const editable = name === "paragraphs" || name === "section_overrides";
+    const unusedUnit = choices.units.find((id) => !value.some((v) => v && typeof v === "object"
+      && !Array.isArray(v) && v.chapter_id === id));
+    function addItem() {
+      if (name === "section_overrides" && unusedUnit) {
+        onChange([...value as JsonValue[], { chapter_id: unusedUnit, settings: structuredClone(choices.sectionDefaults) }]);
+      } else if (name === "paragraphs") {
+        const role = kind === "headers" ? "header" : "footer";
+        const style = choices.styles.find((s) => s.role === role) ?? choices.styles[0];
+        onChange([...value as JsonValue[], {
+          style_id: style.id, alignment: role === "header" ? "left" : "center",
+          content: { preset: role === "header" ? "book-title" : "page-number" },
+        }]);
+      }
+    }
     field = <details><summary>{label(name)} ({value.length})</summary>
-      {value.map((v, i) => <SchemaFields key={i}
+      {value.map((v, i) => <div key={i}><SchemaFields
         name={name === "production_targets" ? `Output ${i + 1}`
           : v && typeof v === "object" && !Array.isArray(v) && typeof v.id === "string" ? v.id : String(i + 1)}
-        value={v} schema={schema.items ?? {}} root={root} geometry={mm}
-        onChange={(next) => onChange(value.map((old, index) => index === i ? next : old))} />)}
+        value={v} schema={schema.items ?? {}} root={root} geometry={mm} {...context}
+        onChange={(next) => onChange(value.map((old, index) => index === i ? next : old))} />
+        {editable && <button type="button" onClick={() => onChange(value.filter((_, index) => index !== i))}>
+          Remove {name === "paragraphs" ? "paragraph" : "section override"}
+        </button>}</div>)}
+      {editable && <button type="button" disabled={name === "section_overrides" && !unusedUnit} onClick={addItem}>
+        Add {name === "paragraphs" ? `${kind === "headers" ? "header" : "footer"} paragraph` : "section override"}
+      </button>}
     </details>;
   } else if (typeof value === "object") {
+    let presetControl;
+    if (definition === "furniture_part" && Object.keys(templates).length) {
+      const paragraphs = value.paragraphs as Record<string, JsonValue>[];
+      const first = paragraphs[0];
+      const content = first?.content as Record<string, JsonValue> | undefined;
+      const selected = value.link_to_previous ? "linked" : !paragraphs.length ? "none"
+        : paragraphs.length > 1 ? "multiple" : String(content?.preset);
+      const role = kind === "headers" ? "header" : "footer";
+      presetControl = <label className="design-field">{role === "header" ? "Header content" : "Footer content"}
+        <select aria-label={role === "header" ? "Header content" : "Footer content"} value={selected}
+          onChange={(e) => {
+            const preset = e.target.value;
+            const style = choices.styles.find((s) => s.role === role) ?? choices.styles[0];
+            onChange({ ...value, link_to_previous: false, paragraphs: preset === "none" ? [] : [{
+              style_id: first?.style_id ?? style.id,
+              alignment: first?.alignment ?? (role === "header" ? "left" : "center"),
+              content: preset === "custom" ? { preset, template: templates[String(content?.preset)]
+                ?? String(content?.template ?? `Custom ${role}`) } : { preset },
+            }] });
+          }}>
+          <option value="none">None (blank and unlinked)</option>
+          {Object.keys(templates).map((p) => <option key={p} value={p}>{presetLabels[p] ?? label(p)}</option>)}
+          <option value="custom">Custom template</option>
+          {selected === "linked" && <option value="linked" disabled>Linked to previous section</option>}
+          {selected === "multiple" && <option value="multiple" disabled>Multiple paragraphs (edit below)</option>}
+        </select>
+      </label>;
+    }
     field = <details open={name === "Design system" || name === "Edition brief" || name === "page"}>
       <summary>{label(name)}</summary>
+      {presetControl}
       {Object.entries(value).map(([key, v]) => <SchemaFields key={key} name={key} value={v} schema={schema.properties?.[key] ?? {}}
-        root={root} geometry={mm} onChange={(next) => onChange({ ...value, [key]: next })} />)}
+        root={root} geometry={mm} {...context} onChange={(next) => onChange({ ...value, [key]: next })} />)}
     </details>;
   } else if (typeof value === "boolean") {
     field = <label className="design-field"><input type="checkbox" checked={value}

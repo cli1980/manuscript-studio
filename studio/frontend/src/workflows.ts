@@ -106,6 +106,7 @@ export class ChapterViewerWorkflowUI extends WorkflowUI {
   override get hasChapterViewer() { return true; }
 
   override decisionPage(run: RunDetail) {
+    if (run.production && (run.gate?.kind === "docx_generation_review" || run.status === "WAITING_FOR_ACCEPTANCE")) return null;
     if (run.status === "WAITING_FOR_HUMAN" && run.gate) return viewer(run.id, run.gate.chapter_id);
     if (run.status === "WAITING_FOR_ACCEPTANCE" && run.acceptance) return viewer(run.id);
     return null;
@@ -182,7 +183,7 @@ export class EditingWorkflowUI extends ChapterViewerWorkflowUI {
     return `After preparation and metadata review you choose editing passes one at a time (${passes.join(", ")}), `
       + "in any order and as often as needed, and accept each pass's output. Finish editing and approve the manuscript; "
       + "the final formatting phase then starts automatically with interior design and its editable specification review. "
-      + "Document production and final publication are not connected to that phase yet.";
+      + "Review the generation plan, download the checked editable DOCX and accept it to finish. PDF and rendered-page checks are deferred.";
   }
 
   override panes(chapter: ChapterDetail): Pane[] {

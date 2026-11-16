@@ -152,6 +152,31 @@ class PreparationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "hash"):
             self.validate()
 
+    def test_raw_html_blocks_and_inline_tags_are_not_prepared_manuscript_content(self):
+        for markup in ("<br />", "<BR>", "<p>Text</p>", "<!-- spacer -->",
+                       "<!DOCTYPE html>", "<?instruction?>", "<![CDATA[text]]>",
+                       "Prose <br/> continues.", "Prose <span>inline</span> text.",
+                       "> <br />", "- Prose <em>inline</em>."):
+            with self.subTest(markup=markup):
+                path = self.revision / "chapters/0001.md"
+                path.write_bytes(("# Title\n\n" + markup + "\n").encode("utf-8"))
+                self.manifest["chapters"][0]["sha256"] = validator.digest(path)
+                with self.assertRaisesRegex(ValueError, r"chapter-1 \(chapters/0001.md\):line 3: Raw HTML"):
+                    self.validate()
+
+    def test_blank_spacing_and_literal_angle_text_are_not_html(self):
+        text = ("# Title\n\nFirst paragraph.\n\n\nSecond *paragraph*.\n\n"
+                "Literal \\<br /> and \\<span>text\\</span> and \\<!-- comment -->.\n\n"
+                "&lt;p&gt;, `<!-- literal -->`, and 2 < 3.\n\n"
+                "<https://example.com> and <writer@example.com>.\n\n"
+                "```html\n<span>literal code</span>\n```\n")
+        path = self.revision / "chapters/0001.md"
+        path.write_bytes(text.encode("utf-8"))
+        self.manifest["chapters"][0]["sha256"] = validator.digest(path)
+        before = path.read_bytes()
+        self.validate(check_sources=True)
+        self.assertEqual(path.read_bytes(), before)
+
     def test_original_change_is_detected_only_when_source_check_requested(self):
         self.source.write_bytes(b"Changed original\n")
         self.validate()

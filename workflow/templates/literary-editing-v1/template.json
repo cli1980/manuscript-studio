@@ -83,6 +83,7 @@
     {"id": "approve-manuscript", "kind": "acceptance"},
     {"id": "interior-design", "kind": "agent", "agent": "interior-design", "gates": ["question"],
      "owns": ["interior-design/"]},
+    {"id": "produce-docx", "kind": "production"},
     {"id": "accept", "kind": "acceptance"},
     {"id": "export", "kind": "export"}
   ],

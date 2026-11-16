@@ -13,6 +13,8 @@ th, td { border-bottom: 1px solid #e3e6ea; padding: 0.4rem 0.5rem; text-align: l
 th { background: #eef1f4; }
 .muted { color: #66707b; }
 .mono { font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem; }
+.docx-delivery .mono { overflow-wrap: anywhere; }
+.docx-delivery pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .panel { background: #fff; border: 1px solid #dde2e7; border-radius: 6px; padding: 0.8rem 1rem; margin: 1rem 0; }
 .panel summary h2 { display: inline; }
 .gate { border-left: 4px solid #d08a00; }

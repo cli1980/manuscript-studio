@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from workflow.src.storage import digest
 from .runner import FIXTURES, CaseRunner, load_cases
 
 HAS_WEB = importlib.util.find_spec("fastapi") and importlib.util.find_spec("httpx")
@@ -148,7 +149,49 @@ class StudioCaseTests(unittest.TestCase):
             expect(page.get_by_text("Questions before design approval", exact=True)).to_have_count(0)
             self.assertTrue(all(q["kind"] in ("author-input", "design-choice")
                                 for q in current["gate"]["design_review"]["proposal"]["questions"]))
-            page.locator("summary").filter(has_text=re.compile(r"^styles \(2\)$")).click()
+            furniture = page.locator("summary").filter(has_text=re.compile("^furniture$")).locator("..")
+            furniture.locator("summary").first.click()
+            defaults = furniture.locator("summary").filter(has_text=re.compile("^default section$")).locator("..")
+            defaults.locator("summary").first.click()
+            defaults.get_by_label("header distance mm", exact=True).fill("11")
+            expect(defaults.get_by_label("header distance mm in inches", exact=True)).to_have_text("(0.433 in)")
+
+            def part(group, variant):
+                collection = defaults.locator("summary").filter(has_text=re.compile("^" + group + "$")).locator("..")
+                if not collection.evaluate("(el) => el.open"):
+                    collection.locator("summary").first.click()
+                item = collection.locator("summary").filter(has_text=re.compile("^" + variant + "$")).locator("..")
+                item.locator("summary").first.click()
+                item.locator("summary").filter(has_text=re.compile(r"^paragraphs \(\d+\)$")).click()
+                return item
+
+            header = part("headers", "default")
+            header.get_by_label("Header content", exact=True).select_option("chapter-name")
+            expect(header.get_by_label("Header content", exact=True)).to_have_value("chapter-name")
+            header.get_by_label("Header content", exact=True).select_option("book-title")
+            header.get_by_label("Header content", exact=True).select_option("custom")
+            header.locator("summary").filter(has_text=re.compile("^1$")).click()
+            header.get_by_label("Custom template", exact=True).fill("Proof {work_title}")
+            header.get_by_role("combobox", name="Style", exact=True).select_option("running-head")
+            footer = part("footers", "default")
+            footer.get_by_label("Footer content", exact=True).select_option("page-x-of-y")
+            expect(footer.get_by_label("Footer content", exact=True)).to_have_value("page-x-of-y")
+            footer.get_by_label("Footer content", exact=True).select_option("custom")
+            footer.locator("summary").filter(has_text=re.compile("^1$")).click()
+            footer.get_by_label("Custom template", exact=True).fill("Page {page} / {page_count}")
+            blank = part("footers", "first")
+            blank.get_by_role("button", name="Add footer paragraph", exact=True).click()
+            expect(blank.get_by_role("button", name="Remove paragraph", exact=True)).to_have_count(1)
+            blank.get_by_role("button", name="Remove paragraph", exact=True).click()
+            blank.get_by_label("Footer content", exact=True).select_option("page-number")
+            blank.get_by_label("Footer content", exact=True).select_option("none")
+            expect(blank.get_by_label("Footer content", exact=True)).to_have_value("none")
+            overrides = furniture.locator("summary").filter(has_text=re.compile(r"^section overrides \(\d+\)$")).locator("..")
+            overrides.locator("summary").first.click()
+            overrides.get_by_role("button", name="Add section override", exact=True).click()
+            expect(overrides.get_by_role("button", name="Remove section override", exact=True)).to_have_count(2)
+            overrides.get_by_role("button", name="Remove section override", exact=True).last.click()
+            page.locator("summary").filter(has_text=re.compile(r"^styles \(4\)$")).click()
             body = page.locator("summary").filter(has_text=re.compile("^body$")).locator("..")
             body.locator("summary").first.click()
             body.locator("summary").filter(has_text=re.compile("^font$")).click()
@@ -171,6 +214,15 @@ class StudioCaseTests(unittest.TestCase):
             self.assertEqual(current["gate"]["design_review"]["proposal"]["design_system"]["styles"][0]["font"]["family"], "Garamond")
             self.assertEqual(current["gate"]["design_review"]["proposal"]["design_system"]["styles"][0]["font"]["size_pt"], 12)
             self.assertEqual(current["gate"]["design_review"]["proposal"]["revision"], 2)
+            saved_furniture = current["gate"]["design_review"]["proposal"]["design_system"]["furniture"]
+            self.assertEqual(saved_furniture["default_section"]["header_distance_mm"], 11)
+            self.assertEqual(saved_furniture["default_section"]["headers"]["default"]["paragraphs"][0]["content"],
+                             {"preset": "custom", "template": "Proof {work_title}"})
+            self.assertEqual(saved_furniture["default_section"]["footers"]["default"]["paragraphs"][0]["content"],
+                             {"preset": "custom", "template": "Page {page} / {page_count}"})
+            self.assertEqual(saved_furniture["default_section"]["footers"]["first"],
+                             {"link_to_previous": False, "paragraphs": []})
+            self.assertEqual(len(saved_furniture["section_overrides"]), 1)
             self.assertEqual(current["gate"]["design_review"]["proposal"]["vendor_profile"]["variant_id"], "hardcover")
             self.assertEqual(current["gate"]["design_review"]["proposal"]["edition_brief"]["purpose"], "editorial-review")
             evidence = os.environ.get("STUDIO_EVIDENCE_DIR")
@@ -187,9 +239,35 @@ class StudioCaseTests(unittest.TestCase):
             with page.expect_response(lambda r: r.url == run_url + "/interior-design") as approved:
                 page.get_by_role("button", name="Approve this design specification").click()
             self.assertTrue(approved.value.ok, approved.value.text())
-            expect(page.get_by_text(re.compile("Interior design approved. Deterministic document production"))).to_be_visible()
+            expect(page.get_by_role("heading", name="DOCX generation plan", exact=True)).to_be_visible()
             current = page.request.get(run_url).json()
-            self.assertEqual((current["status"], current["finalized"], current["attempts"]), ("BLOCKED", False, 2))
+            self.assertEqual((current["status"], current["finalized"], current["attempts"]), ("WAITING_FOR_HUMAN", False, 2))
+            self.assertEqual(current["gate"]["kind"], "docx_generation_review")
+            self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 391)
+            generate = page.get_by_role("button", name="Generate editable DOCX", exact=True)
+            expect(generate).to_be_disabled()
+            page.get_by_label("I authorize this exact editable-DOCX generation plan.").check()
+            with page.expect_response(lambda r: r.url == run_url + "/docx/authorize") as authorized:
+                generate.click()
+            self.assertTrue(authorized.value.ok, authorized.value.text())
+            expect(page.get_by_role("heading", name="Accept editable DOCX", exact=True)).to_be_visible()
+            self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 391)
+            with page.expect_download() as downloaded:
+                page.get_by_role("link", name="Download DOCX candidate", exact=True).click()
+            self.assertEqual(downloaded.value.suggested_filename, "manuscript.docx")
+            current = page.request.get(run_url).json()
+            self.assertEqual(digest(Path(downloaded.value.path()).read_bytes()), current["production"]["docx"]["sha256"])
+            expect(page.get_by_text("No PDF, rendered-page review", exact=False).first).to_be_visible()
+            if evidence:
+                page.screenshot(path=str(Path(evidence) / "docx-candidate-mobile.png"), full_page=True)
+            page.set_viewport_size({"width": 1280, "height": 900})
+            if evidence:
+                page.screenshot(path=str(Path(evidence) / "docx-candidate-desktop.png"), full_page=True)
+            page.get_by_label("I understand that accepting finalizes this run.").check()
+            with page.expect_response(lambda r: r.url == run_url + "/accept") as accepted:
+                page.get_by_role("button", name="Accept DOCX and finish", exact=True).click()
+            self.assertTrue(accepted.value.ok, accepted.value.text())
+            expect(page.get_by_role("link", name="Download accepted DOCX", exact=True)).to_be_visible()
             page.goto(origin + "/#/works/" + work["id"])
             expect(page.get_by_role("heading", name="Story", exact=True)).to_be_visible()
             expect(page.locator(".metadata tr").filter(
@@ -197,6 +275,9 @@ class StudioCaseTests(unittest.TestCase):
             expect(page.locator(".metadata tr").filter(
                 has=page.locator("th").filter(has_text=re.compile("^Manuscript language$")))).to_contain_text("zh")
             expect(page.get_by_role("heading", name="Detected or measured", exact=True)).to_be_visible()
+            with page.expect_download() as published:
+                page.get_by_role("link", name="literary-editing/v001/document.docx", exact=True).click()
+            self.assertEqual(digest(Path(published.value.path()).read_bytes()), current["production"]["docx"]["sha256"])
             self.assertEqual(errors, [])
             self.assertEqual(server_errors, [])
 

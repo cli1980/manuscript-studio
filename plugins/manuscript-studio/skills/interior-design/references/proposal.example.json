@@ -1,6 +1,6 @@
 {
-  "contract": "interior-design-proposal/1",
-  "schema_version": 1,
+  "contract": "interior-design-proposal/4",
+  "schema_version": 4,
   "proposal_id": "example-interior",
   "revision": 1,
   "status": "proposed",
@@ -125,12 +125,88 @@
           "widow_lines": 2,
           "orphan_lines": 2
         }
+      },
+      {
+        "id": "running-head", "role": "header", "heading_level": null,
+        "font": {
+          "family": "Georgia", "fallback_families": ["Times New Roman"],
+          "size_pt": 9, "weight": "regular", "italic": false, "color": "#000000",
+          "line_spacing": {"mode": "multiple", "value": 1}
+        },
+        "paragraph": {
+          "model": "block", "first_line_indent_mm": 0, "space_before_pt": 0,
+          "space_after_pt": 0, "alignment": "left", "indent_opening_paragraph": false,
+          "keep_with_next": false, "widow_lines": 0, "orphan_lines": 0
+        }
+      },
+      {
+        "id": "page-footer", "role": "footer", "heading_level": null,
+        "font": {
+          "family": "Georgia", "fallback_families": ["Times New Roman"],
+          "size_pt": 9, "weight": "regular", "italic": false, "color": "#000000",
+          "line_spacing": {"mode": "multiple", "value": 1}
+        },
+        "paragraph": {
+          "model": "block", "first_line_indent_mm": 0, "space_before_pt": 0,
+          "space_after_pt": 0, "alignment": "center", "indent_opening_paragraph": false,
+          "keep_with_next": false, "widow_lines": 0, "orphan_lines": 0
+        }
       }
     ],
     "navigation": {"include_toc": false, "toc_depth": 0, "scene_break": "preserve-source", "ornament": null},
     "furniture": {
-      "running_heads": "none",
-      "folio_position": "outside-footer",
+      "different_odd_even": true,
+      "default_section": {
+        "header_distance_mm": 10,
+        "footer_distance_mm": 12,
+        "different_first_page": true,
+        "headers": {
+          "default": {
+            "link_to_previous": false,
+            "paragraphs": [{"style_id": "running-head", "alignment": "left", "content": {"preset": "book-title"}}]
+          },
+          "even": {
+            "link_to_previous": false,
+            "paragraphs": [{"style_id": "running-head", "alignment": "right", "content": {"preset": "chapter-name"}}]
+          },
+          "first": {"link_to_previous": false, "paragraphs": []}
+        },
+        "footers": {
+          "default": {
+            "link_to_previous": false,
+            "paragraphs": [{"style_id": "page-footer", "alignment": "right", "content": {"preset": "page-number"}}]
+          },
+          "even": {
+            "link_to_previous": false,
+            "paragraphs": [{"style_id": "page-footer", "alignment": "left", "content": {"preset": "page-number"}}]
+          },
+          "first": {"link_to_previous": false, "paragraphs": []}
+        }
+      },
+      "section_overrides": [{
+        "chapter_id": "front-matter",
+        "settings": {
+          "header_distance_mm": 10,
+          "footer_distance_mm": 12,
+          "different_first_page": true,
+          "headers": {
+            "default": {
+              "link_to_previous": false,
+              "paragraphs": [{"style_id": "running-head", "alignment": "left", "content": {"preset": "book-title"}}]
+            },
+            "even": {
+              "link_to_previous": false,
+              "paragraphs": [{"style_id": "running-head", "alignment": "right", "content": {"preset": "chapter-name"}}]
+            },
+            "first": {"link_to_previous": false, "paragraphs": []}
+          },
+          "footers": {
+            "default": {"link_to_previous": false, "paragraphs": []},
+            "even": {"link_to_previous": false, "paragraphs": []},
+            "first": {"link_to_previous": false, "paragraphs": []}
+          }
+        }
+      }],
       "front_matter_numbering": "none",
       "body_numbering_start": 1
     }
@@ -146,9 +222,8 @@
         {
           "chapter_id": "chapter-one",
           "chapter_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
-          "start_byte": 0,
-          "end_byte": 20,
-          "text_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          "paragraph_index": 2,
+          "paragraph_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
         }
       ],
       "evidence_refs": ["sample-text"]

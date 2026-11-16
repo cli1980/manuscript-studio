@@ -49,6 +49,7 @@ export interface Gate {
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export interface JsonSchema {
+  "x-preset-templates"?: Record<string, string>;
   $ref?: string;
   type?: string | string[];
   properties?: Record<string, JsonSchema>;
@@ -62,11 +63,14 @@ export interface JsonSchema {
 export interface InteriorProposal {
   proposal_id: string;
   revision: number;
+  basis: { preparation: { units: { chapter_id: string }[] } };
   vendor_profile: VendorProfile | null;
   edition_brief: JsonValue;
   design_system: JsonValue;
   reading: { essence: string; genres: string[]; synopsis: string; mood: string[] };
-  text_roles: { id: string; name: string; function: string; style_id: string; occurrences: unknown[] }[];
+  text_roles: { id: string; name: string; function: string; style_id: string; occurrences: {
+    chapter_id: string; chapter_sha256: string; paragraph_index: number; paragraph_sha256: string;
+  }[] }[];
   questions: { id: string; question: string; kind: string; blocking: boolean; options: string[] }[];
   recommendations: { id: string; path: string; rationale: string; alternatives: string[] }[];
 }
@@ -93,6 +97,13 @@ export interface MetadataView {
 export interface MetadataField { field: string; group: "author" | "suggested" | "computed"; kind: string; options: string[]; pattern: string | null; minimum: number | null }
 
 export interface RunSummary {
+  production?: {
+    id: string; status: string; plan_sha256: string; proposal_sha256: string; accepted: boolean;
+    notice: string; attempts: number; error?: { code: string; message: string } | null;
+    summary: { units: number; paragraphs: number; styles: string[]; policy: Record<string, JsonValue>;
+      vendor_warnings: JsonValue[] };
+    docx: { sha256: string; bytes: number; name: string } | null;
+  } | null;
   id: string;
   execution?: ExecutionIdentity | null;
   retired: boolean;
@@ -279,6 +290,9 @@ export const api = {
   work: (id: string) => request<WorkDetail>(`/api/works/${encodeURIComponent(id)}`),
   artifact: (id: string, path: string) => request<string>(`/api/works/${encodeURIComponent(id)}/artifact?path=${encodeURIComponent(path)}`),
   sourceUrl: (id: string) => `/api/works/${encodeURIComponent(id)}/source`,  // A download link, not a fetch.
+  docxUrl: (id: string, buildId: string) => `/api/runs/${encodeURIComponent(id)}/docx/${encodeURIComponent(buildId)}`,
+  publishedDocxUrl: (id: string, publicationId: string) =>
+    `/api/works/${encodeURIComponent(id)}/docx/${encodeURIComponent(publicationId)}`,
   runs: () => request<RunSummary[]>("/api/runs"),
   run: (id: string) => request<RunDetail>(`/api/runs/${id}`),
   events: (id: string, after: number) => request<{ events: WorkflowEvent[]; last_id: number }>(`/api/runs/${id}/events?after=${after}`),
@@ -293,6 +307,8 @@ export const api = {
     gate_id: string; expected_sha256: string; action: "save" | "approve" | "request-revision";
     spec?: InteriorSpec; answers?: Record<string, string>; feedback?: string;
   }) => post<RunDetail>(`/api/runs/${id}/interior-design`, payload),
+  authorizeDocx: (id: string, gate_id: string, expected_plan_sha256: string) =>
+    post<RunDetail>(`/api/runs/${id}/docx/authorize`, { gate_id, expected_plan_sha256 }),
   accept: (id: string, acceptance_id: string, confirm_final: boolean, format_target?: FormatTarget) =>
     post<RunDetail>(`/api/runs/${id}/accept`, { acceptance_id, confirm_final, format_target }),
   editMetadata: (id: string, payload: { field: string; value: unknown; rationale: string; gate_id?: string }) => post<RunDetail>(`/api/runs/${id}/metadata`, payload),

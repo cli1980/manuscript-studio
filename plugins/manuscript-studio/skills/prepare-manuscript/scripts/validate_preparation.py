@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
+from markdown_it import MarkdownIt
 from referencing import Registry, Resource
 
 SCHEMAS = Path(__file__).resolve().parents[1] / "schemas"
@@ -89,6 +90,19 @@ def schema_check(validator, value, label):
         raise ValueError(f"{label}.{location}: {error.message}")
 
 
+def validate_manuscript_markdown(text, location):
+    for block in MarkdownIt("commonmark").parse(text):
+        pending = [block]
+        while pending:
+            token = pending.pop()
+            require(token.type not in ("html_block", "html_inline"),
+                    f"{location}:line {(block.map or [0])[0] + 1}: Raw HTML ({token.type}) "
+                    "is not allowed in manuscript Markdown. Use Markdown syntax and blank lines "
+                    "for paragraph spacing; do not encode empty paragraphs with <br />. "
+                    "Escape HTML-looking original text to preserve it literally, not as HTML.")
+            pending.extend(token.children or [])
+
+
 def validate(work_path, *, check_sources=False):
     work_path = plain_path(work_path)
     root = work_path.parent
@@ -127,8 +141,10 @@ def validate(work_path, *, check_sources=False):
             raw = path.read_bytes()
             require(not raw.startswith(b"\xef\xbb\xbf") and b"\r" not in raw and raw.endswith(b"\n"),
                     "Chapter Markdown must be UTF-8 without BOM, use LF, and end with LF.")
-            require(raw.decode("utf-8").strip(), "Chapter Markdown must not be empty.")
+            text = raw.decode("utf-8")
+            require(text.strip(), "Chapter Markdown must not be empty.")
             require(digest(path) == chapter["sha256"], "A prepared chapter hash does not match.")
+            validate_manuscript_markdown(text, f"{chapter['chapter_id']} ({chapter['file']})")
             require(all(span["source_id"] in sources for span in chapter["source_spans"]),
                     "Chapter source spans refer to an unknown source.")
             supplied = chapter.get("supplied_title")

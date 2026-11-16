@@ -459,6 +459,24 @@ class WorkflowService:
                 raise ValueError("This workflow has no interior-design review phase.")
             return engine.summary(engine.review_design(gate_id, expected_sha256, action, **fields))
 
+    def authorize_docx(self, run_id, gate_id, expected_plan_sha256):
+        with self.open_run(run_id) as engine:
+            if not hasattr(engine, "authorize_docx"):
+                raise ValueError("This workflow has no DOCX production phase.")
+            return engine.summary(engine.authorize_docx(gate_id, expected_plan_sha256))
+
+    def docx_candidate(self, run_id, build_id):
+        with self.open_run(run_id) as engine:
+            state = engine.state()
+            job = state.get("production")
+            if state["status"] == "CANCELLED" or not job or job["id"] != build_id or not job.get("result"):
+                raise ValueError("No current DOCX candidate with that build ID.")
+            artifact = job["result"]["docx"]
+            manifest = json.loads(engine.store.content(job["result"]["manifest"]))
+            if manifest["docx"] != artifact or manifest["build_id"] != build_id:
+                raise ValueError("The DOCX download does not match its build manifest.")
+            return engine.store.content(artifact), artifact["sha256"]
+
     def accept(self, run_id, acceptance_id, *, confirm_final=False, decision_source="human", format_target=None):
         with self.open_run(run_id) as engine:
             return engine.summary(engine.accept(acceptance_id, confirm_final=confirm_final,

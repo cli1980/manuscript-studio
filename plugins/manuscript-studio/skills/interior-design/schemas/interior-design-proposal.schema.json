@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://manuscript-studio.example/schemas/interior-design-proposal/1",
+  "$id": "https://manuscript-studio.example/schemas/interior-design-proposal/4",
   "title": "Interior design proposal",
   "description": "An evidence-bound standalone or reusable design proposal, never approval or production QA.",
   "type": "object",
   "additionalProperties": false,
   "required": ["contract", "schema_version", "proposal_id", "revision", "status", "basis", "vendor_profile", "reading", "author_preferences", "edition_brief", "design_system", "text_roles", "evidence", "recommendations", "questions"],
   "properties": {
-    "contract": {"const": "interior-design-proposal/1"},
-    "schema_version": {"const": 1},
+    "contract": {"const": "interior-design-proposal/4"},
+    "schema_version": {"const": 4},
     "proposal_id": {"$ref": "#/$defs/id"},
     "revision": {"type": "integer", "minimum": 1},
     "status": {"const": "proposed"},
@@ -164,10 +164,21 @@
         },
         "furniture": {
           "type": "object", "additionalProperties": false,
-          "required": ["running_heads", "folio_position", "front_matter_numbering", "body_numbering_start"],
+          "required": ["different_odd_even", "default_section", "section_overrides", "front_matter_numbering", "body_numbering_start"],
           "properties": {
-            "running_heads": {"enum": ["none", "chapter-title", "work-title", "work-and-author"]},
-            "folio_position": {"enum": ["none", "center-footer", "outside-footer"]},
+            "different_odd_even": {"type": "boolean"},
+            "default_section": {"$ref": "#/$defs/section_furniture"},
+            "section_overrides": {
+              "type": "array",
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["chapter_id", "settings"],
+                "properties": {
+                  "chapter_id": {"$ref": "#/$defs/id"},
+                  "settings": {"$ref": "#/$defs/section_furniture"}
+                }
+              }
+            },
             "front_matter_numbering": {"enum": ["none", "roman", "arabic"]},
             "body_numbering_start": {"type": "integer", "minimum": 1}
           }
@@ -175,7 +186,8 @@
       }
     },
     "text_roles": {
-      "type": "array", "minItems": 1,
+      "description": "Whole-paragraph design roles only. Inline formatting comes from source Markdown markers; an empty list uses ordinary body/heading styles.",
+      "type": "array",
       "items": {
         "type": "object", "additionalProperties": false,
         "required": ["id", "name", "kind", "function", "style_id", "occurrences", "evidence_refs"],
@@ -185,7 +197,7 @@
           "kind": {"enum": ["body", "heading", "special"]},
           "function": {"$ref": "#/$defs/text"},
           "style_id": {"$ref": "#/$defs/id"},
-          "occurrences": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/occurrence"}},
+          "occurrences": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/paragraph_occurrence"}},
           "evidence_refs": {"$ref": "#/$defs/refs"}
         }
       }
@@ -264,7 +276,7 @@
       "required": ["id", "role", "heading_level", "font", "paragraph"],
       "properties": {
         "id": {"$ref": "#/$defs/id"},
-        "role": {"enum": ["body", "title", "heading", "quote", "special", "folio", "toc"]},
+        "role": {"enum": ["body", "title", "heading", "quote", "special", "header", "footer", "folio", "toc"]},
         "heading_level": {"type": ["integer", "null"], "minimum": 1, "maximum": 6},
         "font": {
           "type": "object", "additionalProperties": false,
@@ -297,13 +309,93 @@
             "alignment": {"enum": ["left", "center", "right", "justified"]},
             "indent_opening_paragraph": {"type": "boolean"},
             "keep_with_next": {"type": "boolean"},
-            "widow_lines": {"type": "integer", "minimum": 1, "maximum": 4},
-            "orphan_lines": {"type": "integer", "minimum": 1, "maximum": 4}
+            "widow_lines": {
+              "type": "integer", "minimum": 0,
+              "description": "DOCX maps nonzero to enabled, not a literal line threshold. Either nonzero widow_lines or orphan_lines enables the combined control."
+            },
+            "orphan_lines": {
+              "type": "integer", "minimum": 0,
+              "description": "DOCX maps nonzero to enabled, not a literal line threshold. Both widow_lines and orphan_lines must be zero to disable the combined control."
+            }
           }
         }
       }
     },
+    "section_furniture": {
+      "type": "object", "additionalProperties": false,
+      "required": ["header_distance_mm", "footer_distance_mm", "different_first_page", "headers", "footers"],
+      "properties": {
+        "header_distance_mm": {"type": "number", "minimum": 0},
+        "footer_distance_mm": {"type": "number", "minimum": 0},
+        "different_first_page": {"type": "boolean"},
+        "headers": {"$ref": "#/$defs/furniture_variants"},
+        "footers": {"$ref": "#/$defs/furniture_variants"}
+      }
+    },
+    "furniture_variants": {
+      "type": "object", "additionalProperties": false,
+      "required": ["default", "even", "first"],
+      "properties": {
+        "default": {"$ref": "#/$defs/furniture_part"},
+        "even": {"$ref": "#/$defs/furniture_part"},
+        "first": {"$ref": "#/$defs/furniture_part"}
+      }
+    },
+    "furniture_part": {
+      "type": "object", "additionalProperties": false,
+      "required": ["link_to_previous", "paragraphs"],
+      "properties": {
+        "link_to_previous": {"type": "boolean"},
+        "paragraphs": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["style_id", "alignment", "content"],
+            "properties": {
+              "style_id": {"$ref": "#/$defs/id"},
+              "alignment": {"enum": ["left", "center", "right", "justified"]},
+              "content": {"$ref": "#/$defs/furniture_content"}
+            }
+          }
+        }
+      }
+    },
+    "furniture_content": {
+      "description": "A named content preset or explicit custom template. None is an empty, unlinked part, not an empty paragraph.",
+      "type": "object", "additionalProperties": false,
+      "required": ["preset"],
+      "properties": {
+        "preset": {"enum": ["book-title", "chapter-name", "author", "page-number", "page-x-of-y", "custom"]},
+        "template": {
+          "type": "string", "minLength": 1,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]+$",
+          "description": "Custom only: literal text with {work_title}, {chapter_title}, {author}, {page}, {page_count}; doubled braces escape literals. No Markdown, format specifiers or conversions."
+        }
+      },
+      "if": {"properties": {"preset": {"const": "custom"}}},
+      "then": {"required": ["template"]},
+      "else": {"not": {"required": ["template"]}},
+      "x-preset-templates": {
+        "book-title": "{work_title}",
+        "chapter-name": "{chapter_title}",
+        "author": "{author}",
+        "page-number": "{page}",
+        "page-x-of-y": "Page {page} of {page_count}"
+      }
+    },
+    "paragraph_occurrence": {
+      "description": "One complete paragraph from the helper's CommonMark catalog, bound to exact chapter bytes. No inline or byte-range assignments.",
+      "type": "object", "additionalProperties": false,
+      "required": ["chapter_id", "chapter_sha256", "paragraph_index", "paragraph_sha256"],
+      "properties": {
+        "chapter_id": {"$ref": "#/$defs/id"},
+        "chapter_sha256": {"$ref": "#/$defs/hash"},
+        "paragraph_index": {"type": "integer", "minimum": 1},
+        "paragraph_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
     "occurrence": {
+      "description": "Reading evidence only; byte-ranged excerpts are not formatting assignments.",
       "type": "object", "additionalProperties": false,
       "required": ["chapter_id", "chapter_sha256", "start_byte", "end_byte", "text_sha256"],
       "properties": {

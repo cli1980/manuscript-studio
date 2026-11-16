@@ -383,7 +383,31 @@ class WebApiTests(unittest.TestCase):
                    if q["blocking"]}
         approved = self.post(f"/api/runs/{run_id}/interior-design", {**current, "action": "approve", "answers": answers})
         self.assertEqual(approved.status_code, 200, approved.text)
-        self.assertEqual((approved.json()["status"], approved.json()["finalized"]), ("BLOCKED", False))
+        run = self.settle(run_id)
+        self.assertEqual((run["status"], run["gate"]["kind"]), ("WAITING_FOR_HUMAN", "docx_generation_review"))
+        self.assertIsNone(run["gate"]["binding_text"])
+        self.assertEqual(self.post(f"/api/runs/{run_id}/docx/authorize", {
+            "gate_id": run["gate"]["id"], "expected_plan_sha256": "0" * 64}).status_code, 400)
+        authorized = self.post(f"/api/runs/{run_id}/docx/authorize", {
+            "gate_id": run["gate"]["id"], "expected_plan_sha256": run["production"]["plan_sha256"]})
+        self.assertEqual(authorized.status_code, 200, authorized.text)
+        run = self.settle(run_id)
+        self.assertEqual(run["status"], "WAITING_FOR_ACCEPTANCE")
+        docx_url = f"/api/runs/{run_id}/docx/{run['production']['id']}"
+        document = self.client.get(docx_url)
+        self.assertEqual(document.status_code, 200, document.text if document.status_code != 200 else "")
+        self.assertEqual(digest(document.content), run["production"]["docx"]["sha256"])
+        self.assertEqual(document.headers["x-content-sha256"], digest(document.content))
+        self.assertEqual(self.client.get(f"/api/runs/{run_id}/docx/wrong-build").status_code, 400)
+        accepted = self.post(f"/api/runs/{run_id}/accept", {
+            "acceptance_id": run["acceptance"]["acceptance_id"], "confirm_final": True})
+        self.assertEqual(accepted.status_code, 200, accepted.text)
+        run = self.settle(run_id)
+        self.assertEqual((run["status"], run["finalized"]), ("COMPLETED", True))
+        work = self.client.get(f"/api/works/{added.json()['id']}").json()
+        published = work["heads"]["literary-editing/v001/document.docx"]
+        delivery = self.client.get(f"/api/works/{work['id']}/docx/{published['id']}")
+        self.assertEqual(delivery.content, document.content)
         self.assertEqual(calls, ["prepare", "interior-design", "interior-design"])
 
     def test_removed_formatting_route_and_read_only_history(self):
@@ -432,6 +456,37 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(prepared["settings"]["passage_size"], 1500)
         work = self.client.get("/api/works/" + added.json()["id"]).json()
         self.assertEqual(work["manuscript_language"], "zh")
+
+    def test_outdated_run_can_be_stopped_to_start_another_workflow(self):
+        added = self.post("/api/works", {"upload": {"name": "story.md",
+                           "data": base64.b64encode(self.source.read_bytes()).decode()}})
+        work_id = added.json()["id"]
+        run = self.post("/api/runs", {"template_id": "literary-translation-v1", "work_id": work_id})
+        self.assertEqual(run.status_code, 200, run.text)
+        run_id = run.json()["id"]
+        self.settle(run_id)
+        path = self.app.state.workers.server_root / "runs" / run_id
+        store = Store(path)
+        try:
+            with store.locked():
+                revision, state = store.load()
+                state["engine"]["sha256"] = "0" * 64
+                store.save(revision, state, "test.engine_changed")
+        finally:
+            store.close()
+        outdated = self.client.get(f"/api/runs/{run_id}").json()
+        actions = {a["action"]: a["enabled"] for a in outdated["available_actions"]}
+        self.assertFalse(outdated["engine_current"])
+        self.assertTrue(actions["stop"])
+        self.assertFalse(actions["reply"])
+        self.assertEqual(self.client.get(f"/api/works/{work_id}").json()["unfinished_run"], run_id)
+        stopped = self.post(f"/api/runs/{run_id}/stop")
+        self.assertEqual(stopped.status_code, 200, stopped.text)
+        self.assertEqual(stopped.json()["status"], "CANCELLED")
+        self.assertIsNone(self.client.get(f"/api/works/{work_id}").json()["unfinished_run"])
+        started = self.post("/api/runs", {"template_id": "literary-translation-v1", "work_id": work_id})
+        self.assertEqual(started.status_code, 200, started.text)
+        self.settle(started.json()["id"])
 
     def test_run_details_do_not_mix_state_snapshots_when_a_gate_appears(self):
         from workflow.src.engine import Engine

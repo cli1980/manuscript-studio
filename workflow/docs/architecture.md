@@ -615,7 +615,7 @@ Literary editing instead proceeds from zero or more accepted editing passes to m
 
 The legacy standalone formatter, its skill/template, post-publication UI actions and CLI/E2E launch options are removed. Old runs remain read-only historical snapshots with no active format-spec approval sheet and cannot occupy the active-run slot. No old approval is automatically converted into a new design approval.
 
-Design approval currently blocks at unimplemented deterministic production/page review. Translation's composition of this final phase also remains pending. Neither a completed Markdown export nor a saved design is evidence of an approved rendered edition. See the [current design](../../tools/formattor/docs/interior-design-and-production.md) for requirement traceability and remaining decisions.
+Design approval currently blocks at unimplemented deterministic production/page review. Translation's composition of this final phase also remains pending. Neither a completed Markdown export nor a saved design is evidence of an approved rendered edition. See the [current design](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/docs/interior-design-and-production.md) for requirement traceability and remaining decisions.
 
 Workflow-neutral `python-docx` construction, Word/LibreOffice rendering and DOCX inspection primitives remain as foundations for the future producer. They are not a second application-level formatting route.
 

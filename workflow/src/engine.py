@@ -364,12 +364,12 @@ class Engine:
             return True
 
     def _guard(self, state, operation):
-        if state["status"] in TERMINAL or not self.engine_outdated(state):
+        if state["status"] in TERMINAL or operation == "stop" or not self.engine_outdated(state):
             return
         if self.finalized(state) and operation in ("step", "retry"):
             return  # A finalized run may still write its accepted snapshots.
         raise WorkflowError("engine_updated", "The workflow engine changed after this run was created; "
-                                              "only reading and restarting the workflow are available.")
+                                              "only reading, stopping and restarting the workflow are available.")
 
     def _require_mutable(self, state):
         if state["status"] == "CANCELLED":
@@ -456,6 +456,13 @@ class Engine:
                                              "template_id": state["template_id"], "acceptance": state["acceptance"],
                                              "source": state["source"], "chapters": state["outputs"]})
         return files
+
+    def delivery_files(self, state):
+        """Additional verified native outputs included in final publication/export."""
+        return {}
+
+    def production_step(self, revision, state):
+        raise ValueError("This workflow has no deterministic production implementation.")
 
     def accepted_output(self, state):
         return None
@@ -598,6 +605,8 @@ class Engine:
                 raise ValueError(f"Run is {state['status']}; resolve or retry it before advancing.")
             self.verify(state)
             stage = self.stage_def(state)
+            if stage["kind"] == "production":
+                return self.production_step(revision, state)
             if stage["kind"] == "export":
                 return self._export(revision, state)
             if stage["kind"] in ("metadata_review", "select", "acceptance"):
@@ -758,6 +767,8 @@ class Engine:
                 raise ValueError("A response is required.")
             self.verify(state)
             gate = state["gate"]
+            if gate["kind"] == "docx_generation_review":
+                raise ValueError("Use the DOCX generation form to authorize this exact plan.")
             presented = [gate[key] for key in ("binding", "sheet", "settings") if gate.get(key)] + gate.get("documents", [])
             for item in presented:
                 if digest(read_bytes(self.file(item["path"]))) != item["sha256"]:
@@ -1002,6 +1013,8 @@ class Engine:
             "export_path", "document_path", "manuscript_language", "restart_of", "superseded_by", "settings",
             "handed_off_work", "execution")}
         result["chapter_id"] = iteration["chapter_id"] if iteration else None
+        result["requires_runtime"] = self._stage_or_empty(state).get("kind") == "agent"
+        result["production"] = self.production_view(state) if hasattr(self, "production_view") else None
         iterations = state.get("iterations") or []
         whole = next((item for item in iterations if item["chapter_id"] == "_whole"), None)
         result["whole_book_status"] = whole["status"] if whole else None
@@ -1066,7 +1079,8 @@ class Engine:
         add("restart_workflow", not terminal and not finalized and status != "RUNNING",
             locked_reason if (terminal or finalized) else "An agent turn is running.",
             confirmation="The current run is stopped and a new run of this workflow starts on the same work.")
-        add("stop", mutable and status != "RUNNING", locked_reason or "An agent turn is running.",
+        add("stop", not terminal and not finalized and status != "RUNNING",
+            locked_reason if terminal or finalized else "An agent turn is running.",
             irreversible=True, confirmation="Stopping cancels the run permanently; its artifacts and history are kept.")
         return actions
 

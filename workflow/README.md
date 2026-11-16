@@ -22,7 +22,8 @@ Implementation modules live in `workflow/src/`:
 | `prepared.py` | Shared preparation stage, prepared-package verification, per-chapter iterations, restart chapter, metadata review |
 | `translation.py` | `literary-translation-v1` prompts, translation gate rules, chapter completion, accepted-output publication |
 | `editing.py` | `literary-editing-v1`: developmental, line, and copy editing passes chosen by the user, each chapter by chapter with a whole-book pass |
-| `interior.py` | Embedded interior-design proposal hand-off and revision-bound native human form review; production remains pending |
+| `interior.py` | Embedded interior-design proposal hand-off, native human review and manuscript/design approval lifecycle |
+| `production.py` | Thin standalone-formatter API adapter: persisted exact-plan authorization, checked DOCX candidates and editable delivery |
 | `document_audit.py` | Workflow-independent DOCX inspection primitives |
 | `library.py` | Per-work artifact library with an append-only publication log |
 | `service.py` | The service API shared by the CLI and the future web application; run/work index |
@@ -87,7 +88,8 @@ From the repository root, with Python 3.12 or newer:
 
 ```text
 python -m venv .venv-workflow
-.venv-workflow/Scripts/python.exe -m pip install -r workflow/requirements.txt
+git submodule update --init --recursive tools/formattor
+.venv-workflow/Scripts/python.exe -m pip install -r workflow/requirements.txt -e tools/formattor
 .venv-workflow/Scripts/python.exe -m workflow --help
 ```
 
@@ -294,7 +296,8 @@ service API and lives in [`studio/`](../studio/README.md).
 
 ```text
 prepare → metadata review → [choose a pass → run it → accept its output]*
-  → approve manuscript → final formatting (design → review → production/pages pending)
+  → approve manuscript → design/review → authorize DOCX plan → build/check
+  → accept editable DOCX → publish/export
 ```
 
 Upload the text to edit (for example an accepted translation's assembled
@@ -331,8 +334,9 @@ cannot change outside their own jobs. The developmental pass collects
 chapter evidence and ends with one whole-book verdict and `DEV-###`
 recommendations; it never changes text. Approval freezes the manuscript and
 metadata before the interior-design proposal and editable specification review.
-Design approval currently blocks at unimplemented deterministic production/page
-review; it does not publish a completed edition or a content-only version.
+Design approval starts the bounded DOCX production phase; generation requires a
+separate exact-plan authorization and publication requires final editable-DOCX
+acceptance. No PDF/page review or print-ready claim is included.
 Reopening manuscript approval invalidates design decisions, while restarting
 only design preserves the approved content. Restarting a completed editorial
 chapter, and other details, are deferred to the rest of M4.
@@ -342,8 +346,31 @@ chapter, and other details, are deferred to the rest of M4.
 Formatting is the last embedded phase after manuscript approval, not a separate
 workflow launched from a completed publication. In literary editing it starts
 with `interior-design` and the editable specification-review form described
-above. Translation composition, deterministic production and rendered-page review
-remain pending.
+above. The `produce-docx` production stage consumes the standalone formatter's
+public `prepare`/`build` API, not the old document adapters or an agent.
+Translation composition and rendered-page/print production remain pending.
+
+The native generation gate presents a safe summary and plan hash; the complete
+source-bearing plan remains private. Studio can authorize it; the CLI also offers:
+
+```text
+.venv-workflow/Scripts/python.exe -m workflow review RUN
+.venv-workflow/Scripts/python.exe -m workflow authorize-docx RUN --gate GATE-ID --plan-sha256 PLAN-SHA256
+.venv-workflow/Scripts/python.exe -m workflow step RUN
+```
+
+Only a single editable-DOCX target is accepted. Missing dependencies, unsupported
+source/design features and PDF bundles fail explicitly. Source/design receipts,
+exact plan/runtime, candidate bytes and the build manifest are bound by hashes.
+A changed plan returns to authorization; retries never overwrite existing files.
+Design restarts invalidate stale candidate download IDs and authorizations.
+
+After candidate inspection and final acceptance, versioned publication/export
+contains `document.docx`, `docx-build.json` and `design-proposal.json` in addition
+to the accepted Markdown artifacts. This finalizes only the editable-document
+POC edition. It does not calculate fields/pagination, resolve fonts, render pages,
+export PDF or certify print readiness. Quick Styles facilitate later Word edits;
+those edits do not update workflow snapshots. Existing runs are not migrated.
 
 Manuscript approval can select IngramSpark with paperback/hardcover binding.
 The binding variant is automatic, pinned and incorporated into the proposal.
@@ -359,8 +386,9 @@ one-unfinished-run slot. This does not cancel, migrate or approve them.
 
 Workflow-neutral construction/rendering utilities remain in
 [document_adapters.py](src/document_adapters.py), with DOCX inspection in
-[document_audit.py](src/document_audit.py). They are foundations for the pending
-producer, not an alternative application route or a claim of production readiness.
+[document_audit.py](src/document_audit.py). They are retained foundations for
+later rendering/print work, not used by the standalone POC adapter or exposed
+as another application route.
 
 ## State, failures, and recovery
 
@@ -457,7 +485,7 @@ There is no checkpoint rollback. When saved state is not sound, restart instead:
 
 All restarts are refused after final acceptance (`run_finalized`). Each run
 records an engine identity (a hash of `workflow/src/` and its template directory);
-after an engine update an unfinished run allows only reading and `restart`
+after an engine update an unfinished run allows reading, `stop` and `restart`
 (`engine_updated`). `import RUN_DIR` registers a pre-M1 run directory as a new
 work; a completed translation publishes its accepted output so it can still be
 formatted, and other imported runs allow only reading and `restart`.
@@ -485,7 +513,8 @@ them is future work. Mutable glossary/voice files are reread by the skill and
 snapshotted at chapter completion; automatic dependency-aware invalidation for
 arbitrary external continuity edits is not implemented yet.
 
-Run deterministic tests (install `requirements-docx.txt` to include builder tests):
+Run deterministic tests after installing the standalone formatter as above
+(install `requirements-docx.txt` to include retained low-level builder tests):
 
 ```text
 .venv-workflow/Scripts/python.exe -m unittest workflow.tests.test_workflow -v
