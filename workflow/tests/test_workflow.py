@@ -1873,16 +1873,25 @@ class WorkflowTests(unittest.TestCase):
             self.engine.authorize_docx(old_gate["id"], old_job["plan_sha256"])
 
     def test_docx_cli_authorizes_and_builds_without_constructing_an_agent_runtime(self):
-        self.approved_docx_design()
-        prefix = ["--server-root", str(self.service.root), "--owner", "tester"]
-        with patch.object(cli, "CodexRuntime", side_effect=AssertionError("No runtime for native production")), \
-                contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(cli.main(prefix + ["step", self.run_id]), 0)
-            state = self.engine.state()
-            self.assertEqual(cli.main(prefix + ["authorize-docx", self.run_id, "--gate", state["gate"]["id"],
-                                                "--plan-sha256", state["production"]["plan_sha256"]]), 0)
-            self.assertEqual(cli.main(prefix + ["step", self.run_id]), 0)
-        self.assertEqual(self.engine.state()["status"], "WAITING_FOR_ACCEPTANCE")
+        for configured in (False, True):
+            with self.subTest(execution_profile=configured):
+                self.approved_docx_design()
+                prefix = ["--server-root", str(self.service.root), "--owner", "tester"]
+                if configured:
+                    data = profile_data()
+                    data["models"][0]["workflows"] = ["literary-editing"]
+                    path = self.base / "native-profile.json"
+                    path.write_text(json.dumps(data), encoding="utf-8")
+                    prefix += ["--execution-profile", str(path)]
+                with patch.object(cli, "CodexRuntime", side_effect=AssertionError("No native runtime")), \
+                        patch.object(ExecutionProfile, "runtime", side_effect=AssertionError("No profile runtime")), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(cli.main(prefix + ["step", self.run_id]), 0)
+                    state = self.engine.state()
+                    self.assertEqual(cli.main(prefix + ["authorize-docx", self.run_id, "--gate", state["gate"]["id"],
+                                                        "--plan-sha256", state["production"]["plan_sha256"]]), 0)
+                    self.assertEqual(cli.main(prefix + ["step", self.run_id]), 0)
+                self.assertEqual(self.engine.state()["status"], "WAITING_FOR_ACCEPTANCE")
 
     def test_docx_unsupported_content_blocks_without_silent_partial_delivery(self):
         self.start_editing(["# One\n\n- A list item is outside the POC.\n"])

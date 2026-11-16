@@ -1519,6 +1519,20 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   requires an explicit workflow restart. Translation composition, PDF,
   field refresh, font resolution, rendered pages and print certification remain
   deferred/unimplemented. This does not close the full production milestone.
+- **PR #6 rebase/integration verification (2026-11-16 UTC, IDP-C37):**
+  rebased the formatter branch onto `origin/main` at `9179818` after runtime
+  PR #5 merged. Conflict resolution preserves the shared compatible-model
+  picker, pre-cancellation restart validation and execution-profile provenance
+  alongside the DOCX approval/delivery flow. Run details retain token-usage
+  aggregation while describing one state snapshot; run lists still omit usage.
+  Native CLI production constructs neither Codex nor a configured profile
+  runtime; the CLI regression exercises both configurations. Verified the
+  132-test workflow/profile/API/case suite (nine expected browser/live/optional-
+  harness skips), all nine browser/case checks (one expected live skip),
+  six usage tests, 20 standalone formatter tests, and the expanded native-CLI
+  regression. Frontend typecheck/build pass. Checks used isolated worktree/test
+  data; no live run, manuscript or approval was changed. The formatter submodule
+  remains pinned to `9288dc7`; no formatter behavior or POC scope changed.
 - **HTML-free preparation with literal source preservation (2026-11-16 UTC,
   IDP-C38 / R25):** corrected the preparation boundary exposed by a blocked
   DOCX build. Empty DOCX paragraphs use ordinary blank-line spacing, never
