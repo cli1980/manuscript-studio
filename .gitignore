@@ -5,6 +5,7 @@
 __pycache__/
 /.workflow-runs/
 /.venv-workflow/
+/execution-profile.user.json
 
 # Long manuscript cases are local-only manual tests.
 /evals/cases/literary-translation/zh-en-ciqing-001/

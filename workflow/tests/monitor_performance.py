@@ -16,6 +16,8 @@ KINDS = (
     "execution.started", "execution.thread", "execution.result", "execution.failed",
     "thread/started", "turn/started", "turn/completed", "thread/tokenUsage/updated",
     "item/started", "item/completed", "review.received", "e2e.delegated_approval", "artifacts.accepted",
+    "runtime.turn_started", "runtime.turn_completed", "runtime.tool_started",
+    "runtime.tool_completed", "runtime.usage",
 )
 TOOL_TYPES = {"commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall", "webSearch"}
 TOKEN_FIELDS = ("inputTokens", "cachedInputTokens", "outputTokens", "reasoningOutputTokens")
@@ -86,6 +88,7 @@ def analyze(events, state, captured_at):
                 "command_chars": 0, "command_output_chars": 0, "file_diff_chars": 0,
                 "input_gate": pending_receipt["gate"]["kind"] if pending_receipt else None,
                 "input_receipt_type": pending_receipt["parsed"]["type"] if pending_receipt else None,
+                "execution": payload.get("execution"),
             }
             attempts.append(current)
             pending_receipt = None
@@ -93,6 +96,24 @@ def analyze(events, state, captured_at):
             continue
         if kind == "execution.thread":
             current["thread_id"] = payload["thread_id"]
+        elif kind == "runtime.turn_started":
+            current["turn_start"] = timestamp
+            current["turn_id"] = payload["id"]
+        elif kind == "runtime.turn_completed":
+            current["turn_end"] = timestamp
+        elif kind == "runtime.tool_started":
+            current["tools"].setdefault(payload["id"], timestamp)
+        elif kind == "runtime.tool_completed":
+            started = current["tools"].pop(payload["id"], None)
+            if started is not None:
+                current["spans"].append((started, timestamp))
+                current["tool_count"] += 1
+            current["failed_commands"] += bool(payload.get("failed"))
+        elif kind == "runtime.usage":
+            current["usage_updates"] += 1
+            for source, target in (("input", "inputTokens"), ("output", "outputTokens"),
+                                   ("cacheRead", "cachedInputTokens")):
+                current["tokens"][target] += payload.get(source) or 0
         elif kind == "turn/started":
             current["turn_start"] = timestamp
             current["turn_id"] = payload["turn"]["id"]
@@ -157,7 +178,7 @@ def analyze(events, state, captured_at):
         entry = {key: value for key, value in attempt.items()
                  if key not in ("start", "end", "turn_start", "turn_end", "tools", "spans", "context_samples")}
         entry.update({key: round(value, 3) if value is not None else None for key, value in measured.items()})
-        entry["model"] = models.get(attempt["thread_id"])
+        entry["model"] = (attempt.get("execution") or {}).get("model") or models.get(attempt["thread_id"])
         entry["finished"] = attempt["end"] is not None
         entry["context_first_input_tokens"] = next(iter(attempt["context_samples"]), None)
         entry["context_last_input_tokens"] = attempt["context_samples"][-1] if attempt["context_samples"] else None

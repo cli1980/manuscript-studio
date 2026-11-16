@@ -6,6 +6,7 @@ import { GatePanel } from "./GatePanel";
 import { ChapterPanes } from "./ChapterPanes";
 import { clearComments, type InlineComment } from "./CommentableText";
 import { runState, useLive } from "../live";
+import { TokenUsage } from "./TokenUsage";
 
 // The chapter viewer: a run's review page, generic across workflows. It lays out the chapter list, the reading
 // panes, and the decision slots; the run's WorkflowUI decides what differs (the panes, decision wording, statuses).
@@ -94,6 +95,7 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
       <p><a href={`#/runs/${runId}`}>← Run {runId.slice(0, 8)}</a></p>
       <h1>Chapters</h1>
       {run.data && <RunStatusBar run={run.data} />}
+      {run.data && <TokenUsage usage={run.data.usage} />}
       <ErrorBox error={index.error} />
       {unattached && data && !data.prepared && decision(false)}
       {data && !data.prepared && !unattached && <p className="muted">The agent is preparing the manuscript; chapters appear here

@@ -1,15 +1,15 @@
-"""Small synchronous Codex App Server stdio adapter; no model SDK dependency."""
+"""Common operation contract and the Codex App Server protocol adapter."""
 
 from __future__ import annotations
 
 import json
-import queue
-import subprocess
-import threading
-import time
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Protocol
+
+from .stdio import StdioTransport
+from .usage import CodexUsage
 
 
 @dataclass(frozen=True)
@@ -31,84 +31,39 @@ class CodexRuntime:
         self.timeout = timeout
 
     def run(self, request, on_event, on_thread):
-        process = subprocess.Popen(
-            self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, encoding="utf-8", bufsize=1, cwd=request.cwd,
-        )
-        messages = queue.Queue()
-        stderr = []
+        with StdioTransport(self.command, cwd=request.cwd, timeout=self.timeout, name="Codex") as transport:
+            next_id = 0
+            pending = deque()
 
-        def read_stdout():
-            try:
-                for line in process.stdout:
-                    try:
-                        messages.put(json.loads(line))
-                    except json.JSONDecodeError:
-                        messages.put(RuntimeError("App Server emitted invalid JSON."))
-            finally:
-                messages.put(EOFError("App Server closed its output."))
+            def receive():
+                while True:
+                    message = transport.receive()
+                    if "method" not in message or "id" not in message:
+                        return message
+                    method = message["method"]
+                    on_event("runtime.request", {"method": method, "declined": True})
+                    if method in ("item/commandExecution/requestApproval", "item/fileChange/requestApproval"):
+                        transport.send({"id": message["id"], "result": {"decision": "decline"}})
+                    else:
+                        transport.send({"id": message["id"], "error": {
+                            "code": -32601, "message": "Unsupported interactive request; use saved domain gates."}})
 
-        def read_stderr():
-            for line in process.stderr:
-                stderr.append(line.rstrip())
-                del stderr[:-20]
+            def rpc(method, params):
+                nonlocal next_id
+                next_id += 1
+                call_id = next_id
+                transport.send({"id": call_id, "method": method, "params": params})
+                while True:
+                    message = receive()
+                    if message.get("id") == call_id and "method" not in message:
+                        if "error" in message:
+                            raise RuntimeError(f"{method}: {message['error']}")
+                        return message["result"]
+                    pending.append(message)
 
-        readers = [threading.Thread(target=read_stdout, daemon=True),
-                   threading.Thread(target=read_stderr, daemon=True)]
-        for reader in readers:
-            reader.start()
-        deadline = time.monotonic() + self.timeout
-        next_id = 0
-        pending = []
-
-        def send(message):
-            process.stdin.write(json.dumps(message, ensure_ascii=False) + "\n")
-            process.stdin.flush()
-
-        def receive():
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise TimeoutError("Codex turn exceeded the configured execution timeout.")
-            try:
-                message = messages.get(timeout=remaining)
-            except queue.Empty as exc:
-                raise TimeoutError("Codex turn exceeded the configured execution timeout.") from exc
-            if isinstance(message, Exception):
-                raise RuntimeError(f"{message} {' '.join(stderr)}")
-            # No permission escalation is supported in this first CLI iteration.
-            if "method" in message and "id" in message:
-                on_event("runtime.request", message)
-                if message["method"] in (
-                    "item/commandExecution/requestApproval", "item/fileChange/requestApproval"
-                ):
-                    send({"id": message["id"], "result": {"decision": "decline"}})
-                else:
-                    send({"id": message["id"], "error": {
-                        "code": -32601, "message": "Unsupported interactive runtime request; use saved domain gates."
-                    }})
-                return receive()
-            if "method" in message:
-                on_event(message["method"], message.get("params", {}))
-            return message
-
-        def rpc(method, params):
-            nonlocal next_id
-            next_id += 1
-            call_id = next_id
-            send({"id": call_id, "method": method, "params": params})
-            while True:
-                message = receive()
-                if message.get("id") == call_id and "method" not in message:
-                    if "error" in message:
-                        raise RuntimeError(f"{method}: {message['error']}")
-                    return message["result"]
-                # Notifications can arrive before the response, including turn/completed.
-                pending.append(message)
-
-        try:
             rpc("initialize", {"clientInfo": {"name": "manuscript_workflow", "version": "0.1.0"},
                                "capabilities": {"experimentalApi": False}})
-            send({"method": "initialized", "params": {}})
+            transport.send({"method": "initialized", "params": {}})
             params = {"cwd": str(request.cwd), "approvalPolicy": "never",
                       "sandbox": "workspace-write"}
             if request.model:
@@ -126,32 +81,43 @@ class CodexRuntime:
                                   "networkAccess": False},
             })
             turn_id = turn["turn"]["id"]
-            final = None
-            while True:
-                message = pending.pop(0) if pending else receive()
-                params = message.get("params", {})
-                if params.get("threadId") != thread_id:
-                    continue
-                method = message.get("method")
-                if method == "item/completed" and params.get("turnId") == turn_id:
-                    item = params["item"]
-                    if item.get("type") == "agentMessage":
-                        final = item["text"]
-                if method == "turn/completed" and params["turn"]["id"] == turn_id:
-                    if params["turn"]["status"] != "completed":
-                        raise RuntimeError(f"Codex turn did not complete: {params['turn']}")
-                    if final is None:
-                        raise ValueError("Completed turn had no final structured message.")
-                    return json.loads(final)
-        finally:
-            if process.poll() is None:
-                process.terminate()
+            on_event("runtime.turn_started", {"id": turn_id})
+            final, usage = None, CodexUsage()
             try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
-            for reader in readers:
-                reader.join(timeout=2)
-            for stream in (process.stdin, process.stdout, process.stderr):
-                stream.close()
+                while True:
+                    message = pending.popleft() if pending else receive()
+                    params = message.get("params", {})
+                    if params.get("threadId") != thread_id:
+                        continue
+                    method = message.get("method")
+                    if method == "turn/completed" and params["turn"]["id"] == turn_id:
+                        failed = params["turn"]["status"] != "completed"
+                        on_event("runtime.turn_completed", {"id": turn_id, "failed": failed})
+                        if failed:
+                            raise RuntimeError(f"Codex turn did not complete: {params['turn']}")
+                        if final is None:
+                            raise ValueError("Completed turn had no final structured message.")
+                        return json.loads(final)
+                    if params.get("turnId") != turn_id:
+                        continue
+                    if method in ("item/started", "item/completed"):
+                        item = params["item"]
+                        if item.get("type") in ("commandExecution", "fileChange", "mcpToolCall",
+                                                "dynamicToolCall", "webSearch"):
+                            kind = "runtime.tool_started" if method == "item/started" else "runtime.tool_completed"
+                            on_event(kind, {"id": item.get("id"), "tool": item["type"],
+                                            "failed": item.get("exitCode") not in (None, 0)})
+                        if method == "item/completed" and item.get("type") == "agentMessage":
+                            final = item["text"]
+                    elif method == "thread/tokenUsage/updated":
+                        delta = usage.update(params.get("tokenUsage", {}))
+                        if delta is not None:
+                            on_event("runtime.usage", {"id": turn_id, "accounting": "delta-v1",
+                                                      "partial": usage.partial, **delta})
+            except (TimeoutError, KeyboardInterrupt):
+                try:
+                    transport.send({"id": "interrupt", "method": "turn/interrupt",
+                                    "params": {"threadId": thread_id, "turnId": turn_id}})
+                except RuntimeError:
+                    pass
+                raise

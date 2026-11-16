@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from .engine import finalization_notice
+from .execution import ExecutionProfile
 from .runtime import CodexRuntime
 from .service import WorkflowService
 
@@ -90,8 +91,12 @@ def parser():
     result.add_argument("--server-root", type=Path, default=Path(".workflow-runs"),
                         help="Server root holding the run/work index, work libraries, and runs.")
     result.add_argument("--owner", help="Owner recorded on new works and runs (default: OS user name).")
+    result.add_argument("--execution-profile", type=Path, help="Startup execution profile JSON.")
+    result.add_argument("--user-execution-profile", type=Path,
+                        help="User JSON overlay for endpoints, models, and default model; requires --execution-profile.")
     sub = result.add_subparsers(dest="command", required=True)
     sub.add_parser("templates", help="List registered workflow templates.")
+    sub.add_parser("models", help="Show the startup profile's configured model choices.")
     sub.add_parser("reindex", help="Rebuild the index from work libraries and per-run state.")
     works = sub.add_parser("works", help="Inspect works and their libraries.")
     work_sub = works.add_subparsers(dest="works_command", required=True)
@@ -114,7 +119,7 @@ def parser():
     origin.add_argument("--work", help="Start this workflow on an existing work.")
     create.add_argument("--manuscript-language", help="Required with --source, e.g. zh-CN.")
     create.add_argument("--publication", help="Derived templates: the accepted-output publication (default: latest).")
-    create.add_argument("--model", help="Model for every agent.")
+    create.add_argument("--model", help="Configured model key with --execution-profile; otherwise a runtime model ID.")
     create.add_argument("--agent-model", action="append", metavar="AGENT=MODEL", help="Model for one agent.")
     create.add_argument("--passage-size", type=int, metavar="N",
                         help="Maximum passage size for this run (characters for CJK text, else words); "
@@ -166,7 +171,8 @@ def parser():
 def main(argv=None):
     args = parser().parse_args(argv)
     try:
-        with WorkflowService(args.server_root, owner=args.owner) as service:
+        profile = ExecutionProfile.load(args.execution_profile, args.user_execution_profile)
+        with WorkflowService(args.server_root, owner=args.owner, execution_profile=profile) as service:
             return run(service, args)
     except ModuleNotFoundError as exc:
         print(f"workflow: missing dependency ({exc}); install workflow/requirements-docx.txt for native formatting.",
@@ -182,6 +188,10 @@ def main(argv=None):
 
 def run(service, args):
     command = args.command
+    if command == "models":
+        emit(service.execution_profile.public() if service.execution_profile else
+             {"name": "codex-default", "harness": "codex", "models": []})
+        return 0
     if command == "templates":
         emit(service.list_templates())
     elif command == "reindex":
@@ -222,7 +232,10 @@ def run(service, args):
                                         agent_models=agent_models(args.agent_model),
                                         settings={"passage_size": args.passage_size} if args.passage_size else None)
         show(service, run_id)
-        print(f'\nNext: python -m workflow --server-root "{service.root}" step {run_id}')
+        profile_option = f' --execution-profile "{args.execution_profile}"' if args.execution_profile else ""
+        if args.user_execution_profile:
+            profile_option += f' --user-execution-profile "{args.user_execution_profile}"'
+        print(f'\nNext: python -m workflow --server-root "{service.root}"{profile_option} step {run_id}')
     elif command == "runs":
         emit(service.list_runs(work_id=args.work))
     elif command == "events":
@@ -240,11 +253,15 @@ def run(service, args):
         if command == "step":
             if args.timeout <= 0:
                 raise ValueError("Timeout must be positive.")
+            profile = service.execution_profile
+            if profile and (args.codex != "codex" or args.timeout != 900):
+                raise ValueError("With --execution-profile, configure command and timeout in that profile.")
             with service.open_run(args.run) as engine:
                 kind = engine._stage_or_empty(engine.state()).get("kind")
-            if kind == "agent" and shutil.which(args.codex) is None:
+            if not profile and kind == "agent" and shutil.which(args.codex) is None:
                 raise ValueError("Codex executable not found. Install/sign in to Codex or pass --codex PATH.")
-            service.step(args.run, CodexRuntime([args.codex, "app-server"], args.timeout))
+            service.step(args.run, profile.runtime() if profile else
+                         CodexRuntime([args.codex, "app-server"], args.timeout))
         elif command == "metadata":
             value = json.loads(args.value_file.read_text(encoding="utf-8-sig"))
             service.edit_metadata(args.run, args.field, value, args.reason, gate_id=args.gate)

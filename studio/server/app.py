@@ -41,7 +41,7 @@ KEEPALIVE = 15  # Seconds between stream pings, so a client can tell a quiet fee
 
 
 def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", timeout=900, owner=None,
-               extra_origins=()):
+               extra_origins=(), execution_profile=None):
     server_root = plain(Path(server_root))
     WorkflowService(server_root, owner=owner).close()  # Create the root and index up front.
     hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
@@ -52,8 +52,9 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
             raise ValueError(f"Only loopback http origins can be allowed: {origin}")
         origins.add(origin)
         hosts.add(origin.removeprefix("http://"))
-    workers = Workers(server_root, runtime_factory or (lambda: CodexRuntime([codex, "app-server"], timeout)),
-                      owner=owner)
+    runtime_factory = runtime_factory or (execution_profile.runtime if execution_profile else
+                                         lambda: CodexRuntime([codex, "app-server"], timeout))
+    workers = Workers(server_root, runtime_factory, owner=owner, execution_profile=execution_profile)
     live = Watcher(server_root, workers)
 
     @contextlib.asynccontextmanager
@@ -89,10 +90,15 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         return JSONResponse({"detail": str(exc)}, status_code=status)
 
     def service():
-        with WorkflowService(server_root, owner=owner) as value:
+        with WorkflowService(server_root, owner=owner, execution_profile=execution_profile) as value:
             yield value
 
     # ----- templates and works -------------------------------------------------------------
+
+    @app.get("/api/execution")
+    def execution():
+        return execution_profile.public() if execution_profile else {
+            "name": "codex-default", "harness": "codex", "models": []}
 
     @app.get("/api/templates")
     def templates(svc: WorkflowService = Depends(service)):
@@ -233,7 +239,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
     def runs(work_id: str | None = None, svc: WorkflowService = Depends(service)):
         result = []
         for row in reversed(svc.list_runs(work_id=work_id)):
-            summary = svc.get_run(row["id"])
+            summary = svc.get_run(row["id"], include_usage=False)
             result.append({**summary, "created_at": row["created_at"], "updated_at": row["updated_at"],
                            "worker": workers.status(row["id"])})
         return result

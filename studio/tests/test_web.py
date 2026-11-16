@@ -1,17 +1,70 @@
 """Run: python -m unittest studio.tests.test_web -v (requires studio/requirements.txt)."""
 
 import base64
+import contextlib
 import importlib.util
+import io
 import json
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from workflow.src.execution import ExecutionProfile
+from workflow.src.service import WorkflowService
 from workflow.src.storage import digest, now
+from workflow.tests.test_execution import profile_data
 
 HAS_WEB = importlib.util.find_spec("fastapi") and importlib.util.find_spec("httpx")
 ORIGIN = "http://127.0.0.1:8765"
+
+
+@unittest.skipUnless(HAS_WEB, "Install studio/requirements.txt.")
+class StartupProfileTests(unittest.TestCase):
+    def test_server_entrypoint_exposes_merged_startup_snapshot_and_user_model_selection(self):
+        from fastapi.testclient import TestClient
+        from studio.server.__main__ import main
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            project, user = root / "project.json", root / "user.json"
+            project.write_text(json.dumps(profile_data()), encoding="utf-8")
+            overlay = {"default_model": "personal",
+                       "models": [{"key": "personal", "model": "personal-model", "endpoint": "fixture",
+                                   "workflows": ["literary-translation"]}]}
+            user.write_text(json.dumps(overlay), encoding="utf-8")
+            with patch("studio.server.__main__.uvicorn.run") as launch:
+                main(["--server-root", str(root / "server"), "--execution-profile", str(project),
+                      "--user-execution-profile", str(user)])
+            app = launch.call_args.args[0]
+            overlay["models"][0]["model"] = "changed-after-startup"
+            user.write_text(json.dumps(overlay), encoding="utf-8")
+            with TestClient(app, base_url=ORIGIN) as client:
+                catalog = client.get("/api/execution").json()
+                self.assertEqual(catalog["default_model"], "personal")
+                self.assertEqual([m["model_key"] for m in catalog["models"]], ["choice", "personal"])
+                self.assertEqual(catalog["models"][1]["model"], "personal-model")
+                self.assertNotIn("api_key_env", json.dumps(catalog))
+                work = client.post("/api/works", headers={"Origin": ORIGIN}, json={
+                    "upload": {"name": "story.md", "data": base64.b64encode(b"# Story\n\nText.\n").decode()},
+                    "manuscript_language": "en"}).json()
+                created = client.post("/api/runs", headers={"Origin": ORIGIN}, json={
+                    "template_id": "literary-translation-v1", "work_id": work["id"], "start": False})
+                self.assertEqual(created.status_code, 200, created.text)
+                self.assertEqual(created.json()["execution"]["model"], "personal-model")
+                self.assertFalse(created.json()["worker"]["active"])
+
+    def test_server_rejects_overlay_without_project_before_starting(self):
+        from studio.server.__main__ import main
+
+        with patch("studio.server.__main__.uvicorn.run") as launch:
+            with contextlib.redirect_stderr(io.StringIO()) as error:
+                with self.assertRaises(SystemExit) as caught:
+                    main(["--user-execution-profile", "not-read.json"])
+            self.assertEqual(caught.exception.code, 2)
+            self.assertIn("requires --execution-profile", error.getvalue())
+            launch.assert_not_called()
 
 
 def context(request):
@@ -243,6 +296,25 @@ class WebApiTests(unittest.TestCase):
             time.sleep(0.05)
         return self.client.get(f"/api/runs/{run_id}").json()
 
+    def test_run_detail_usage_is_aggregated_read_only_and_not_added_to_the_run_list(self):
+        work = self.post("/api/works", {
+            "upload": {"name": "original.md", "data": base64.b64encode(self.source.read_bytes()).decode()},
+            "manuscript_language": "zh"}).json()
+        created = self.post("/api/runs", {"template_id": "literary-translation-v1",
+                                         "work_id": work["id"], "start": False}).json()
+        self.assertIsNone(created["usage"]["total_tokens"])
+        with WorkflowService(Path(self.temp.name) / "server") as svc, svc.open_run(created["id"]) as engine:
+            engine.store.event("execution.started", {"execution": {"harness": "pi"}})
+            engine.store.event("runtime.usage", {"input": 100, "output": 20, "cacheRead": 70})
+            before = len(list(engine.store.events()))
+            for _ in range(2):
+                usage = self.client.get(f"/api/runs/{created['id']}").json()["usage"]
+                self.assertEqual(usage["total_tokens"], 120)
+                self.assertEqual(usage["cached_input_tokens"], 70)
+                self.assertFalse(usage["partial"])
+            self.assertEqual(len(list(engine.store.events())), before)
+        self.assertNotIn("usage", self.client.get("/api/runs").json()[0])
+
     def test_translation_runs_through_every_gate_from_the_browser_api(self):
         upload = {"name": "original.md", "data": base64.b64encode(self.source.read_bytes()).decode()}
         refused = self.post("/api/runs", {"template_id": "literary-translation-v1", "upload": upload,
@@ -386,6 +458,36 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(response.headers["content-disposition"],
                          "attachment; filename=\"_ _draft_.md\"; filename*=UTF-8''%E6%B4%9E%20%28draft%29.md")
         self.assertEqual(self.client.get("/api/works/no-such-work/source").status_code, 404)
+
+    def test_startup_profile_catalog_and_workflow_model_selection(self):
+        from fastapi.testclient import TestClient
+        from studio.server.app import create_app
+
+        data = profile_data()
+        data["models"].append({**data["models"][0], "key": "second-choice", "model": "another-model"})
+        profile = ExecutionProfile(data)
+        # Mutating the input cannot hot-reload the already constructed profile.
+        data["models"][0]["model"] = "changed-outside-server"
+        app = create_app(Path(self.temp.name) / "profile-server", execution_profile=profile)
+        with TestClient(app, base_url=ORIGIN) as client:
+            catalog = client.get("/api/execution").json()
+            self.assertEqual(catalog["models"][0]["model"], "vendor/family/test-model")
+            self.assertNotIn("api_key_env", json.dumps(catalog))
+            work = client.post("/api/works", headers={"Origin": ORIGIN}, json={
+                "upload": {"name": "original.md", "data": base64.b64encode(self.source.read_bytes()).decode()},
+                "manuscript_language": "zh"}).json()
+            payload = {"template_id": "literary-translation-v1", "work_id": work["id"], "start": False}
+            rejected = client.post("/api/runs", headers={"Origin": ORIGIN},
+                                   json={**payload, "model": "not-configured"})
+            self.assertEqual(rejected.status_code, 400)
+            self.assertIn("no fallback", rejected.json()["detail"])
+            created = client.post("/api/runs", headers={"Origin": ORIGIN},
+                                  json={**payload, "model": "second-choice"})
+            self.assertEqual(created.status_code, 200, created.text)
+            self.assertEqual(created.json()["execution"]["model"], "another-model")
+            self.assertEqual(created.json()["execution"]["model_key"], "second-choice")
+            self.assertEqual(created.json()["execution"]["endpoint"], "fixture")
+            self.assertFalse(app.state.workers.status(created.json()["id"])["active"])
 
     def test_change_feed_reports_only_real_changes(self):
         from workflow.src.storage import Store

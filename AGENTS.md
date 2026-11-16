@@ -9,6 +9,14 @@ Read [roadmap.md](roadmap.md) before starting project work. Keep progress accura
 and understandable to both agents and humans. Do not invent priorities,
 milestones, completed checks, or human approvals.
 
+## Milestone branches
+
+For all milestone development after M3, create and switch to a dedicated feature
+branch before making implementation changes. If that milestone already has a
+feature branch, continue on it. Do not develop milestones directly on `main`;
+keep unrelated milestone work on separate branches. Use descriptive names such
+as `feature/m4-literary-edit` or `feature/remote-multi-user`.
+
 ## Compatibility
 
 Until the product's first formal release, do not preserve backward compatibility

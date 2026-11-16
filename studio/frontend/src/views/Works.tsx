@@ -5,6 +5,7 @@ import { Markdown } from "./Markdown";
 import { workflowUI } from "../workflows";
 import { AuthorForm, MetadataTable } from "./Metadata";
 import { allRuns, allWorks, useLive } from "../live";
+import { ExecutionProfileNotice, ModelPicker, useModelSelection } from "./ModelSelection";
 
 // Works: manuscript intake and workflow outcomes. Every work and its library is viewable without a run.
 export function Works() {
@@ -218,6 +219,7 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
   const [error, setError] = useState<string | null>(null);
   const available = (templates.data ?? []).filter((t) => !t.consumes);
   const template = available.find((t) => t.id === templateId);
+  const selection = useModelSelection(template?.workflow);
   // Passage size is counted in characters for Chinese, Japanese, and Korean, otherwise in words.
   const unit = ["zh", "ja", "ko"].includes(language.split("-")[0].toLowerCase()) ? "cjk_chars" : "words";
   const defaultSize = template?.passage_size?.[unit];
@@ -227,7 +229,8 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
     setError(null);
     try {
       const settings = defaultSize && passageSize.trim() ? { passage_size: Number(passageSize) } : undefined;
-      const run = await api.create({ template_id: templateId, work_id: workId, settings });
+      const run = await api.create({ template_id: templateId, work_id: workId, settings,
+        ...(selection.model ? { model: selection.model } : {}) });
       setTemplateId("");
       setPassageSize("");
       onStarted();
@@ -253,8 +256,10 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
             </option>
           ))}
         </select>
-        <button className="primary" disabled={!templateId || busy} onClick={() => void start()}>{busy ? "Starting…" : "Start"}</button>
+        <ModelPicker selection={selection} />
+        <button className="primary" disabled={!templateId || busy || !selection.ready} onClick={() => void start()}>{busy ? "Starting…" : "Start"}</button>
       </div>
+      <ExecutionProfileNotice selection={selection} />
       {defaultSize && (
         <details>
           <summary>Advanced</summary>
@@ -266,7 +271,7 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
         </details>
       )}
       {template && <p className="muted">{workflowUI(template.workflow).stageSummary(template)}</p>}
-      <ErrorBox error={error ?? templates.error} />
+      <ErrorBox error={error ?? templates.error ?? selection.error} />
     </div>
   );
 }

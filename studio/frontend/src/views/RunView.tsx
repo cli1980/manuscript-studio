@@ -4,6 +4,7 @@ import { ErrorBox, Status, useLoad, when } from "./common";
 import { GatePanel } from "./GatePanel";
 import { workflowUI } from "../workflows";
 import { runEvents, runState, useLive } from "../live";
+import { TokenUsage } from "./TokenUsage";
 
 export function RunView({ runId }: { runId: string }) {
   const { data: run, error, reload, setData } = useLoad(() => api.run(runId), [runId], useLive(runState(runId)));
@@ -57,6 +58,9 @@ export function RunView({ runId }: { runId: string }) {
             {p.number} · {ui.stageTitle(run, p.stage)} · {p.accepted ? "accepted" : p.completed ? "awaiting acceptance" : "in progress"}
           </span>))}</div>}
         <div><span>Turns</span>{run.attempts}</div>
+        {run.execution && <div><span>Execution</span>{run.execution.profile} · {run.execution.harness} ·{" "}
+          {run.execution.model} · {run.execution.endpoint ?? "installed provider"}
+          <small className="muted"> · {run.execution.sandbox}</small></div>}
         {run.settings?.passage_size && <div><span>Passage size</span>at most {run.settings.passage_size}
           {["zh", "ja", "ko"].includes(run.manuscript_language.split("-")[0].toLowerCase()) ? " characters" : " words"}</div>}
         {ui.hasChapterViewer && <div><span>Chapters</span><a href={`#/runs/${run.id}/chapters`}>Open chapter browser</a></div>}
@@ -80,6 +84,7 @@ export function RunView({ runId }: { runId: string }) {
       <Controls run={run} actions={actions} perform={perform} />
       <ErrorBox error={actionError} />
       <GatePanel run={run} perform={perform} />
+      <TokenUsage usage={run.usage} />
       <Timeline runId={runId} />
     </section>
   );
