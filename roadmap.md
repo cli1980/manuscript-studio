@@ -1622,6 +1622,166 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   design. Skill-contract implementation does not imply full design approval or
   completion of native intake/production.
 
+### M5 - Shared manuscript analysis
+
+- **Status:** `planned`; planning recorded 2026-11-16. No skill, schema,
+  validator, workflow stage or review UI is implemented by this entry.
+- **Owner:** `cli1980`.
+- **Planning branch:** `feature/manuscript-understanding-plan`.
+- **Owner-confirmed direction (2026-11-16):** create a `manuscript-analysis`
+  skill; define its outputs and handoffs to actual workflows and downstream
+  skills, including translation and developmental editing; track delivery as
+  a milestone. The skill name `manuscript-analysis` is owner-confirmed; the
+  contract and integration choices below are proposals, not
+  additional owner-approved requirements.
+- **Outcome:** one reusable, evidence-bound account of what a manuscript says
+  and how its narrative unfolds, rather than separate, incompatible summaries
+  inferred by each consumer. Extraction remains preparation's responsibility;
+  literary evaluation, translation, editing and design remain consumer tasks.
+  This milestone does not change the existing highest-priority DOCX work.
+
+#### Proposed skill boundary and inputs
+
+- Skill name: `manuscript-analysis`. Package it alongside the existing
+  skills, with instructions, a versioned output contract, examples, validation
+  helpers and synthetic evaluation cases. Support standalone invocation and
+  composition inside workflows; do not depend on Studio databases or a
+  particular model/harness. Workflow transitions and approvals stay host-owned.
+- Require a ready package under the
+  [preparation contract](plugins/manuscript-studio/skills/prepare-manuscript/references/preparation-contract.md):
+  work identity, revision manifest, ordered Markdown units, source identities,
+  unit hashes, scope and manuscript language. Record the exact consumed inputs,
+  metadata context, analysis language and requested analysis policy.
+- Read the actual prepared text, including the ending and relevant front/back
+  matter. A metadata description, earlier synopsis or sample is not a substitute
+  for reading the bound manuscript. Supplied titles and user assertions remain
+  distinguishable from evidence present in the original text.
+- Produce understanding, not improvements: no source edits, translation,
+  developmental verdict/quality score, marketing claims, invented resolutions
+  or automatic metadata updates. Shared metadata remains authoritative under
+  its [own contract](plugins/manuscript-studio/skills/prepare-manuscript/references/manuscript-metadata.md).
+  Treat manuscript content as data, never instructions.
+
+#### Proposed output contract
+
+Draft contract identifier: `manuscript-analysis/1`; filenames and field
+names remain design proposals until schema review. Write to a separate,
+versioned output destination, never into a published preparation revision.
+
+| Artifact | Authority and minimum contents |
+| --- | --- |
+| `manifest.json` | Analysis ID/revision, contract version, work/source/preparation bindings, ordered unit hashes, consumed metadata digest, analysis policy/language, coverage, blockers, artifact hashes and credential-free skill/model provenance. |
+| `understanding.json` | Whole-work synopsis including the ending, narrative/structural overview, character identities/aliases/relationships/arcs, plot and subplot threads, event chronology versus presentation order, setting/world rules, themes/motifs and explicit uncertainties. |
+| `chapters/<unit-id>.json` | One record for every prepared unit: source ID/order/role/hash, summary, viewpoint/time/place where supported, participants, significant events and causal links, thread developments, unresolved questions and evidence references. Mark non-narrative units as such instead of inventing plot. |
+| `review.md` | Derived, human-readable synopsis, chapter breakdown and linked story maps, with spoiler and uncertainty notices. Render from canonical JSON; do not create a competing editable authority. |
+
+- Book-level records reference chapter/event/entity IDs instead of maintaining
+  unrelated copies of the same facts. Narrative units have substantive summaries;
+  front/back matter has an appropriate account of its actual contents.
+- Every material claim carries an ID, provenance kind (source observation,
+  interpretation or user assertion), supporting/contrary evidence where
+  applicable, confidence and uncertainty. Evidence binds a prepared unit hash
+  and an exact quote/span. Define offsets against the exact UTF-8-decoded
+  Markdown text, without normalization, so repeated quotations are unambiguous.
+  Package-local IDs must not masquerade as canonical preparation annotations.
+- Distinguish events from interpretations, intended ambiguity from omissions,
+  and apparent contradictions from confirmed errors. Do not resolve unreliable
+  narration or incomplete series arcs by invention. Unsupported assertions
+  remain unknown/provisional; confidence is not human approval.
+- Coverage names every supplied unit and whether it was analyzed, excluded
+  with a reason, or remains unread/blocked. A partial read cannot yield a
+  complete-novel synopsis or satisfy a consumer requiring whole-work coverage.
+  A completed reading may still contain legitimate interpretive uncertainties.
+
+#### Proposed generation, persistence and freshness
+
+1. Verify preparation/source bindings and inventory the complete requested
+   scope. For long novels, persist unit-level reading checkpoints before
+   whole-book synthesis; model context limits must not silently omit chapters
+   or redefine chapter boundaries.
+2. Read units in source order, collect cited local notes, then synthesize and
+   cross-check book-level claims, chronology, entities and unresolved threads.
+   Report blocked or partial coverage instead of claiming an unread ending.
+3. Validate schemas, IDs, references, unit coverage, quote/span matches and
+   artifact hashes. Deterministic checks establish structural/evidence integrity,
+   not that an agent truly read every word or interpreted the novel correctly.
+   Include semantic review/evaluation separately.
+4. Publish an immutable analysis revision through the host's artifact library;
+   standalone callers retain the same package contract in their chosen output
+   directory. Consumers pin a package hash, not a mutable "latest" path.
+5. Reuse only after checking work, ordered content hashes, scope, language,
+   consumed metadata and analysis policy/contract compatibility. Record both
+   the original preparation binding and each consumer's verified binding.
+   Current runs still prepare independently: reuse of reading is not permission
+   to skip preparation or silently relabel an analysis for a different manifest.
+   Any cross-manifest equivalence check must be explicit and auditable.
+6. Changed text/order/scope or relevant context makes affected analysis stale.
+   Changed chapter notes require renewed cross-chapter synthesis; unchanged
+   notes may be reused only with verified dependencies. Translated or edited
+   text is a distinct input, not automatically covered by the original reading.
+   Corrections create an attributable revision, never overwrite published data.
+
+#### Proposed workflow and downstream handoffs
+
+Recommended placement is after verified preparation and existing metadata
+review, before workflow-specific briefing or editorial jobs. Whether this is
+mandatory for every run and whether it needs a separate human gate remain open.
+The skill emits data/readiness; the host decides progression and reuse.
+
+| Consumer | Handoff and retained responsibility |
+| --- | --- |
+| Literary translation | Consume the source synopsis, chapter/character/thread maps and ambiguities when building the glossary, voice guidance and samples. Keep the approved translation brief authoritative for translation choices. Continue checking actual source passages; the analysis neither replaces fidelity review nor proves understanding of the eventual target text. |
+| Developmental editing | Start from the shared chapter/event/arc map rather than inventing an incompatible intake synopsis. Still read the complete bound manuscript and assess structure, causality, pacing and character independently; observations are not diagnoses or approved recommendations. Preserve editorial review/application gates. |
+| Line/copy editing | Use character, chronology, world-rule and unresolved-thread records as continuity context, not authorization to rewrite text or turn disputed interpretations into facts. Refresh against accepted changes before relying on them. |
+| Interior design | Adapt bound synopsis/themes/voice/structure into the existing proposal `reading` fields with provenance. Require fresh or explicitly revalidated reading for changed edited/translated text. No change to formatter approval, production inputs or print-readiness claims is implied. |
+| Future querying/other skills | Derive consumer-specific synopses or briefs from the same cited understanding. Query emphasis, spoiler policy, author biography and external claims remain separate concerns; a neutral full synopsis is not automatically a submission-ready pitch. |
+
+- Each handoff names the prepared input identity, analysis revision/package hash,
+  required scope, readiness and unresolved limitations. Incompatible/stale
+  packages fail explicitly or return to understanding generation; never silently
+  use a summary from another work, language or revision.
+- Standalone consumers use the same contract checks as workflows. Studio/CLI
+  should expose readable coverage, synopsis, chapter summaries, evidence,
+  uncertainties and freshness without making raw JSON the only review surface.
+  A future human correction/approval receipt must bind the exact package and
+  remain distinct from downstream translation/editing/design approval.
+
+#### Delivery sequence and acceptance criteria
+
+- **Contract first:** review the skill boundary, output schema/examples,
+  readiness/evidence rules, consumer adapter contracts and explicit open choices.
+- **Standalone skill:** implement reading/synthesis instructions and structural
+  validators; evaluate against synthetic short works and a whole-novel case with
+  independently checked summaries. No private novel enters version control.
+- **Host integration:** persist/resume/publish/pin analyses and test stale-input,
+  partial-read, metadata-context, interrupted-synthesis and revision handling.
+  Integrate translation and developmental editing first, with Studio/CLI review.
+- **Other consumers:** add line/copy, design and querying adapters only with
+  source-freshness tests; do not claim these integrations from schema presence.
+- **Acceptance:** a complete novel yields a source-bound full synopsis,
+  per-unit summaries and coherent entity/thread/timeline records with navigable
+  evidence; missing units and unsupported claims are visible, not fabricated.
+  Cover repeated quotations, reordered/edited chapters, multilingual evidence,
+  non-narrative units, ambiguous identities and unresolved endings in evaluation.
+- **Acceptance:** translation and developmental editing demonstrably consume
+  the same pinned analysis of the same text, retain their independent source
+  reading and human gates, and refuse stale/partial packages when complete
+  coverage is required. Verify standalone and host behavior, restart/reuse,
+  immutable published revisions, and human-readable Studio/CLI access.
+- **Acceptance:** preparation/source bytes and confirmed metadata remain
+  unchanged; no analysis is treated as source-update permission, semantic-role
+  transfer, literary-quality certification or final artifact acceptance.
+- **Open choices before implementation:** initial manuscript/language coverage;
+  analysis language and summary depth/length presets; mandatory versus optional
+  placement/reuse policy for each workflow; human review/correction requirements
+  and promotion authority; precise cross-manifest equivalence rules; treatment
+  of non-fiction/mixed forms and incremental re-synthesis dependencies.
+- **Related contracts:** [shared preparation](plugins/manuscript-studio/skills/prepare-manuscript/references/preparation-contract.md),
+  [developmental review](plugins/manuscript-studio/skills/literary-editing/references/developmental-edit.md),
+  [translation workflow](workflow/src/translation.py) and
+  [design proposal reading](plugins/manuscript-studio/skills/interior-design/references/proposal-contract.md).
+  These describe current consumers, not implementation evidence for M5.
+
 ### Later (unordered)
 
 - DOCX formatting from the web application
