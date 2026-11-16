@@ -346,8 +346,33 @@ chapter, and other details, are deferred to the rest of M4.
 Formatting is the last embedded phase after manuscript approval, not a separate
 workflow launched from a completed publication. In literary editing it starts
 with `interior-design` and the editable specification-review form described
-above. The `produce-docx` production stage consumes the standalone formatter's
-public `prepare`/`build` API, not the old document adapters or an agent.
+above. The CLI supports the same structured review; ordinary `reply` text cannot
+approve a design. `review RUN` displays the proposal, blocking author questions,
+vendor advisories, gate ID and exact proposal SHA-256:
+
+```text
+python -m workflow review RUN
+python -m workflow review-design RUN --gate GATE-ID --proposal-sha256 PROPOSAL-SHA256 --action save --spec-file spec.json
+python -m workflow review-design RUN --gate GATE-ID --proposal-sha256 PROPOSAL-SHA256 --action request-revision --feedback-file feedback.txt
+python -m workflow review-design RUN --gate GATE-ID --proposal-sha256 PROPOSAL-SHA256 --action approve --answers-file answers.json
+```
+
+Use the same `--server-root`, `--execution-profile` and
+`--user-execution-profile` options before the command when applicable.
+`spec.json` contains exactly `edition_brief`, `design_system` and `role_styles`;
+the latter maps every existing text-role ID to its selected style ID. The full
+proposal is not a save payload. Source bindings, purpose/vendor/binding and
+role scopes remain protected by the same service validation as Studio.
+`feedback.txt` contains nonempty revision instructions. `answers.json` maps
+every blocking question ID to a nonempty answer; omit `--answers-file` only
+when no questions block approval. Each action accepts only its corresponding
+file option. Saving changes produces a new gate ID and proposal hash; review
+those before the next action, because stale bindings are rejected.
+
+These commands neither invoke an agent nor authorize DOCX generation. A revision
+request returns to `READY` for an explicit agent `step`; design approval returns
+to `READY` for native planning. The `produce-docx` production stage consumes the
+standalone formatter's public `prepare`/`build` API, not the old document adapters or an agent.
 Translation composition and rendered-page/print production remain pending.
 
 The native generation gate presents a safe summary and plan hash; the complete
@@ -364,6 +389,11 @@ source/design features and PDF bundles fail explicitly. Source/design receipts,
 exact plan/runtime, candidate bytes and the build manifest are bound by hashes.
 A changed plan returns to authorization; retries never overwrite existing files.
 Design restarts invalidate stale candidate download IDs and authorizations.
+Design-only restarts archive the previous proposals but restore the exact
+content-addressed vendor-profile snapshot selected at manuscript approval.
+They do not resolve a fresh profile or change that approval. Reopening
+manuscript approval instead invalidates the old profile so a new target can
+be selected.
 
 After candidate inspection and final acceptance, versioned publication/export
 contains `document.docx`, `docx-build.json` and `design-proposal.json` in addition

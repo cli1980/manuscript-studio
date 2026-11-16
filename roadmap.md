@@ -1533,6 +1533,20 @@ status, owner, and relevant issue or implementation links. Use these statuses:
   regression. Frontend typecheck/build pass. Checks used isolated worktree/test
   data; no live run, manuscript or approval was changed. The formatter submodule
   remains pinned to `9288dc7`; no formatter behavior or POC scope changed.
+- **PR #6 review fixes (2026-11-16 UTC, IDP-C37 / R24):** design-only stage
+  restart restores the exact checkpointed vendor-profile bytes after archiving
+  the old design directory. The manuscript approval/profile identity survives
+  reopening and proposal generation; restarting manuscript approval still
+  invalidates the old profile. The CLI now displays the design proposal/hash
+  and author questions and exposes `review-design` save, revision-request and
+  approval actions through the existing service. Every action binds the gate
+  ID and proposal SHA-256; action-specific UTF-8 files carry spec edits,
+  feedback or blocking-question answers. Stale bindings, missing answers,
+  malformed JSON and mismatched file options fail without changing the gate.
+  Approval without an answers file is allowed only when no questions block.
+  Verified the three focused regressions, the 134-test workflow/profile/API/
+  case suite (nine expected skips) and the Studio DOCX browser flow. No live
+  workflow data, standalone formatter behavior or production scope changed.
 - **HTML-free preparation with literal source preservation (2026-11-16 UTC,
   IDP-C38 / R25):** corrected the preparation boundary exposed by a blocked
   DOCX build. Empty DOCX paragraphs use ordinary blank-line spacing, never

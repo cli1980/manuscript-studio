@@ -91,6 +91,14 @@ class InteriorDesignPhase(DocxProductionPhase):
             if state.get("production"):
                 state.setdefault("production_history", []).append(state.pop("production"))
 
+    def restart_restore(self, state, stage_ids):
+        result = super().restart_restore(state, stage_ids)
+        profile = state.get("design_vendor_profile")
+        if DESIGN_STAGE in stage_ids and MANUSCRIPT_APPROVAL not in stage_ids and profile:
+            # Design outputs are archived, but the approved target's pinned input must survive.
+            result[profile["path"]] = profile
+        return result
+
     def prepare_acceptance(self, state, format_target):
         if state["stage"] == MANUSCRIPT_APPROVAL:
             target = dict(DEFAULT_FORMAT_TARGET) if format_target is None else format_target

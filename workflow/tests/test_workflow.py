@@ -2046,9 +2046,20 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(proposal["edition_brief"]["production_targets"][0]["binding"], "paperback")
         self.assertEqual(proposal["design_system"]["page"]["gutter_mm"], 5)
         profile = state["design_vendor_profile"]
+        profile_bytes = self.engine.store.content(profile)
         state = self.engine.restart_stage("interior-design", reason="Recheck design")
         self.assertEqual(state["design_vendor_profile"], profile)
         self.assertEqual(state["manuscript_approval"], manuscript_approval)
+        self.assertEqual(self.engine.file(profile["path"]).read_bytes(), profile_bytes)
+        self.reopen()
+        state = self.engine.advance(ScriptedRuntime(self.design_result))
+        self.assertEqual((state["status"], state["gate"]["kind"]), ("WAITING_FOR_HUMAN", "interior_design_review"))
+        self.assertEqual(self.engine.design_view(state)["proposal"]["vendor_profile"]["sha256"],
+                         json.loads(profile_bytes)["sha256"])
+        self.assertEqual(state["manuscript_approval"], manuscript_approval)
+        state = self.engine.restart_stage("approve-manuscript", reason="Choose a new target")
+        self.assertNotIn("design_vendor_profile", state)
+        self.assertFalse((self.workspace / profile["path"]).exists())
 
     def test_design_cannot_replace_user_selected_vendor_variant(self):
         self.start_editing()
@@ -2165,6 +2176,91 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsNone(state["error"])
         self.assertEqual(state["receipts"][-1]["parsed"]["answers"], {})
         self.assertFalse(self.engine.finalized(state))
+
+    def test_cli_design_review_saves_revises_and_approves_exact_proposal(self):
+        self.start_editing(["# One\n\nHe came back.\n", "# Two\n\nShe left.\n"])
+        self.approve_editing()
+        state = self.engine.advance(ScriptedRuntime(self.design_result))
+        prefix = ["--server-root", str(self.service.root), "--owner", "tester"]
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(cli.main(prefix + ["review", self.run_id]), 0)
+        self.assertIn("review-design", output.getvalue())
+        self.assertIn(state["gate"]["binding"]["sha256"], output.getvalue())
+        proposal = self.engine.design_view(state)["proposal"]
+        self.assertIn(proposal["proposal_id"], output.getvalue())
+        spec = {k: copy.deepcopy(proposal[k]) for k in ("edition_brief", "design_system")}
+        spec["role_styles"] = {r["id"]: r["style_id"] for r in proposal["text_roles"]}
+        spec["design_system"]["page"]["gutter_mm"] = 5
+        spec_path = self.base / "design-spec.json"
+        spec_path.write_text(json.dumps(spec), encoding="utf-8")
+        original_gate = state["gate"]
+
+        def review_args(action, gate):
+            return prefix + ["review-design", self.run_id, "--action", action, "--gate", gate["id"],
+                             "--proposal-sha256", gate["binding"]["sha256"]]
+
+        with patch.object(cli, "CodexRuntime", side_effect=AssertionError("Review must not run an agent")), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(cli.main(review_args("save", original_gate) + ["--spec-file", str(spec_path)]), 0)
+            saved = self.engine.state()
+            self.assertNotEqual(saved["gate"]["id"], original_gate["id"])
+            self.assertEqual(self.engine.design_view(saved)["proposal"]["design_system"]["page"]["gutter_mm"], 5)
+            self.assertEqual(cli.main(review_args("approve", original_gate)), 1)
+            self.assertEqual(self.engine.state(), saved)
+            feedback = self.base / "design-feedback.txt"
+            feedback.write_text("Keep my gutter; refine the typography.", encoding="utf-8")
+            self.assertEqual(cli.main(review_args("request-revision", saved["gate"]) +
+                                      ["--feedback-file", str(feedback)]), 0)
+        state = self.engine.state()
+        self.assertEqual((state["status"], state["next_input"]["text"]), ("READY", feedback.read_text(encoding="utf-8")))
+        state = self.engine.advance(ScriptedRuntime(self.design_result))
+        gate = state["gate"]
+        proposal = self.engine.design_view(state)["proposal"]
+        self.assertEqual(proposal["design_system"]["page"]["gutter_mm"], 5)
+        answers = self.base / "design-answers.json"
+        answers.write_text(json.dumps({q["id"]: "Keep the proposed opening." for q in proposal["questions"]
+                                       if q["blocking"]}), encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as errors:
+            self.assertEqual(cli.main(review_args("approve", gate)), 1)  # Blocking answers cannot be bypassed.
+            self.assertEqual(self.engine.state(), state)
+            self.assertEqual(cli.main(review_args("approve", gate) + ["--answers-file", str(answers)]), 0)
+            state = self.engine.state()
+            self.assertEqual((state["stage"], state["status"]), ("produce-docx", "READY"))
+            self.assertEqual(state["design_approval"]["proposal"]["sha256"], gate["binding"]["sha256"])
+            self.assertEqual(state["receipts"][-1]["decision_source"], "human")
+            with patch.object(cli, "CodexRuntime", side_effect=AssertionError("Native planning needs no agent")):
+                self.assertEqual(cli.main(prefix + ["step", self.run_id]), 0, errors.getvalue())
+        self.assertEqual(self.engine.state()["gate"]["kind"], "docx_generation_review")
+
+    def test_cli_design_review_validates_action_files_and_allows_no_questions(self):
+        self.start_editing()
+        self.approve_editing()
+
+        def design(request):
+            result = self.design_result(request)
+            proposal = json.loads(self.engine.file(result["state_path"]).read_bytes())
+            proposal["questions"] = []
+            self.write(result["state_path"], proposal)
+            return result
+
+        state = self.engine.advance(ScriptedRuntime(design))
+        gate = state["gate"]
+        prefix = ["--server-root", str(self.service.root), "review-design", self.run_id,
+                  "--gate", gate["id"], "--proposal-sha256", gate["binding"]["sha256"]]
+        invalid = self.base / "invalid-design.json"
+        invalid.write_text("not JSON", encoding="utf-8")
+        for args in (["--action", "save"], ["--action", "request-revision"],
+                     ["--action", "approve", "--spec-file", str(invalid)],
+                     ["--action", "save", "--answers-file", str(invalid)],
+                     ["--action", "approve", "--answers-file", str(invalid)]):
+            with self.subTest(args=args), contextlib.redirect_stdout(io.StringIO()), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(cli.main(prefix + args), 1)
+                self.assertEqual(self.engine.state(), state)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(cli.main(prefix + ["--action", "approve"]), 0)
+        self.assertEqual(self.engine.state()["receipts"][-1]["parsed"]["answers"], {})
+        self.assertEqual(self.engine.state()["stage"], "produce-docx")
 
     def test_interior_design_refuses_invalid_settings_and_supports_revision(self):
         self.start_editing()

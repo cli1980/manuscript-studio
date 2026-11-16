@@ -58,6 +58,17 @@ def display(engine, state, *, review=False):
         elif gate["kind"] == "metadata_review":
             print("\nEdit: python -m workflow metadata RUN --gate GATE-ID --field /PATH --value-file VALUE.json"
                   "\nEach edit presents a new gate ID. Confirm with a reply containing exactly 'confirm metadata'.")
+        elif gate["kind"] == "interior_design_review":
+            view = engine.design_view(state)
+            print("\nInterior-design proposal and author questions:")
+            emit({"proposal_sha256": view["sha256"], "proposal": view["proposal"],
+                  "vendor_warnings": view["vendor_warnings"]})
+            command = (f"python -m workflow review-design {state['id']} --gate {gate['id']} "
+                       f"--proposal-sha256 {view['sha256']}")
+            print("\nSave specification edits: " + command + " --action save --spec-file SPEC.json")
+            print("Request an agent revision: " + command + " --action request-revision --feedback-file FEEDBACK.txt")
+            print("Approve the displayed proposal: " + command + " --action approve [--answers-file ANSWERS.json]")
+            print("Answers map every blocking question ID to a nonempty response; omit the file only if none block.")
         elif gate["kind"] == "docx_generation_review":
             print("\n" + state["gate"]["message"])
             print("Authorize the displayed exact plan with: python -m workflow authorize-docx RUN "
@@ -141,8 +152,8 @@ def parser():
     history = sub.add_parser("metadata-history", help="List a run's metadata versions or show one.")
     history.add_argument("run")
     history.add_argument("--version", type=int)
-    for command in ("step", "status", "review", "reply", "accept", "authorize-docx", "retry", "stop", "events",
-                    "restart-stage", "restart-chapter", "restart"):
+    for command in ("step", "status", "review", "reply", "accept", "review-design", "authorize-docx", "retry",
+                    "stop", "events", "restart-stage", "restart-chapter", "restart"):
         child = sub.add_parser(command)
         child.add_argument("run")
         if command == "step":
@@ -154,6 +165,13 @@ def parser():
         elif command == "authorize-docx":
             child.add_argument("--gate", required=True)
             child.add_argument("--plan-sha256", required=True)
+        elif command == "review-design":
+            child.add_argument("--gate", required=True)
+            child.add_argument("--proposal-sha256", required=True, help="SHA-256 shown by review for this proposal.")
+            child.add_argument("--action", required=True, choices=("save", "request-revision", "approve"))
+            child.add_argument("--spec-file", type=Path, help="Save: JSON edition_brief, design_system and role_styles.")
+            child.add_argument("--feedback-file", type=Path, help="Request revision: UTF-8 feedback text.")
+            child.add_argument("--answers-file", type=Path, help="Approve: JSON mapping of blocking question IDs to answers.")
         elif command == "accept":
             child.add_argument("--acceptance-id", required=True)
             child.add_argument("--confirm-final", action="store_true",
@@ -262,6 +280,18 @@ def run(service, args):
             service.reply(args.run, args.gate, args.response_file.read_text(encoding="utf-8"))
         elif command == "authorize-docx":
             service.authorize_docx(args.run, args.gate, args.plan_sha256)
+        elif command == "review-design":
+            files = {"spec": args.spec_file, "feedback": args.feedback_file, "answers": args.answers_file}
+            field = {"save": "spec", "request-revision": "feedback", "approve": "answers"}[args.action]
+            if any(path is not None for name, path in files.items() if name != field):
+                raise ValueError(f"--action {args.action} accepts only --{field}-file.")
+            path = files[field]
+            if path is None and field != "answers":
+                raise ValueError(f"--action {args.action} requires --{field}-file.")
+            text = path.read_text(encoding="utf-8-sig") if path is not None else "{}"
+            value = text if field == "feedback" else json.loads(text)
+            service.review_interior_design(args.run, args.gate, args.proposal_sha256, args.action, **{field: value})
+            review = True
         elif command == "accept":
             service.accept(args.run, args.acceptance_id, confirm_final=args.confirm_final)
         elif command == "retry":
