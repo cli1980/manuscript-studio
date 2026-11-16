@@ -1,0 +1,2 @@
+jsonschema>=4.21,<5
+markdown-it-py>=3,<5

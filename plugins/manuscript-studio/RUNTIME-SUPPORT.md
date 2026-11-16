@@ -10,7 +10,7 @@ before promising an output or showing an approval interface.
 | Codex CLI or desktop with accessible project files and Python 3.10+ | Script-backed preparation, review parsing, and literary workflows | Install skill dependencies as needed; inline review only if the active surface supports `::codex-inline-vis`. Otherwise use revision-bound text. |
 | ChatGPT desktop/workspace with plugin support | Skills available through the enabled plugin and host tools | Local/Git marketplace availability, file writes, Python, and inline rendering vary by product and workspace. Probe capabilities, do not assume desktop means filesystem or inline support. |
 | Browser chat with attachments but no execution tools | Analysis, drafts, and manually reviewable proposals | Reading GitHub is not installation. No claim of validated extraction, saved receipts, source modification, or rendered DOCX without the actual tools. Return proposals/specifications and explain missing validation. |
-| Any host with an available Documents skill and its required construction/rendering/inspection tools | Approved Word/DOCX production and page-by-page visual verification | These are external prerequisites, not bundled dependencies. Missing Documents skill or render/page-inspection capability blocks generation. |
+| Host with verified preparation and accessible manuscript text | Standalone or reusable interior-design proposal, with JSON validation when Python/jsonschema are available | No workflow run, orchestration UI, Documents skill, office renderer or inline surface is needed. The skill does not construct documents or record design/page approval. Native intake/production integration is separate work. |
 
 Preparation uses `jsonschema` and format-specific extraction dependencies listed
 in its `requirements.txt`. Query research additionally needs browsing/search;
@@ -18,29 +18,31 @@ without it, draft reusable materials but label agent guidelines unverified and
 do not claim a verified agent-specific package. Git is optional: without it,
 return reviewable files/proposals rather than claiming a commit.
 
-## Formatting fallback demonstration
+## Interior-design boundary demonstration
 
 **Request:** "Format this manuscript as a Word edition."
 
-**Capabilities:** manuscript is readable; the Documents skill or its required
-rendering workflow is absent.
+**Capabilities:** verified preparation is readable; document-generation tools
+may or may not be present.
 
 **Required behavior:**
 
 ```text
-Generation status: blocked-adapter
-Missing capability: Documents skill and/or its required rendering and page inspection.
-Available result: a proposed format-spec.md for your review.
-No generated DOCX is claimed to be complete or visually verified.
-Resume construction only in an environment with the required adapter and tools,
-after the specification's explicit approval gate.
+Available result: interior-design-proposal.json, status=proposed.
+Validation: report shape-only or local-preparation validation accurately.
+No DOCX/PDF is generated or visually verified by this skill.
+Native design approval, production, and human page review are separate operations.
+The new embedded GUI/production integration is not implemented by this plugin.
 ```
 
-Keep the manuscript unchanged. Do not silently substitute an ad hoc DOCX builder,
-skip visual QA, deliver an empty TOC, or interpret "continue" as approval.
-Having Word or LibreOffice alone does not install the required Documents skill.
+If preparation is missing, request it first. If Python is unavailable, label the
+proposal unvalidated. Do not invoke a Documents skill or silently substitute an
+ad hoc builder; having Word/LibreOffice does not expand this skill's authority.
 
 ## Inline review and text fallback demonstration
+
+This applies to the other literary review skills, not to the proposal-only
+interior-design skill.
 
 Interactive sheets require Python to validate/render the saved JSON and a host
 that can present `::codex-inline-vis{file="<basename>.html"}` from the active
@@ -51,15 +53,15 @@ When inline presentation is unavailable or fails, state that fact and show the
 same stable IDs, choices, required notes, binding, and saved revision in text:
 
 ```text
-Approval sheet: format-demo
+Approval sheet: review-demo
 Revision: rev-1
 Binding: manuscript fingerprint recorded in the saved sheet
-FM001 | Body typography | approve / modify (exact replacement note required)
-FM002 | Chapter openings | approve / modify (exact replacement note required)
+RV001 | Punctuation change | approve / modify (exact replacement note required)
+RV002 | Sentence clarity | approve / modify (exact replacement note required)
 
 Example user dispositions:
-FM001: approve
-FM002: modify - Use chapter headings without a page break.
+RV001: approve
+RV002: modify - Retain the original wording.
 ```
 
 This is an illustrative dialogue, not an approval receipt for a real manuscript.
@@ -79,5 +81,6 @@ If Python/parser access is also missing, present a non-authoritative proposal
 and mark machine validation/persistence blocked; do not invent a validated receipt
 or apply source changes.
 
-See the [formatting skill](skills/format-manuscript/SKILL.md) and
-[approval skill](skills/review-approval-sheet/SKILL.md) for authoritative gates.
+See the [interior-design skill](skills/interior-design/SKILL.md) for its proposal
+contract and [approval skill](skills/review-approval-sheet/SKILL.md) for literary
+review gates.

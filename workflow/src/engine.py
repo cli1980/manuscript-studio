@@ -117,9 +117,8 @@ def pin_directories(directories):
 
 
 def engine_for_state(state):
-    if state.get("kind") == "manuscript-formatting" and "template_id" not in state:
-        from .formatting import FormattingEngine
-        return FormattingEngine
+    if state.get("template_id") not in registry.templates():
+        return ArchivedEngine
     reference = state.get("definition", {}).get("engine")
     if reference is None:
         from .translation import TranslationEngine  # Pre-M1 translation runs.
@@ -131,6 +130,7 @@ class Engine:
     """Base engine. Subclasses implement prompts and domain completion through hooks."""
 
     result_fields = ()
+    retired = False
 
     def __init__(self, root, *, library=None):
         self.store = Store(root)
@@ -196,7 +196,8 @@ class Engine:
             raise ValueError("Designate one regular, non-linked source file.")
         if source.is_relative_to(root):
             raise ValueError("The run directory cannot contain the designated source.")
-        if not isinstance(manuscript_language, str) or not LANGUAGE_TAG.fullmatch(manuscript_language):
+        if manuscript_language is not None and (
+                not isinstance(manuscript_language, str) or not LANGUAGE_TAG.fullmatch(manuscript_language)):
             raise ValueError("Use a manuscript-language tag such as zh or zh-CN.")
         if not isinstance(work_id, str) or not WORK_ID.fullmatch(work_id) or len(work_id) > 100:
             raise ValueError("A lowercase work ID such as my-book-1a2b3c is required.")
@@ -363,12 +364,12 @@ class Engine:
             return True
 
     def _guard(self, state, operation):
-        if state["status"] in TERMINAL or not self.engine_outdated(state):
+        if state["status"] in TERMINAL or operation == "stop" or not self.engine_outdated(state):
             return
         if self.finalized(state) and operation in ("step", "retry"):
             return  # A finalized run may still write its accepted snapshots.
         raise WorkflowError("engine_updated", "The workflow engine changed after this run was created; "
-                                              "only reading and restarting the workflow are available.")
+                                              "only reading, stopping and restarting the workflow are available.")
 
     def _require_mutable(self, state):
         if state["status"] == "CANCELLED":
@@ -455,6 +456,13 @@ class Engine:
                                              "template_id": state["template_id"], "acceptance": state["acceptance"],
                                              "source": state["source"], "chapters": state["outputs"]})
         return files
+
+    def delivery_files(self, state):
+        """Additional verified native outputs included in final publication/export."""
+        return {}
+
+    def production_step(self, revision, state):
+        raise ValueError("This workflow has no deterministic production implementation.")
 
     def accepted_output(self, state):
         return None
@@ -597,6 +605,8 @@ class Engine:
                 raise ValueError(f"Run is {state['status']}; resolve or retry it before advancing.")
             self.verify(state)
             stage = self.stage_def(state)
+            if stage["kind"] == "production":
+                return self.production_step(revision, state)
             if stage["kind"] == "export":
                 return self._export(revision, state)
             if stage["kind"] in ("metadata_review", "select", "acceptance"):
@@ -757,6 +767,8 @@ class Engine:
                 raise ValueError("A response is required.")
             self.verify(state)
             gate = state["gate"]
+            if gate["kind"] == "docx_generation_review":
+                raise ValueError("Use the DOCX generation form to authorize this exact plan.")
             presented = [gate[key] for key in ("binding", "sheet", "settings") if gate.get(key)] + gate.get("documents", [])
             for item in presented:
                 if digest(read_bytes(self.file(item["path"]))) != item["sha256"]:
@@ -801,7 +813,19 @@ class Engine:
 
     # ----- acceptance and export ------------------------------------------------------------
 
-    def accept(self, acceptance_id, *, confirm_final=False, decision_source="human"):
+    def acceptance_details(self, state):
+        return {"title": "Final acceptance", "action_label": "Accept and finalize", "finalizes": True,
+                "notice": finalization_notice(state["workflow"])}
+
+    def record_acceptance(self, state, receipt):
+        state["acceptance"] = receipt
+        self.publish_accepted(state)
+
+    def prepare_acceptance(self, state, format_target):
+        if format_target is not None:
+            raise ValueError("This acceptance does not select a formatting target.")
+
+    def accept(self, acceptance_id, *, confirm_final=False, decision_source="human", format_target=None):
         if decision_source not in ("human", "delegated-automation"):
             raise ValueError("Unknown decision source.")
         with self.store.locked():
@@ -809,23 +833,25 @@ class Engine:
             self._guard(state, "accept")
             if state["status"] != "WAITING_FOR_ACCEPTANCE" or state.get("acceptance_id") != acceptance_id:
                 raise ValueError("Stale or unavailable artifact acceptance.")
-            notice = finalization_notice(state["workflow"])
+            details = self.acceptance_details(state)
+            notice = details["notice"]
             if confirm_final is not True:
-                raise WorkflowError("confirmation_required", notice + " Confirm the finalization notice to accept.")
+                raise WorkflowError("confirmation_required", notice + " Confirm the approval notice to accept.")
             self.verify(state)
-            state["acceptance"] = {"id": acceptance_id, "created_at": now(), "decision_source": decision_source,
-                                   "hashes": [a["sha256"] for a in state["outputs"]],
-                                   "finalization": {"confirmed": True, "notice": notice}}
+            self.prepare_acceptance(state, format_target)
+            receipt = {"id": acceptance_id, "created_at": now(), "decision_source": decision_source,
+                       "hashes": [a["sha256"] for a in state["outputs"]],
+                       "finalization" if details["finalizes"] else "confirmation": {"confirmed": True, "notice": notice}}
             try:
-                self.publish_accepted(state)
+                self.record_acceptance(state, receipt)
             except WorkflowError as exc:
                 # Publication is all-or-nothing; the run is not finalized.
-                state.pop("acceptance")
+                state.pop("acceptance", None)
                 state.update(status="BLOCKED", error=str(exc))
                 self.store.save(revision, state, "acceptance.blocked", {"error": state["error"]})
                 raise
             self._advance_stage(state)
-            self.store.save(revision, state, "artifacts.accepted", state["acceptance"])
+            self.store.save(revision, state, "artifacts.accepted" if details["finalizes"] else "manuscript.approved", receipt)
             return state
 
     def _export(self, revision, state):
@@ -987,6 +1013,8 @@ class Engine:
             "export_path", "document_path", "manuscript_language", "restart_of", "superseded_by", "settings",
             "handed_off_work", "execution")}
         result["chapter_id"] = iteration["chapter_id"] if iteration else None
+        result["requires_runtime"] = self._stage_or_empty(state).get("kind") == "agent"
+        result["production"] = self.production_view(state) if hasattr(self, "production_view") else None
         iterations = state.get("iterations") or []
         whole = next((item for item in iterations if item["chapter_id"] == "_whole"), None)
         result["whole_book_status"] = whole["status"] if whole else None
@@ -996,6 +1024,7 @@ class Engine:
         result["passes"] = [{"number": p["number"], "stage": p["stage"], "completed": bool(p["completed_at"]),
                              "accepted": bool(p["accepted"])} for p in state.get("passes") or []]
         result["finalized"] = self.finalized(state)
+        result["retired"] = self.retired
         result["engine_current"] = not self.engine_outdated(state)
         if state.get("gate"):
             result["gate_id"] = state["gate"]["id"]
@@ -1005,8 +1034,9 @@ class Engine:
             result["gate_review"] = state["gate"]["kind"] == "metadata_review" or bool(state["gate"].get("documents"))
             if state["gate"]["kind"] == "metadata_review":
                 result["metadata_record_revision"] = state["gate"]["record_revision"]
-        if state.get("acceptance_id") and state["status"] == "WAITING_FOR_ACCEPTANCE":
+        if state.get("acceptance_id") and state["status"] == "WAITING_FOR_ACCEPTANCE" and result["engine_current"]:
             result["acceptance_id"] = state["acceptance_id"]
+            result["acceptance_title"] = self.acceptance_details(state)["title"]
         return result
 
     def available_actions(self, state):
@@ -1032,8 +1062,9 @@ class Engine:
         add("edit_metadata", mutable and status != "RUNNING" and bool(state.get("prepared")),
             locked_reason or ("An agent turn is running." if status == "RUNNING" else
                               "Metadata is available after preparation."))
+        acceptance = self.acceptance_details(state)
         add("accept", status == "WAITING_FOR_ACCEPTANCE" and mutable, locked_reason or "Nothing awaits acceptance.",
-            irreversible=True, confirmation=finalization_notice(state.get("workflow", "this")))
+            irreversible=acceptance["finalizes"], confirmation=acceptance["notice"])
         retry_ok = status in ("FAILED", "BLOCKED", "PAUSED", "RUNNING") and (
             mutable or (finalized and not terminal and self._stage_or_empty(state).get("kind") == "export"))
         add("retry", retry_ok, locked_reason or "The run does not need a retry.",
@@ -1048,6 +1079,33 @@ class Engine:
         add("restart_workflow", not terminal and not finalized and status != "RUNNING",
             locked_reason if (terminal or finalized) else "An agent turn is running.",
             confirmation="The current run is stopped and a new run of this workflow starts on the same work.")
-        add("stop", mutable and status != "RUNNING", locked_reason or "An agent turn is running.",
+        add("stop", not terminal and not finalized and status != "RUNNING",
+            locked_reason if terminal or finalized else "An agent turn is running.",
             irreversible=True, confirmation="Stopping cancels the run permanently; its artifacts and history are kept.")
         return actions
+
+
+class ArchivedEngine(Engine):
+    """Read historical snapshots without retaining removed workflow executors."""
+
+    retired = True
+
+    def _guard(self, state, operation):
+        raise WorkflowError("workflow_removed", "This workflow was removed. Its history and artifacts are read-only. "
+                            "Start a supported workflow to continue.")
+
+    def _stage_or_empty(self, state):
+        return next((s for s in state.get("definition", {}).get("stages", [])
+                     if s["id"] == state.get("stage")), {})
+
+    @staticmethod
+    def stage_ids(state):
+        return [s["id"] for s in state.get("definition", {}).get("stages", [])]
+
+    def summary(self, state):
+        result = super().summary(state)
+        result.update(recorded_status=state["status"], status="RETIRED", engine_current=False)
+        return result
+
+    def available_actions(self, state):
+        return []

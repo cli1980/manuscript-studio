@@ -16,7 +16,7 @@ from urllib.parse import quote
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 
-from workflow.src.engine import WorkflowError, finalization_notice
+from workflow.src.engine import WorkflowError
 from workflow.src.prepared import WHOLE
 from workflow.src.runtime import CodexRuntime
 from workflow.src.service import WorkflowService
@@ -195,14 +195,17 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         return result
 
     def run_detail(svc, run_id):
-        detail = svc.get_run(run_id)
-        detail["worker"] = workers.status(run_id)
         with svc.open_run(run_id) as engine:
             state = engine.state()
+            detail = svc.run_view(engine, state)
+            detail["worker"] = workers.status(run_id)
             detail["template_title"] = state.get("definition", {}).get("title")
             detail["stages"] = engine.stage_ids(state)
             detail["stage_titles"] = {o["stage"]: o["title"] for s in state.get("definition", {}).get("stages", [])
                                       for o in s.get("options", [])}
+            if engine.retired or not detail["engine_current"] or state["status"] in ("COMPLETED", "CANCELLED"):
+                detail.pop("gate", None)
+                return detail
             gate = state.get("gate")
             if gate:
                 view = detail["gate"]
@@ -213,13 +216,16 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                     for item in view["sheet"]["items"]:
                         item["chapter_id"] = locations[item["id"]]
                 view["commands"] = engine.gate_commands(state, gate)
+                if gate["kind"] == "interior_design_review":
+                    view["design_review"] = engine.design_view(state)
                 # When this request follows the reviewer's feedback, the gate message is the answer to it.
                 previous = next((r for r in reversed(state["receipts"]) if r["gate"]["kind"] == gate["kind"]
                                  and r["gate"].get("chapter_id") == gate.get("chapter_id")), None)
                 view["answer_to"] = ({"text": previous["text"], "created_at": previous["created_at"]}
                                      if previous and previous["parsed"].get("type") == "feedback" else None)
                 view["binding_text"] = None
-                if gate.get("binding") and gate["kind"] != "metadata_review" and gate["binding"]["bytes"] <= MAX_TEXT:
+                if gate.get("binding") and gate["kind"] not in ("metadata_review", "docx_generation_review") \
+                        and gate["binding"]["bytes"] <= MAX_TEXT:
                     try:
                         view["binding_text"] = engine.store.content(gate["binding"]).decode("utf-8")
                     except UnicodeDecodeError:
@@ -229,8 +235,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                     detail["metadata"] = engine.metadata_view(state)
                     detail["metadata_fields"] = svc.metadata_fields()
             if state["status"] == "WAITING_FOR_ACCEPTANCE":
-                detail["acceptance"] = {"acceptance_id": state["acceptance_id"],
-                                        "notice": finalization_notice(state["workflow"]),
+                detail["acceptance"] = {**engine.acceptance_details(state), "acceptance_id": state["acceptance_id"],
                                         "outputs": [{k: o.get(k) for k in ("chapter_id", "sha256", "bytes")}
                                                     for o in state["outputs"]]}
         return detail
@@ -253,12 +258,10 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
             raise HTTPException(400, "Add manuscripts on the Works page, then start a workflow on the work.")
         if not payload.get("work_id"):
             raise HTTPException(400, "Select the work to run the workflow on.")
-        if payload.get("derived"):
-            run_id = svc.create_derived_run(payload["work_id"], template_id, publication_id=payload.get("publication_id"),
-                                            options=payload.get("options") or {}, model=payload.get("model"))
-        else:
-            run_id = svc.create_run(template_id, work_id=payload.get("work_id"), model=payload.get("model"),
-                                    settings=payload.get("settings"))
+        if any(key in payload for key in ("derived", "publication_id", "options", "new_edition")):
+            raise HTTPException(400, "Separate formatting runs were removed. Use the workflow's final formatting phase.")
+        run_id = svc.create_run(template_id, work_id=payload.get("work_id"), model=payload.get("model"),
+                                settings=payload.get("settings"))
         if payload.get("start", True):
             workers.start(run_id)
         return run_detail(svc, run_id)
@@ -325,7 +328,39 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
     @app.post("/api/runs/{run_id}/accept")
     def accept(run_id: str, payload: dict = Body(...), svc: WorkflowService = Depends(service)):
         return act(svc, run_id, lambda: svc.accept(run_id, payload["acceptance_id"],
-                                                   confirm_final=payload.get("confirm_final") is True))
+                                                   confirm_final=payload.get("confirm_final") is True,
+                                                   format_target=payload.get("format_target")))
+
+    @app.post("/api/runs/{run_id}/interior-design")
+    def interior_design(run_id: str, payload: dict = Body(...), svc: WorkflowService = Depends(service)):
+        action = payload["action"]
+        return act(svc, run_id, lambda: svc.review_interior_design(
+            run_id, payload["gate_id"], payload["expected_sha256"], action,
+            spec=payload.get("spec"), answers=payload.get("answers"), feedback=payload.get("feedback")),
+            resume=action in ("request-revision", "approve"))
+
+    @app.post("/api/runs/{run_id}/docx/authorize")
+    def authorize_docx(run_id: str, payload: dict = Body(...), svc: WorkflowService = Depends(service)):
+        return act(svc, run_id, lambda: svc.authorize_docx(
+            run_id, payload["gate_id"], payload["expected_plan_sha256"]))
+
+    @app.get("/api/runs/{run_id}/docx/{build_id}")
+    def download_docx(run_id: str, build_id: str, svc: WorkflowService = Depends(service)):
+        data, sha = svc.docx_candidate(run_id, build_id)
+        return Response(data, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        headers={"Content-Disposition": 'attachment; filename="manuscript.docx"',
+                                 "X-Content-SHA256": sha})
+
+    @app.get("/api/works/{work_id}/docx/{publication_id}")
+    def download_published_docx(work_id: str, publication_id: str, svc: WorkflowService = Depends(service)):
+        library = svc.library(work_id)
+        record = library.publication(publication_id)
+        if not record["artifact"].endswith("/document.docx"):
+            raise ValueError("This publication is not an editable-DOCX delivery.")
+        return Response(library.read(record),
+                        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        headers={"Content-Disposition": 'attachment; filename="manuscript.docx"',
+                                 "X-Content-SHA256": record["sha256"]})
 
     @app.post("/api/runs/{run_id}/metadata")
     def metadata(run_id: str, payload: dict = Body(...), svc: WorkflowService = Depends(service)):

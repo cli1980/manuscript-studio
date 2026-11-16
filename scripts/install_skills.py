@@ -21,9 +21,9 @@ DEPENDENCIES = {
     name: ("prepare-manuscript", "review-approval-sheet")
     for name in (
         "literary-editing", "literary-translation", "literary-agent-querying",
-        "format-manuscript",
     )
 }
+DEPENDENCIES["interior-design"] = ("prepare-manuscript",)
 
 
 def assert_plain_path(path: Path) -> None:

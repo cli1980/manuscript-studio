@@ -60,7 +60,7 @@ class PreparationEvaluationTests(unittest.TestCase):
             "reference_file": "reference-map.json", "expected_metadata": {"manuscript_language": "en", "work_type": "fiction"},
             "expected_preparation_status": "ready", "scope_kind": "whole_work",
             "expected_workflows": {name: {"status": "not_started"} for name in (
-                "literary-editing", "literary-translation", "literary-agent-querying", "format-manuscript")},
+                "literary-editing", "literary-translation", "literary-agent-querying")},
             "require_trace": False, "manual_checks": [],
         }
         self.reference = {
@@ -82,7 +82,7 @@ class PreparationEvaluationTests(unittest.TestCase):
         }
         self.work = {
             "schema_version": 2, "work_id": "worker-selected-id", "record_revision": 1, "updated_at": NOW,
-            "metadata": {"title": None, "subtitle": None, "contributors": [], "original_language": None,
+            "metadata": {"title": "First", "subtitle": None, "contributors": [], "original_language": None,
                          "manuscript_language": "en", "work_type": "fiction", "form": None, "genres": [],
                          "audience": None, "keywords": [], "description": None,
                          "edition": {"label": None, "status": None},
@@ -93,7 +93,7 @@ class PreparationEvaluationTests(unittest.TestCase):
             "preparation": {"status": "ready", "current_revision": "r0001", "blockers": []},
             "workflows": {name: {"status": "not_started", "basis_revision": None, "scope": None,
                                 "operation": None, "state_locator": None, "updated_at": None}
-                          for name in ("literary-editing", "literary-translation", "literary-agent-querying", "format-manuscript")},
+                          for name in ("literary-editing", "literary-translation", "literary-agent-querying")},
         }
         self.save()
 

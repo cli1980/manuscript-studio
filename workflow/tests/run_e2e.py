@@ -707,14 +707,6 @@ def parser():
     result.add_argument("--resume", help="Resume a run ID created by this launcher under the server root.")
     result.add_argument("--codex", default="codex", help="Codex executable, not a shell command.")
     result.add_argument("--model", help="Override both agents' models on creation.")
-    result.add_argument("--format-docx", action="store_true",
-                        help="After translation export, run the optional final manuscript-formatting agent.")
-    backend = result.add_mutually_exclusive_group()
-    backend.add_argument("--documents-skill", type=Path, help="Optional external Documents skill instead of built-in adapters.")
-    backend.add_argument("--renderer", choices=("word", "libreoffice"),
-                         help="DOCX renderer; defaults to Word on Windows, LibreOffice elsewhere.")
-    result.add_argument("--format-purpose", choices=("reader-facing", "editorial-review", "submission"),
-                        default="reader-facing")
     result.add_argument("--auto-approve-recommended", action="store_true",
                         help="Explicitly delegate acceptance of structured accept recommendations; stop on review/blockers.")
     result.add_argument("--timeout", type=float, default=900, help="Active-turn timeout; human waits do not count.")
@@ -724,71 +716,6 @@ def parser():
     checks.add_argument("--check-case", action="store_true", help="Validate fixture/manifest only; no Codex or run creation.")
     checks.add_argument("--preflight", action="store_true", help="Also check Python dependencies, Codex CLI and login; no model call.")
     return result
-
-
-def format_document(service, parent, runtime, *, documents_skill=None, renderer=None, purpose="reader-facing",
-                    model=None, auto_approve_recommended=False, max_turns=100, input_fn=input):
-    """Optional derived operation; the translation run's result remains independently recorded."""
-    work_id = parent.state()["work_id"]
-    run_id = service.create_derived_run(work_id, "manuscript-formatting-v1", model=model, options={
-        "documents_skill": documents_skill, "renderer": renderer, "purpose": purpose})
-    with service.open_run(run_id) as job:
-        return drive_formatting(parent, job, runtime, auto_approve_recommended=auto_approve_recommended,
-                                max_turns=max_turns, input_fn=input_fn)
-
-
-def drive_formatting(parent, job, runtime, *, auto_approve_recommended, max_turns, input_fn):
-    from workflow.src.cli import display
-    print(f"Formatting run: {job.state()['id']}\nPath: {job.root}")
-    try:
-        for _ in range(max_turns):
-            state = job.state()
-            display(job, state, review=state["status"] == "WAITING_FOR_HUMAN")
-            if state["status"] == "COMPLETED":
-                print(f"Verified DOCX: {state['document_path']}")
-                return 0
-            if state["status"] == "READY":
-                job.advance(runtime)
-            elif state["status"] == "WAITING_FOR_HUMAN":
-                if auto_approve_recommended:
-                    try:
-                        response, suggestion = recommended_response(job)
-                    except ValueError as exc:
-                        print(f"Formatting needs review: {exc}")
-                        return 2
-                    job.store.event("e2e.delegated_approval", {"gate_id": state["gate"]["id"], **suggestion})
-                    action = "reply"
-                else:
-                    action, response = read_response(input_fn)
-                if action == "/pause":
-                    return 2
-                if action == "/cancel":
-                    job.cancel()
-                    return 2
-                if action == "/refresh":
-                    job.retry(refresh_gate=True)
-                else:
-                    job.reply(state["gate"]["id"], response,
-                              decision_source="delegated-automation" if auto_approve_recommended else "human")
-            else:
-                print(f"Formatting stopped: {state.get('error') or state['status']}")
-                print(f"Retry/review the run with: python -m workflow status {state['id']}")
-                return 1 if state["status"] == "FAILED" else 2
-        print("Formatting turn limit reached; resume the same parent with --format-docx.")
-        return 2
-    except EOFError:
-        return 2
-    finally:
-        report_path = parent.root / "e2e-report.json"
-        if report_path.exists():
-            report = json.loads(report_path.read_text(encoding="utf-8"))
-            state = job.state()
-            report.setdefault("formatting_jobs", {}).setdefault(state["id"], {}).update({
-                "path": str(job.root), "status": state["status"],
-                "document_path": state.get("document_path"), "error": state.get("error"),
-                "backend": state.get("backend"),
-            })
-            atomic_json(report_path, report)
 
 
 def main(argv=None):
@@ -803,8 +730,8 @@ def main(argv=None):
             python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
             if not python.is_file():
                 subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
-            requirements = "requirements-docx.txt" if args.format_docx and args.documents_skill is None else "requirements.txt"
-            subprocess.run([str(python), "-m", "pip", "install", "-r", str(REPO / "workflow" / requirements)], check=True)
+            subprocess.run([str(python), "-m", "pip", "install", "-r",
+                            str(REPO / "workflow/requirements.txt")], check=True)
             return subprocess.call([str(python), str(Path(__file__).resolve()),
                                     *[arg for arg in argv if arg != "--setup"]])
         case = load_case(args.case)
@@ -814,22 +741,14 @@ def main(argv=None):
             return 0
         from workflow.src.runtime import CodexRuntime
         from workflow.src.service import WorkflowService
-        if args.format_docx:
-            from workflow.src.formatting import manuscript_paragraphs
-            manuscript_paragraphs("# Dependency preflight\n\nText.\n")
-            if args.documents_skill:
-                adapter = args.documents_skill if args.documents_skill.is_dir() else args.documents_skill.parent
-                require((adapter / "SKILL.md").is_file(), "Documents skill is unavailable.")
-            else:
-                from workflow.src.document_adapters import preflight as document_preflight
-                from workflow.src.formatting import select_renderer
-                document_preflight(select_renderer(args.renderer))
         service = WorkflowService(args.server_root)
         run_id = args.resume
         if run_id:
             with service.open_run(run_id) as engine:
+                if engine.retired:
+                    engine._guard(engine.state(), "resume")
                 status, saved = engine.state()["status"], engine.state().get("e2e")
-        needs_runtime = args.format_docx or not run_id or status not in ("COMPLETED", "CANCELLED")
+        needs_runtime = not run_id or status not in ("COMPLETED", "CANCELLED")
         runtime_info = preflight(case, args.codex) if needs_runtime or args.preflight else saved["runtime"]
         if args.preflight:
             print(f"Preflight passed: {runtime_info['version']}. DOCX extraction capability is verified by the preparation stage.")
@@ -851,19 +770,6 @@ def main(argv=None):
                                   operation="editing" if engine.state()["workflow"] == "literary-editing" else "translation")
             code = drive(engine, case, runtime, max_turns=args.max_turns,
                          auto_approve_recommended=args.auto_approve_recommended)
-            if args.format_docx and engine.state()["status"] == "COMPLETED" and code != 1:
-                format_runtime = CaseRuntime(
-                    CodexRuntime([runtime_info["executable"], "app-server"], args.timeout),
-                    "Consolidate the accepted English chapters into one readable DOCX without editorial changes.",
-                    auto_approve_recommended=args.auto_approve_recommended, operation="formatting",
-                )
-                formatted = format_document(
-                    service, engine, format_runtime, documents_skill=args.documents_skill, renderer=args.renderer,
-                    purpose=args.format_purpose, model=args.model,
-                    auto_approve_recommended=args.auto_approve_recommended, max_turns=args.max_turns,
-                )
-                if formatted:
-                    return formatted
             return code
     except ModuleNotFoundError as exc:
         print(f"Missing Python dependency: {exc.name}. Rerun with --setup.", file=sys.stderr)

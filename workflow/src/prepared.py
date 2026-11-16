@@ -6,6 +6,7 @@ import copy
 import json
 import re
 import sys
+import threading
 import uuid
 from pathlib import Path
 
@@ -18,17 +19,22 @@ NOT_STARTED = {"status": "not_started", "basis_revision": None, "scope": None, "
                "state_locator": None, "updated_at": None}
 
 
+_METADATA_IMPORT_LOCK = threading.RLock()
+
+
 def load_metadata_helper(skill_root, contract):
     """Load prepare_metadata.py bound to a specific validate_preparation module."""
-    previous = sys.modules.get("validate_preparation")
-    sys.modules["validate_preparation"] = contract
-    try:
-        return module_at(skill_root / "scripts/prepare_metadata.py")
-    finally:
-        if previous is None:
-            sys.modules.pop("validate_preparation", None)
-        else:
-            sys.modules["validate_preparation"] = previous
+    # The temporary module alias is process-global, including across API requests.
+    with _METADATA_IMPORT_LOCK:
+        previous = sys.modules.get("validate_preparation")
+        sys.modules["validate_preparation"] = contract
+        try:
+            return module_at(skill_root / "scripts/prepare_metadata.py")
+        finally:
+            if previous is None:
+                sys.modules.pop("validate_preparation", None)
+            else:
+                sys.modules["validate_preparation"] = previous
 
 
 def language_key(work):
@@ -406,6 +412,7 @@ class PreparedManuscriptEngine(Engine):
         files["manifest.json"] = json_bytes({"run_id": state["id"], "work_id": state["work_id"],
                                              "acceptance": state["acceptance"], "source": state["source"],
                                              "chapters": state["outputs"], "continuity": state["continuity"]})
+        files.update(self.delivery_files(state))
         return files
 
     def accepted_output(self, state):
@@ -450,6 +457,9 @@ class PreparedManuscriptEngine(Engine):
                         "expected_head": None, "basis": basis})
         entries.append({"artifact": f"{prefix}/manifest.json", "data": json_bytes(accepted),
                         "expected_head": None, "basis": basis, "contract": accepted["contract"]})
+        for name, data in self.delivery_files(state).items():
+            entries.append({"artifact": f"{prefix}/{name}", "data": data,
+                            "expected_head": None, "basis": basis})
         summary = {"status": "completed", "basis_revision": accepted["prepared_revision"],
                    "scope": {"kind": "whole_work", "chapter_ids": [c["chapter_id"] for c in accepted["chapters"]]},
                    "operation": self.operation, "state_locator": f"run:{state['id']}", "updated_at": now()}
@@ -489,7 +499,7 @@ class PreparedManuscriptEngine(Engine):
         source = str(self.root / "input" / state["source_name"])
         if work["discovery"]["location_kind"] != "file" or work["discovery"]["location"] != source:
             raise ValueError("Preparation must bind the designated input snapshot.")
-        if work["metadata"][language_key(work)] != state["manuscript_language"]:
+        if state["manuscript_language"] and work["metadata"][language_key(work)] != state["manuscript_language"]:
             raise ValueError("Preparation manuscript language differs from the run.")
         manifest_path = path.parent / "revisions" / work["preparation"]["current_revision"] / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -507,7 +517,9 @@ class PreparedManuscriptEngine(Engine):
             "base": {key: work[key] for key in ("work_id", "discovery", "preparation")},
             "files": {p.relative_to(self.workspace).as_posix(): self.store.snapshot(p, "prepared") for p in files},
         }
-        state.update(chapters=chapters, thread_id=None, domain_state=None)
+        state.update(chapters=chapters, thread_id=None, domain_state=None,
+                     manuscript_language=work["metadata"][language_key(work)])
+        state["settings"] = self.resolve_settings(state["definition"], state["settings"], state["manuscript_language"])
         first = next((self.stage_def(state, s) for s in self.stage_ids(state)
                       if self.stage_def(state, s).get("iterate")), None)
         state["iterations"] = self.build_iterations(state, first) if first else []
@@ -614,11 +626,15 @@ class PreparedManuscriptEngine(Engine):
         before = read_bytes(path)
         library = json.loads(self.library.read(head))
         merged = json.loads(before)
-        if library["metadata"]["manuscript_language"] != merged["metadata"]["manuscript_language"]:
+        language = merged["metadata"]["manuscript_language"], merged["metadata_provenance"].get("/manuscript_language")
+        if library["metadata"]["manuscript_language"] not in (None, language[0]):
             raise ValueError("The work library's manuscript language differs from this run.")
         extent = merged["metadata"]["extent"], merged["metadata_provenance"].get("/extent")
         merged["metadata"] = copy.deepcopy(library["metadata"])
         merged["metadata_provenance"] = copy.deepcopy(library["metadata_provenance"])
+        merged["metadata"]["manuscript_language"] = language[0]
+        if language[1]:
+            merged["metadata_provenance"]["/manuscript_language"] = language[1]
         # Extent is computed from this run's own prepared revision.
         merged["metadata"]["extent"] = extent[0]
         merged["metadata_provenance"].pop("/extent", None)
@@ -705,6 +721,7 @@ class PreparedManuscriptEngine(Engine):
                 raise ValueError("Metadata changed after presentation; retry with --refresh-gate to review it again.")
             if not at_gate and self._library_changed(state):
                 raise WorkflowError("metadata_conflict", "The work library's metadata changed outside this run.")
+            self.before_metadata_edit(state)
             result = self.metadata_helper().update(path, "set", field=field, value=value, actor=actor, rationale=reason)
             self.verify(state)
             payload = {"field": field, "record_revision": result["record_revision"]}
@@ -718,6 +735,9 @@ class PreparedManuscriptEngine(Engine):
                     payload["publication_id"] = self._publish_metadata(state, "metadata_edit")["id"]
             self.store.save(revision, state, "metadata.edited", payload)
             return state
+
+    def before_metadata_edit(self, state):
+        """Refuse an edit before writing if a downstream phase has frozen its metadata basis."""
 
     def after_turn(self, state):
         if not state.get("prepared") or self.stage_def(state).get("preparation"):

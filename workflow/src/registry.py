@@ -66,7 +66,7 @@ TEMPLATE_SCHEMA = {
             "type": "object", "required": ["id", "kind"],
             "properties": {
                 "id": ID,
-                "kind": {"enum": ["agent", "metadata_review", "select", "acceptance", "export"]},
+                "kind": {"enum": ["agent", "metadata_review", "select", "acceptance", "production", "export"]},
                 "agent": {"type": "string"},
                 "preparation": {"type": "boolean"},
                 # A select stage: the user picks option stages one at a time (e.g. editing passes) and accepts

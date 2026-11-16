@@ -1,0 +1,4 @@
+interface:
+  display_name: "Interior Design"
+  short_description: "Propose evidence-bound book interior designs"
+  default_prompt: "Use $interior-design to read my prepared manuscript and propose an interior-design form for review, without generating a document."

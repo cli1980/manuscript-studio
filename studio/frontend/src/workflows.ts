@@ -106,6 +106,7 @@ export class ChapterViewerWorkflowUI extends WorkflowUI {
   override get hasChapterViewer() { return true; }
 
   override decisionPage(run: RunDetail) {
+    if (run.production && (run.gate?.kind === "docx_generation_review" || run.status === "WAITING_FOR_ACCEPTANCE")) return null;
     if (run.status === "WAITING_FOR_HUMAN" && run.gate) return viewer(run.id, run.gate.chapter_id);
     if (run.status === "WAITING_FOR_ACCEPTANCE" && run.acceptance) return viewer(run.id);
     return null;
@@ -163,11 +164,6 @@ export class TranslationWorkflowUI extends ChapterViewerWorkflowUI {
   }
 }
 
-/** Manuscript formatting: one decision flow on a whole accepted version, so everything stays on the run page. */
-export class FormattingWorkflowUI extends WorkflowUI {
-  override get agentName() { return "formatter"; }
-}
-
 const EDITING_VERBS: Record<string, string> = { developmental: "developmental review", line: "line editing", copy: "copyediting" };
 
 /** Literary editing: one pane, the text being edited (the original until a pass changes the chapter). The user
@@ -175,12 +171,19 @@ const EDITING_VERBS: Record<string, string> = { developmental: "developmental re
 export class EditingWorkflowUI extends ChapterViewerWorkflowUI {
   override get agentName() { return "editor"; }
 
+  override decisionCopy(gate: Gate): DecisionCopy {
+    return gate.kind === "interior_design_review"
+      ? { heading: "Review formatting specification" } : super.decisionCopy(gate);
+  }
+
   override stageVerb(stage: string) { return EDITING_VERBS[stage] ?? super.stageVerb(stage); }
 
   override stageSummary(template: Template) {
     const passes = Object.values(template.choices).flat().map((o) => o.title.toLowerCase());
     return `After preparation and metadata review you choose editing passes one at a time (${passes.join(", ")}), `
-      + "in any order and as often as needed, and accept each pass's output. Final acceptance publishes the edited text.";
+      + "in any order and as often as needed, and accept each pass's output. Finish editing and approve the manuscript; "
+      + "the final formatting phase then starts automatically with interior design and its editable specification review. "
+      + "Review the generation plan, download the checked editable DOCX and accept it to finish. PDF and rendered-page checks are deferred.";
   }
 
   override panes(chapter: ChapterDetail): Pane[] {
@@ -194,7 +197,6 @@ export class EditingWorkflowUI extends ChapterViewerWorkflowUI {
 const WORKFLOWS: Record<string, WorkflowUI> = {
   "literary-translation": new TranslationWorkflowUI("literary-translation"),
   "literary-editing": new EditingWorkflowUI("literary-editing"),
-  "format-manuscript": new FormattingWorkflowUI("format-manuscript"),
 };
 
 export function workflowUI(workflow: string | undefined | null): WorkflowUI {

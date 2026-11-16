@@ -48,7 +48,7 @@ evals/
 │   ├── prepare-manuscript/
 │   ├── literary-translation/
 │   ├── literary-agent-querying/
-│   ├── format-manuscript/
+│   ├── interior-design/
 │   └── review-approval-sheet/
 ├── rubrics/
 ├── server/

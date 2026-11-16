@@ -119,6 +119,28 @@ wording. Do not add generated chapter titles, YAML front matter, analysis,
 glossary entries, or provenance headings to chapter bodies. Keep footnotes with
 the relevant unit and preserve their text and references.
 
+Manuscript Markdown is HTML-free. Raw HTML blocks and inline tags, including
+`<br />`, paragraph/span tags, comments, declarations and processing instructions,
+are not permitted. The validator checks parsed CommonMark tokens, not a tag
+regex: escaped/literal code text and Markdown autolinks are not raw HTML.
+HTML-looking text present in the original is literary content, not an instruction
+to render HTML. Preserve the exact visible characters by escaping the markup in
+prepared Markdown: original `<br />` becomes `\<br />`, and original
+`<span>text</span>` becomes `\<span>text\</span>`. Do not interpret tags as
+formatting, strip them, or invent code styling. Existing literal code can remain
+code. An input Markdown file containing unescaped tags is not ready to copy
+unchanged: escape them to preserve literal source text and record that
+representation change, without altering the authoritative original.
+
+Empty DOCX paragraphs are represented by ordinary blank-line paragraph spacing.
+Never manufacture `<br />`, empty HTML elements, placeholder prose or ornaments
+to preserve a source paragraph count. Verify all nonempty source content in
+order and record empty-paragraph/spacing normalization separately in
+`extraction.normalization_notes`. An empty paragraph alone does not authorize
+inventing a semantic scene-break marker. Explicit Markdown hard breaks may
+represent actual within-paragraph source line breaks; they are not a substitute
+for an empty source paragraph.
+
 Keep non-text anchors in their source positions. Store necessary image or other
 non-text assets in `assets/`, with hashes and source locators, and reference them
 from the chapter. Do not invent descriptions of inaccessible illustrations.
@@ -215,6 +237,12 @@ workflows stale while retaining their old `basis_revision` and state locators.
 Create a new revision, re-extract or copy verified unchanged units, verify its
 coverage, and publish it before resuming affected work. Only the owning workflow
 may revalidate its decisions and move its status out of stale.
+
+This also applies to earlier extractions that invented HTML spacing markers.
+Do not remove those markers in place or reuse approvals bound to the old
+chapter hashes. Reprepare with the HTML-free/literal-text rules in a fresh
+revision using the updated skill, retain the old evidence, and obtain fresh
+dependent manuscript/design approval before production.
 
 Reassess source-bound metadata against the new revision and mark old inferences
 and counts stale until refreshed. Metadata-only edits increment the work record

@@ -66,6 +66,19 @@ inside a new revision directory. This contract applies even when the input is
 already text or Markdown; verified existing chapters may be copied into the
 standard layout without re-extracting them.
 
+Manuscript Markdown must contain no raw HTML, either block or inline: no
+`<br />`, `<p>`, `<span>`, comments, or other tags. Use ordinary Markdown syntax.
+Represent empty DOCX paragraphs with blank-line paragraph spacing, not HTML,
+placeholder text, or invented scene-break ornaments. Do not force one Markdown
+block per source DOCX paragraph by turning empty paragraphs into tags.
+Record spacing normalization in the manifest. HTML-looking text present in the
+original must remain literal text: escape its angle brackets in Markdown (for
+example, original `<br />` becomes `\<br />`). Never interpret those tags as
+formatting, strip them, or invent code styling for otherwise plain source text.
+Already-literal code may retain its source code syntax. If meaningful structure
+cannot be represented faithfully without HTML, record a blocker rather than
+silently dropping it or publishing raw HTML.
+
 Find real chapter or section boundaries from the source. Do not split by token,
 page, or word limits. A verified self-contained work without chapters is one
 `standalone` unit. Front and back matter must be included as explicitly typed

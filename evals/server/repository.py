@@ -17,7 +17,7 @@ SKILLS = {
     "literary-editing": "Literary editing",
     "literary-translation": "Literary translation",
     "literary-agent-querying": "Literary agent querying",
-    "format-manuscript": "Format manuscript",
+    "interior-design": "Interior design",
     "review-approval-sheet": "Review approval sheet",
 }
 DIMENSIONS = {"fidelity", "english_naturalness", "literary_voice"}

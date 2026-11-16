@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, readBase64, type Publication } from "../api";
+import { api, readBase64 } from "../api";
 import { ErrorBox, Status, TextBlock, useLoad, when } from "./common";
 import { Markdown } from "./Markdown";
 import { workflowUI } from "../workflows";
@@ -25,7 +25,7 @@ export function Works() {
               <tr key={work.id}>
                 <td><a href={`#/works/${encodeURIComponent(work.id)}`}>{work.title}</a></td>
                 <td className="mono">{work.id}</td>
-                <td>{work.manuscript_language}</td>
+                <td>{work.manuscript_language ?? "Awaiting preparation"}</td>
                 <td>
                   {Object.entries(work.workflows).map(([name, flow]) => (
                     <span key={name} className="tag">{name}: {flow.status === "read_only" ? "final" : flow.status}</span>
@@ -45,7 +45,7 @@ export function Works() {
 
 function AddManuscript({ onAdded }: { onAdded: (workId: string) => void }) {
   const [file, setFile] = useState<File | null>(null);
-  const [language, setLanguage] = useState("zh-CN");
+  const [language, setLanguage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,11 +70,12 @@ function AddManuscript({ onAdded }: { onAdded: (workId: string) => void }) {
       <h2>Add a manuscript</h2>
       <div className="row">
         <input type="file" accept=".md,.txt,.docx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <label>Manuscript language <input value={language} onChange={(e) => setLanguage(e.target.value)} size={8} /></label>
-        <button type="submit" disabled={busy || !file || !language}>{busy ? "Adding…" : "Add as a new work"}</button>
+        <label>Language hint (optional) <input value={language} placeholder="Auto-detect" onChange={(e) => setLanguage(e.target.value)} size={12} /></label>
+        <button type="submit" disabled={busy || !file}>{busy ? "Adding…" : "Add as a new work"}</button>
       </div>
       <ErrorBox error={error} />
-      <p className="muted">Each upload creates a new work, even for an identical file. Preparation runs as the first stage of a workflow.</p>
+      <p className="muted">Each upload creates a new work, even for an identical file. Language can remain blank:
+        preparation detects it from the manuscript before downstream work starts.</p>
     </form>
   );
 }
@@ -85,7 +86,6 @@ export function WorkView({ workId }: { workId: string }) {
     useLive((live) => `${live.works[workId] ?? ""}|${allRuns(live)}`));
   const [viewing, setViewing] = useState<{ path: string; text: string } | null>(null);
   const [viewError, setViewError] = useState<string | null>(null);
-  const [formatError, setFormatError] = useState<string | null>(null);
 
   async function open(path: string) {
     try {
@@ -96,24 +96,12 @@ export function WorkView({ workId }: { workId: string }) {
     }
   }
 
-  async function format(renderer: string, publicationId: string) {
-    try {
-      const run = await api.create({ template_id: "manuscript-formatting-v1", derived: true, work_id: workId,
-        publication_id: publicationId, options: { renderer } });
-      window.location.hash = `#/runs/${run.id}`;
-    } catch (exc) {
-      setFormatError(exc instanceof Error ? exc.message : String(exc));
-    }
-  }
-
   if (!data) return <ErrorBox error={error ?? null} />;
-  // Every finalized run's accepted output can be formatted; newest first.
-  const accepted = data.publications.filter((p) => p.contract === "accepted-markdown-chapters/1").reverse();
   return (
     <section>
       <p><a href="#/works">← Works</a></p>
       <h1>{data.title}</h1>
-      <p className="muted mono">{data.id} · {data.manuscript_language} · source <a href={api.sourceUrl(data.id)} download
+      <p className="muted mono">{data.id} · {data.manuscript_language ?? "language pending preparation"} · source <a href={api.sourceUrl(data.id)} download
         title="Download the original upload">{data.source_name}</a> · owner {data.owner}</p>
       {data.origin && (
         <p>Created from the formatted <a href={`#/runs/${data.origin.run_id}`}>{data.origin.source_version}</a> output of work{" "}
@@ -141,10 +129,6 @@ export function WorkView({ workId }: { workId: string }) {
             : flow.status}
         </div>
       ))}
-      {accepted.length > 0 && (
-        <FormatPanel workId={workId} accepted={accepted} busy={!!data.unfinished_run} onFormat={(renderer, id) => void format(renderer, id)} />
-      )}
-      <ErrorBox error={formatError} />
       <h2>Runs</h2>
       <table>
         <thead><tr><th>Run</th><th>Template</th><th>Status</th><th>Stage</th><th>Created</th></tr></thead>
@@ -180,6 +164,7 @@ export function WorkView({ workId }: { workId: string }) {
               {/* The original upload is downloaded, not viewed; its verified text is in each run's chapter viewer. */}
               {path.startsWith("sources/")
                 ? <a href={api.sourceUrl(workId)} download>{path}</a>
+                : path.endsWith("/document.docx") ? <a href={api.publishedDocxUrl(workId, head.id)} download>{path}</a>
                 : <button className="link" onClick={() => void open(path)}>{path}</button>}
               <span className="muted"> v{head.version} · {head.status}{head.review_status === "unreviewed" ? " (unreviewed)" : ""}</span>
             </li>
@@ -207,7 +192,7 @@ export function WorkView({ workId }: { workId: string }) {
 // Start a workflow on this work without leaving the page; the new run appears in the Runs table below.
 function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }: {
   workId: string;
-  language: string;
+  language: string | null;
   unfinishedRun: string | null;
   workflows: Record<string, { status: string }>;
   onStarted: () => void;
@@ -221,14 +206,14 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
   const template = available.find((t) => t.id === templateId);
   const selection = useModelSelection(template?.workflow);
   // Passage size is counted in characters for Chinese, Japanese, and Korean, otherwise in words.
-  const unit = ["zh", "ja", "ko"].includes(language.split("-")[0].toLowerCase()) ? "cjk_chars" : "words";
-  const defaultSize = template?.passage_size?.[unit];
+  const unit = language ? (["zh", "ja", "ko"].includes(language.split("-")[0].toLowerCase()) ? "cjk_chars" : "words") : null;
+  const defaultSize = unit ? template?.passage_size?.[unit] : undefined;
 
   async function start() {
     setBusy(true);
     setError(null);
     try {
-      const settings = defaultSize && passageSize.trim() ? { passage_size: Number(passageSize) } : undefined;
+      const settings = template?.passage_size && passageSize.trim() ? { passage_size: Number(passageSize) } : undefined;
       const run = await api.create({ template_id: templateId, work_id: workId, settings,
         ...(selection.model ? { model: selection.model } : {}) });
       setTemplateId("");
@@ -242,8 +227,10 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
     }
   }
 
-  // While a run is unfinished the Runs section already shows it; the start panel simply stays hidden.
-  if (unfinishedRun) return null;
+  if (unfinishedRun) return <div className="banner warn">
+    A workflow is still unfinished on this work. <a href={`#/runs/${unfinishedRun}`}>Open the unfinished workflow</a>
+    {" "}and finish or stop it before starting another.
+  </div>;
   return (
     <div className="panel">
       <h2>Start a workflow</h2>
@@ -260,102 +247,19 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
         <button className="primary" disabled={!templateId || busy || !selection.ready} onClick={() => void start()}>{busy ? "Starting…" : "Start"}</button>
       </div>
       <ExecutionProfileNotice selection={selection} />
-      {defaultSize && (
+      {template?.passage_size && (
         <details>
           <summary>Advanced</summary>
           <label>Maximum passage size{" "}
-            <input type="number" min={100} step={100} value={passageSize} placeholder={String(defaultSize)}
-              onChange={(e) => setPassageSize(e.target.value)} />{" "}{unit === "cjk_chars" ? "characters" : "words"}</label>
+            <input type="number" min={100} step={100} value={passageSize} placeholder={defaultSize ? String(defaultSize) : "Automatic"}
+              onChange={(e) => setPassageSize(e.target.value)} />{" "}{!unit ? "units determined during preparation"
+                : unit === "cjk_chars" ? "characters" : "words"}</label>
           <p className="muted">The agent translates and reviews each chapter passage by passage. Smaller passages get closer
             review; a longer passage needs your approval as an exception. Fixed for the run.</p>
         </details>
       )}
       {template && <p className="muted">{workflowUI(template.workflow).stageSummary(template)}</p>}
       <ErrorBox error={error ?? templates.error ?? selection.error} />
-    </div>
-  );
-}
-
-// Formatting: choose a version, preview its key data, then format it.
-interface RunRecord {
-  version: string; workflow: string; template_id: string; run_id: string; accepted_at: string;
-  acceptance: { decision_source: string }; manuscript_language: string; output_language: string;
-  prepared_revision: string; metadata_confirmed: { record_revision: number } | null; restarts: number;
-  chapters: { chapter_id: string; bytes: number; attempts: number | null }[];
-  decisions: Record<string, { replies: number; decided_by: Record<string, number> }>;
-}
-
-function versionOf(publication: Publication) {
-  return publication.artifact.match(/\/(v\d{3,})\//)?.[1] ?? "";
-}
-
-function FormatPanel({ workId, accepted, busy, onFormat }: {
-  workId: string;
-  accepted: Publication[];
-  busy: boolean;
-  onFormat: (renderer: string, publicationId: string) => void;
-}) {
-  const [choice, setChoice] = useState("");
-  const [renderer, setRenderer] = useState("word");
-  const [preview, setPreview] = useState<{ run: RunRecord; titles: string[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const selected = accepted.find((p) => p.id === choice);
-
-  async function choose(id: string) {
-    setChoice(id);
-    setPreview(null);
-    setError(null);
-    const publication = accepted.find((p) => p.id === id);
-    if (!publication) return;
-    try {
-      const folder = publication.artifact.replace(/manifest\.json$/, "");
-      const [run, manifest] = await Promise.all([
-        api.artifact(workId, folder + "run.json"), api.artifact(workId, publication.artifact)]);
-      const parse = (value: unknown) => (typeof value === "string" ? JSON.parse(value) : value);
-      const chapters = (parse(manifest) as { chapters: { chapter_id: string; title: string | null }[] }).chapters;
-      setPreview({ run: parse(run) as RunRecord, titles: chapters.map((c) => c.title ?? c.chapter_id) });
-    } catch (exc) {
-      setError(exc instanceof Error ? exc.message : String(exc));
-    }
-  }
-
-  return (
-    <div className="panel">
-      <h2>Format as DOCX</h2>
-      <div className="row">
-        <label>Version{" "}
-          <select value={choice} onChange={(e) => void choose(e.target.value)}>
-            <option value="">Choose a version…</option>
-            {accepted.map((p) => (
-              <option key={p.id} value={p.id}>{p.workflow ?? "workflow"} {versionOf(p)} · {when(p.created_at)}</option>
-            ))}
-          </select>
-        </label>
-        <label>Renderer{" "}
-          <select value={renderer} onChange={(e) => setRenderer(e.target.value)}>
-            <option value="word">Microsoft Word</option>
-            <option value="libreoffice">LibreOffice</option>
-          </select>
-        </label>
-        <button className="primary" disabled={busy || !selected || !preview} onClick={() => onFormat(renderer, choice)}>Format</button>
-      </div>
-      <ErrorBox error={error} />
-      {preview && selected && (
-        <div className="version-preview">
-          <dl className="review-details">
-            <div><dt>Version</dt><dd>{preview.run.workflow} {preview.run.version} → manuscript-{preview.run.version}.docx</dd></div>
-            <div><dt>Run</dt><dd><a href={`#/runs/${preview.run.run_id}`}>{preview.run.run_id.slice(0, 8)}</a> ({preview.run.template_id})</dd></div>
-            <div><dt>Accepted</dt><dd>{when(preview.run.accepted_at)} by {preview.run.acceptance.decision_source === "human" ? "you" : preview.run.acceptance.decision_source}</dd></div>
-            <div><dt>Languages</dt><dd>{preview.run.manuscript_language} → {preview.run.output_language}</dd></div>
-            <div><dt>Chapters</dt><dd>{preview.titles.length}: {preview.titles.join(", ")}</dd></div>
-            <div><dt>Size</dt><dd>{preview.run.chapters.reduce((total, c) => total + c.bytes, 0).toLocaleString()} bytes</dd></div>
-            <div><dt>Basis</dt><dd>prepared revision {preview.run.prepared_revision}; metadata revision {preview.run.metadata_confirmed?.record_revision ?? "—"}</dd></div>
-            <div><dt>Decisions</dt><dd>{Object.entries(preview.run.decisions).map(([gate, d]) => `${gate.replaceAll("_", " ")}: ${d.replies}`).join(" · ") || "none"}
-              {preview.run.restarts ? ` · ${preview.run.restarts} restarts` : ""}</dd></div>
-          </dl>
-        </div>
-      )}
-      {busy && <p className="muted">A run is unfinished on this work; formatting can start when it finishes.</p>}
     </div>
   );
 }

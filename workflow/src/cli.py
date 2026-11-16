@@ -8,7 +8,6 @@ import shutil
 import sys
 from pathlib import Path
 
-from .engine import finalization_notice
 from .execution import ExecutionProfile
 from .runtime import CodexRuntime
 from .service import WorkflowService
@@ -20,6 +19,10 @@ def emit(value):
 
 def display(engine, state, *, review=False):
     emit(engine.summary(state))
+    if engine.retired:
+        print("\nThis workflow was removed. Its history and artifacts are read-only; "
+              "start a supported workflow to continue.")
+        return
     if not review:
         return
     if state.get("gate"):
@@ -55,6 +58,21 @@ def display(engine, state, *, review=False):
         elif gate["kind"] == "metadata_review":
             print("\nEdit: python -m workflow metadata RUN --gate GATE-ID --field /PATH --value-file VALUE.json"
                   "\nEach edit presents a new gate ID. Confirm with a reply containing exactly 'confirm metadata'.")
+        elif gate["kind"] == "interior_design_review":
+            view = engine.design_view(state)
+            print("\nInterior-design proposal and author questions:")
+            emit({"proposal_sha256": view["sha256"], "proposal": view["proposal"],
+                  "vendor_warnings": view["vendor_warnings"]})
+            command = (f"python -m workflow review-design {state['id']} --gate {gate['id']} "
+                       f"--proposal-sha256 {view['sha256']}")
+            print("\nSave specification edits: " + command + " --action save --spec-file SPEC.json")
+            print("Request an agent revision: " + command + " --action request-revision --feedback-file FEEDBACK.txt")
+            print("Approve the displayed proposal: " + command + " --action approve [--answers-file ANSWERS.json]")
+            print("Answers map every blocking question ID to a nonempty response; omit the file only if none block.")
+        elif gate["kind"] == "docx_generation_review":
+            print("\n" + state["gate"]["message"])
+            print("Authorize the displayed exact plan with: python -m workflow authorize-docx RUN "
+                  "--gate GATE-ID --plan-sha256 " + state["production"]["plan_sha256"])
     if state["status"] == "WAITING_FOR_ACCEPTANCE":
         print("\nReview these immutable outputs against the source before accepting.")
         for artifact in state["outputs"]:
@@ -64,7 +82,7 @@ def display(engine, state, *, review=False):
             if artifact.get("content_changed_after_sanity_review"):
                 print("Text changed after the approved sanity-review base; inspect the applied changes.")
             print("Accepted candidate:\n" + engine.store.content(artifact).decode("utf-8"))
-        print("\nIMPORTANT: " + finalization_notice(state["workflow"]))
+        print("\nIMPORTANT: " + engine.acceptance_details(state)["notice"])
         print("Accept with: python -m workflow accept RUN --acceptance-id ACCEPTANCE-ID --confirm-final")
     if engine.finalized(state):
         print(f"\nFINAL: this run is finalized; its {state['workflow']} version on work {state['work_id']} can never "
@@ -117,18 +135,12 @@ def parser():
     origin = create.add_mutually_exclusive_group(required=True)
     origin.add_argument("--source", type=Path, help="Upload a manuscript; always creates a new work.")
     origin.add_argument("--work", help="Start this workflow on an existing work.")
-    create.add_argument("--manuscript-language", help="Required with --source, e.g. zh-CN.")
-    create.add_argument("--publication", help="Derived templates: the accepted-output publication (default: latest).")
+    create.add_argument("--manuscript-language", help="Optional language hint; preparation detects it when omitted.")
     create.add_argument("--model", help="Configured model key with --execution-profile; otherwise a runtime model ID.")
     create.add_argument("--agent-model", action="append", metavar="AGENT=MODEL", help="Model for one agent.")
     create.add_argument("--passage-size", type=int, metavar="N",
                         help="Maximum passage size for this run (characters for CJK text, else words); "
                              "default from the template.")
-    backend = create.add_mutually_exclusive_group()
-    backend.add_argument("--documents-skill", type=Path, help="Formatting: external Documents skill.")
-    backend.add_argument("--renderer", choices=("word", "libreoffice"), help="Formatting: built-in renderer.")
-    create.add_argument("--purpose", choices=("reader-facing", "editorial-review", "submission"), default="reader-facing")
-    create.add_argument("--new-edition", action="store_true", help="Formatting: create a distinct edition.")
     runs = sub.add_parser("runs", help="List runs.")
     runs.add_argument("--work")
     metadata = sub.add_parser("metadata", help="Edit one shared metadata field of a run.")
@@ -140,8 +152,8 @@ def parser():
     history = sub.add_parser("metadata-history", help="List a run's metadata versions or show one.")
     history.add_argument("run")
     history.add_argument("--version", type=int)
-    for command in ("step", "status", "review", "reply", "accept", "retry", "stop", "events",
-                    "restart-stage", "restart-chapter", "restart"):
+    for command in ("step", "status", "review", "reply", "accept", "review-design", "authorize-docx", "retry",
+                    "stop", "events", "restart-stage", "restart-chapter", "restart"):
         child = sub.add_parser(command)
         child.add_argument("run")
         if command == "step":
@@ -150,10 +162,20 @@ def parser():
         elif command == "reply":
             child.add_argument("--gate", required=True)
             child.add_argument("--response-file", required=True, type=Path)
+        elif command == "authorize-docx":
+            child.add_argument("--gate", required=True)
+            child.add_argument("--plan-sha256", required=True)
+        elif command == "review-design":
+            child.add_argument("--gate", required=True)
+            child.add_argument("--proposal-sha256", required=True, help="SHA-256 shown by review for this proposal.")
+            child.add_argument("--action", required=True, choices=("save", "request-revision", "approve"))
+            child.add_argument("--spec-file", type=Path, help="Save: JSON edition_brief, design_system and role_styles.")
+            child.add_argument("--feedback-file", type=Path, help="Request revision: UTF-8 feedback text.")
+            child.add_argument("--answers-file", type=Path, help="Approve: JSON mapping of blocking question IDs to answers.")
         elif command == "accept":
             child.add_argument("--acceptance-id", required=True)
             child.add_argument("--confirm-final", action="store_true",
-                               help="Confirm that accepting finalizes the run and makes the workflow read-only.")
+                               help="Confirm the displayed manuscript-approval or finalization notice.")
         elif command == "retry":
             child.add_argument("--confirm-stopped", action="store_true")
             child.add_argument("--refresh-gate", action="store_true")
@@ -213,24 +235,10 @@ def run(service, args):
             value = json.loads(args.value_file.read_text(encoding="utf-8-sig"))
             emit(service.edit_work_metadata(args.work, args.field, value, args.reason))
     elif command == "create":
-        from . import registry
-        template = registry.get(args.template)
-        if "consumes" in template:
-            if args.source or args.manuscript_language:
-                raise ValueError("Derived templates start from an existing work's publication; use --work.")
-            if args.passage_size:
-                raise ValueError("--passage-size applies to templates that divide chapters into passages.")
-            run_id = service.create_derived_run(
-                args.work, args.template, publication_id=args.publication, model=args.model,
-                agent_models=agent_models(args.agent_model), new_edition=args.new_edition,
-                options={"documents_skill": args.documents_skill, "renderer": args.renderer, "purpose": args.purpose})
-        else:
-            if args.publication or args.renderer or args.documents_skill or args.new_edition:
-                raise ValueError("Formatting options apply only to derived templates.")
-            run_id = service.create_run(args.template, upload=args.source, work_id=args.work,
-                                        manuscript_language=args.manuscript_language, model=args.model,
-                                        agent_models=agent_models(args.agent_model),
-                                        settings={"passage_size": args.passage_size} if args.passage_size else None)
+        run_id = service.create_run(args.template, upload=args.source, work_id=args.work,
+                                    manuscript_language=args.manuscript_language, model=args.model,
+                                    agent_models=agent_models(args.agent_model),
+                                    settings={"passage_size": args.passage_size} if args.passage_size else None)
         show(service, run_id)
         profile_option = f' --execution-profile "{args.execution_profile}"' if args.execution_profile else ""
         if args.user_execution_profile:
@@ -260,14 +268,30 @@ def run(service, args):
                 kind = engine._stage_or_empty(engine.state()).get("kind")
             if not profile and kind == "agent" and shutil.which(args.codex) is None:
                 raise ValueError("Codex executable not found. Install/sign in to Codex or pass --codex PATH.")
-            service.step(args.run, profile.runtime() if profile else
-                         CodexRuntime([args.codex, "app-server"], args.timeout))
+            runtime = None
+            if kind == "agent":
+                runtime = profile.runtime() if profile else CodexRuntime([args.codex, "app-server"], args.timeout)
+            service.step(args.run, runtime)
         elif command == "metadata":
             value = json.loads(args.value_file.read_text(encoding="utf-8-sig"))
             service.edit_metadata(args.run, args.field, value, args.reason, gate_id=args.gate)
             review = True
         elif command == "reply":
             service.reply(args.run, args.gate, args.response_file.read_text(encoding="utf-8"))
+        elif command == "authorize-docx":
+            service.authorize_docx(args.run, args.gate, args.plan_sha256)
+        elif command == "review-design":
+            files = {"spec": args.spec_file, "feedback": args.feedback_file, "answers": args.answers_file}
+            field = {"save": "spec", "request-revision": "feedback", "approve": "answers"}[args.action]
+            if any(path is not None for name, path in files.items() if name != field):
+                raise ValueError(f"--action {args.action} accepts only --{field}-file.")
+            path = files[field]
+            if path is None and field != "answers":
+                raise ValueError(f"--action {args.action} requires --{field}-file.")
+            text = path.read_text(encoding="utf-8-sig") if path is not None else "{}"
+            value = text if field == "feedback" else json.loads(text)
+            service.review_interior_design(args.run, args.gate, args.proposal_sha256, args.action, **{field: value})
+            review = True
         elif command == "accept":
             service.accept(args.run, args.acceptance_id, confirm_final=args.confirm_final)
         elif command == "retry":

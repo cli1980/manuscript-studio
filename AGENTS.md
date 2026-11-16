@@ -17,6 +17,25 @@ feature branch, continue on it. Do not develop milestones directly on `main`;
 keep unrelated milestone work on separate branches. Use descriptive names such
 as `feature/m4-literary-edit` or `feature/remote-multi-user`.
 
+## Interior design and formatting
+
+Before changing interior-design skills, formatting inputs, production, or workflow
+integration, read the
+[high-level design](tools/formattor/docs/interior-design-and-production.md), including
+its requirement traceability and open-decision register.
+
+`tools/formattor` is a pinned submodule from `cli1980/book-formatter`. If its
+documents are absent, run
+`git submodule update --init --recursive tools/formattor` first. Edit tool-owned
+files in that repository and update the parent's gitlink; do not recreate a
+second tracked copy in this repository.
+
+Keep owner-confirmed requirements separate from draft recommendations. Preserve
+stable requirement/decision IDs; record subsequent direction and its effects in
+the design. Do not silently resolve open product decisions or claim implementation
+without linked evidence. Keep milestone scope/progress in `roadmap.md` and link
+to the design instead of creating another delivery tracker.
+
 ## Compatibility
 
 Until the product's first formal release, do not preserve backward compatibility

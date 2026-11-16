@@ -32,8 +32,8 @@
     "expected_preparation_status": {"enum": ["ready", "blocked"]},
     "expected_workflows": {
       "type": "object",
-      "required": ["literary-editing", "literary-translation", "literary-agent-querying", "format-manuscript"],
-      "propertyNames": {"enum": ["literary-editing", "literary-translation", "literary-agent-querying", "format-manuscript"]},
+      "required": ["literary-editing", "literary-translation", "literary-agent-querying"],
+      "propertyNames": {"enum": ["literary-editing", "literary-translation", "literary-agent-querying"]},
       "additionalProperties": {
         "type": "object",
         "required": ["status"],

@@ -1,5 +1,11 @@
 # M1 design draft — Generalized workflow engine
 
+Historical note: the derived formatter examples in this original M1 record are
+superseded by IDP-C12. That engine/template/skill and its launch paths are removed.
+Current formatting is the parent workflow's final phase; see the
+[current design](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/docs/interior-design-and-production.md). Retained examples below are
+historical rationale, not supported commands or extension requirements.
+
 **Status:** Owner-reviewed design (2026-10-26 session); all open questions were
 answered and are incorporated below. A 2026-10-27 gap review before
 implementation changed some of it; section 13 records those decisions and takes

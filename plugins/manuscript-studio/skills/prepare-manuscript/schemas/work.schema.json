@@ -37,12 +37,11 @@
     "workflows": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["literary-editing", "literary-translation", "literary-agent-querying", "format-manuscript"],
+      "required": ["literary-editing", "literary-translation", "literary-agent-querying"],
       "properties": {
         "literary-editing": {"$ref": "#/$defs/workflow"},
         "literary-translation": {"$ref": "#/$defs/workflow"},
-        "literary-agent-querying": {"$ref": "#/$defs/workflow"},
-        "format-manuscript": {"$ref": "#/$defs/workflow"}
+        "literary-agent-querying": {"$ref": "#/$defs/workflow"}
       }
     }
   },

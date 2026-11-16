@@ -4,6 +4,24 @@
 
 The project is designed to keep authors and translators focused on ideas, voice, and story instead of repeatedly searching dictionaries and thesauruses, debating commas and colons, revisiting grammar books, or hunting for typos. It provides structured, reviewable workflows that help AI agents streamline the path from manuscript development through translation, editing, and querying—without taking creative authority away from the author.
 
+## Formatter Tool Submodule
+
+[Book Formatter](https://github.com/cli1980/book-formatter) is an independent
+repository, checked out here as the pinned `tools/formattor` submodule.
+Its [design and gap-analysis index](https://github.com/cli1980/book-formatter/blob/237be7d034b57f7a77fd0b7e9cd0ecb03a27d05c/README.md)
+is authoritative for the formatter. The current content is documentation;
+executable API/CLI packaging and generator integration remain pending.
+
+For an existing checkout:
+
+```text
+git submodule update --init --recursive tools/formattor
+```
+
+For a new checkout, use `git clone --recurse-submodules`. Submodule update uses
+the parent repository's pinned commit, not automatically the latest `main`.
+Skills-only plugin installation does not require the formatter checkout.
+
 ## Install as a ChatGPT and Codex plugin
 
 The six skills live in one canonical directory, `plugins/manuscript-studio/skills/`.
@@ -23,8 +41,9 @@ publish the plugin to the public directory or install it in ChatGPT web.
 Before use, read the plugin's [privacy policy](plugins/manuscript-studio/PRIVACY.md),
 [support contact](plugins/manuscript-studio/SUPPORT.md), and
 [runtime support and fallback examples](plugins/manuscript-studio/RUNTIME-SUPPORT.md).
-DOCX production requires an external Documents skill and rendering tools;
-interactive reviews depend on the host's inline visualization support, with
+The separately installed standalone formatter supplies the bounded DOCX-only
+workflow POC; it does not require Word or a renderer. PDF/rendering is deferred.
+Interactive reviews depend on the host's inline visualization support, with
 revision-bound text fallback when it is unavailable.
 
 Existing installations do not automatically migrate because the marketplace
@@ -180,9 +199,18 @@ Translates literary works chapter by chapter using source analysis, a living glo
 
 Reads and positions a novel, builds a synopsis-complete story ledger, researches and prioritizes suitable literary agents, and prepares reusable query materials. Existing approved artifacts are reused by default. Only an explicit request to build a package for a specific agent creates an on-demand ZIP, including a synopsis only when that agent's verified guidelines request one.
 
-### `format-manuscript`
+### `interior-design`
 
-Inspects a project draft, recommends and confirms a reusable genre- and purpose-appropriate formatting specification, then orchestrates production of a polished manuscript edition without changing the prose. Its current primary path produces visually verified Word manuscripts with semantic styles and an accurate table of contents while keeping the specification reusable for future PDF and EPUB adapters.
+Reads verified preparation, metadata, agent reading and author preferences to
+produce a proposed interior-design form: typography, leading, geometry, paragraph
+rhythm, semantic text roles and navigation. It runs standalone without a workflow
+run or orchestration UI, or can be called as a reusable component. The
+[output schema](plugins/manuscript-studio/skills/interior-design/schemas/interior-design-proposal.schema.json)
+and [synthetic example](plugins/manuscript-studio/skills/interior-design/references/proposal.example.json)
+are machine-readable. This replaces the former `format-manuscript` skill; it
+does not generate documents, approve designs or attest production QA. Native
+intake and production are separate from the skill; the workflow consumes the
+standalone formatter for the bounded editable-DOCX POC.
 
 ### `review-approval-sheet`
 
@@ -196,8 +224,12 @@ source-grounded review and human gates,
 explicit artifact acceptance, and Markdown export. It persists run state and review
 receipts in SQLite and uses a Codex App Server adapter. General line editing is not
 part of the default translation flow.
-An optional final manuscript formatter can consolidate accepted English chapters
-into a readable DOCX after format-specification approval and document/render QA.
+Literary editing starts its final formatting phase after manuscript approval,
+with interior design and an editable specification-review form. The old separate
+formatter route and format skill are removed. Exact-plan authorization, checked
+DOCX construction, candidate download and final editable-document acceptance are
+integrated into that phase. PDF/rendered-page review and translation composition
+remain pending; no print certification is claimed.
 
 This prototype is separate from the distributed skills plugin. See its README for
 setup, tests, recovery, and current limits, and the

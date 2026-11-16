@@ -7,6 +7,7 @@ import { ChapterPanes } from "./ChapterPanes";
 import { clearComments, type InlineComment } from "./CommentableText";
 import { runState, useLive } from "../live";
 import { TokenUsage } from "./TokenUsage";
+import { DocxDelivery } from "./DocxDelivery";
 
 // The chapter viewer: a run's review page, generic across workflows. It lays out the chapter list, the reading
 // panes, and the decision slots; the run's WorkflowUI decides what differs (the panes, decision wording, statuses).
@@ -186,6 +187,8 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
             {run.data?.status === "WAITING_FOR_ACCEPTANCE" && run.data.acceptance && (
               <div className="decision-anchor">{decision(false)}</div>
             )}
+            {run.data?.production?.docx && run.data.status !== "WAITING_FOR_ACCEPTANCE"
+              && <DocxDelivery run={run.data} perform={(operation) => void performExchange(operation)} />}
           </div>
         </div>
       )}
@@ -199,8 +202,9 @@ const SUPPLIED_BASIS = { metadata: "the work's metadata", document_properties: "
 // Where the run stands, so the viewer is enough to follow it; problems link to run management.
 function RunStatusBar({ run }: { run: RunDetail }) {
   const working = run.status === "RUNNING" || run.worker.active;
-  const state = working ? "agent working" : run.status === "WAITING_FOR_HUMAN" ? "waiting for you"
-    : run.status === "WAITING_FOR_ACCEPTANCE" ? "ready to finalize" : null;
+  const state = working ? (run.stage === "produce-docx" ? "formatter working" : "agent working")
+    : run.status === "WAITING_FOR_HUMAN" ? "waiting for you"
+    : run.status === "WAITING_FOR_ACCEPTANCE" ? run.acceptance?.title : null;
   const ended = run.status === "COMPLETED" || run.status === "CANCELLED";
   const problem = !run.engine_current && !ended && !run.finalized
     ? "The workflow engine changed after this run started; it can only be restarted."

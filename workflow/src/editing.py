@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import sys
+import uuid
 
+from .interior import DESIGN_STAGE, MANUSCRIPT_APPROVAL, InteriorDesignPhase
 from .prepared import WHOLE, PreparedManuscriptEngine
 from .storage import digest, now, plain, read_bytes
 
@@ -85,9 +87,21 @@ RETURN = (
 )
 
 
-class EditingEngine(PreparedManuscriptEngine):
+class EditingEngine(InteriorDesignPhase, PreparedManuscriptEngine):
     chapter_folder = "chapters"
     operation = "literary-edit"
+
+    def _present_choice(self, state):
+        super()._present_choice(state)
+        gate = state["gate"]
+        if gate["kind"] == "pass_choice":
+            gate["options"][-1]["title"] = "Review manuscript"
+            gate["message"] += "\n\nFinish editing to review and approve the manuscript before the final formatting phase."
+
+    def _advance_stage(self, state):
+        if state["stage"] == "passes":
+            return self._enter_stage(state, MANUSCRIPT_APPROVAL)
+        return super()._advance_stage(state)
 
     @staticmethod
     def manuscript_path(chapter):
@@ -166,6 +180,9 @@ class EditingEngine(PreparedManuscriptEngine):
         return [state["manuscript"][item["chapter_id"]]]
 
     def before_turn(self, state):
+        if state["stage"] == DESIGN_STAGE:
+            self.prepare_design_turn(state)
+            return
         item = self.current_iteration(state) if self.stage_def(state).get("iterate") else None
         starting = item is not None and item["status"] == "pending"
         super().before_turn(state)
@@ -178,6 +195,7 @@ class EditingEngine(PreparedManuscriptEngine):
 
     def verify_extra(self, state):
         super().verify_extra(state)
+        self.verify_design(state)
         stage = self._stage_or_empty(state)
         if not state.get("manuscript"):
             return
@@ -223,6 +241,8 @@ class EditingEngine(PreparedManuscriptEngine):
                     raise ValueError(f"An empty review requires the saved explicit '{evidence}' record.")
 
     def on_completed(self, state, stage, result):
+        if stage["id"] == DESIGN_STAGE:
+            return self.complete_design(state, result)
         if not stage.get("iterate"):
             return super().on_completed(state, stage, result)
         item = self.current_iteration(state)
@@ -270,6 +290,8 @@ class EditingEngine(PreparedManuscriptEngine):
         return artifact
 
     def stage_prompt(self, state, stage):
+        if stage["id"] == DESIGN_STAGE:
+            return self.design_prompt(state)
         agent = state["definition"]["agents"][stage["agent"]]
         context = {
             "stage": stage["id"], "source": str(self.root / "input" / state["source_name"]),
