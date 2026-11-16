@@ -773,6 +773,18 @@ status, owner, and relevant issue or implementation links. Use these statuses:
     combinations fail with an actionable explanation.
 - **POC feature brief — Pi Evaluation** (Pi selected by the owner on
   2026-11-06; tryout endpoint and model selected on 2026-11-12):
+  - **PR #5 review fixes (2026-11-16):** restart now resolves the default model
+    and all carried agent-model choices against the startup profile before
+    cancelling the original run, for both ordinary and derived restart paths.
+    Missing keys, changed workflow permissions and incompatible defaults leave
+    the original state/index unchanged; restoring a compatible profile permits
+    restart. Works and Workflows share compatible-model selection and profile
+    notices; creation waits for the catalog and requires a compatible choice
+    when configured. Workflow changes cannot submit an incompatible prior
+    choice; no-profile operation still omits the model key.
+    Verified 99 workflow/profile/API tests, both model-selection browser checks
+    and frontend typecheck/build. Browser checks use isolated fixtures with no
+    inference calls. No live runs or unrelated formatter checkout were changed.
   - **Status:** `in_progress`; implemented locally and uncommitted, automated
     local checks and one live private-endpoint translation case passed; human quality
     review and remaining recovery/isolation evidence pending.

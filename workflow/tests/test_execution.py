@@ -1,6 +1,7 @@
 """Execution-profile and Pi transport checks; no external inference requests."""
 
 import contextlib
+import copy
 import io
 import json
 import os
@@ -18,6 +19,7 @@ from ..src.execution import ExecutionProfile
 from ..src.harnesses import HARNESSES, Harness
 from ..src.pi_runtime import PiRuntime
 from ..src.runtime import Request
+from ..src.service import WorkflowService
 from ..src.stdio import StdioTransport
 
 PI_CLI = Path(__file__).resolve().parents[2] / (
@@ -36,6 +38,47 @@ def profile_data():
 
 
 class ProfileTests(unittest.TestCase):
+    def test_restart_rejects_changed_models_without_cancelling_original(self):
+        for change in ("removed-key", "restricted-workflow", "incompatible-default"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder).resolve()
+                source = root / "source.md"
+                source.write_bytes(b"# Story\n\nSynthetic manuscript.\n")
+                original = profile_data()
+                service = WorkflowService(root / "server", execution_profile=ExecutionProfile(original))
+                try:
+                    run_id = service.create_run("literary-translation-v1", upload=source,
+                                                manuscript_language="en", model="choice")
+                    path = Path(service._run_row(run_id)["path"])
+                    before = service._load_state(path)
+                finally:
+                    service.close()
+                updated = copy.deepcopy(original)
+                if change == "removed-key":
+                    updated["default_model"] = updated["models"][0]["key"] = "replacement"
+                elif change == "restricted-workflow":
+                    updated["models"][0]["workflows"] = ["literary-editing"]
+                else:
+                    updated["models"].append({**updated["models"][0], "key": "editing-only",
+                                              "workflows": ["literary-editing"]})
+                    updated["default_model"] = "editing-only"
+                service = WorkflowService(root / "server", execution_profile=ExecutionProfile(updated))
+                try:
+                    with self.assertRaises(ValueError):
+                        service.restart_workflow(run_id, reason="Profile changed")
+                    self.assertEqual(service._load_state(path), before)
+                    self.assertEqual(service._run_row(run_id)["status"], before["status"])
+                    self.assertEqual([r["id"] for r in service.list_runs()], [run_id])
+                finally:
+                    service.close()
+                service = WorkflowService(root / "server", execution_profile=ExecutionProfile(original))
+                try:
+                    replacement = service.restart_workflow(run_id, reason="Compatible profile restored")
+                    self.assertEqual(service._load_state(path)["superseded_by"], replacement)
+                    self.assertEqual(service.get_run(replacement)["execution"]["model_key"], "choice")
+                finally:
+                    service.close()
+
     def test_file_and_credentials_are_snapshotted_and_secrets_are_not_public(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "profile.json"

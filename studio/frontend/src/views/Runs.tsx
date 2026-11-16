@@ -3,6 +3,7 @@ import { api } from "../api";
 import { ErrorBox, reviewName, Status, useLoad, when } from "./common";
 import { workflowUI } from "../workflows";
 import { allRuns, useLive } from "../live";
+import { ExecutionProfileNotice, ModelPicker, useModelSelection } from "./ModelSelection";
 
 const PENDING: Record<string, string> = {
   WAITING_FOR_HUMAN: "Your review", WAITING_FOR_ACCEPTANCE: "Final acceptance", BLOCKED: "Resolve blocker",
@@ -49,24 +50,20 @@ export function Runs({ initialWork }: { initialWork?: string }) {
 function NewRun({ initialWork }: { initialWork?: string }) {
   const templates = useLoad(api.templates, []);
   const works = useLoad(api.works, []);
-  const execution = useLoad(api.execution, []);
   const [templateId, setTemplateId] = useState("literary-translation-v1");
-  const [modelKey, setModelKey] = useState("");
   const [workId, setWorkId] = useState(initialWork ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const template = templates.data?.find((t) => t.id === templateId);
-  const configured = !!execution.data?.models.length;
-  const models = execution.data?.models.filter((m) =>
-    !m.workflows.length || (template && m.workflows.includes(template.workflow))) ?? [];
-  const model = modelKey || models.find((m) => m.model_key === execution.data?.default_model)?.model_key || "";
+  const selection = useModelSelection(template?.workflow);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const run = await api.create({ template_id: templateId, work_id: workId, ...(model ? { model } : {}) });
+      const run = await api.create({ template_id: templateId, work_id: workId,
+        ...(selection.model ? { model: selection.model } : {}) });
       window.location.hash = workflowUI(run.workflow).landingPage(run.id);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : String(exc));
@@ -80,18 +77,11 @@ function NewRun({ initialWork }: { initialWork?: string }) {
       <h2>Start a workflow</h2>
       <div className="row">
         <label>Workflow{" "}
-          <select value={templateId} onChange={(e) => { setTemplateId(e.target.value); setModelKey(""); }}>
+          <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
             {templates.data?.filter((t) => !t.consumes).map((t) => <option key={t.id} value={t.id}>{t.title} ({t.id})</option>)}
           </select>
         </label>
-        {configured && <label>Model{" "}
-          <select value={model} onChange={(e) => setModelKey(e.target.value)}>
-            <option value="">Select a compatible model…</option>
-            {models.map((m) => <option key={m.model_key} value={m.model_key}>
-              {m.model} · {m.endpoint ?? m.harness}
-            </option>)}
-          </select>
-        </label>}
+        <ModelPicker selection={selection} />
         <label>Work{" "}
           <select value={workId} onChange={(e) => setWorkId(e.target.value)}>
             <option value="">Select a work…</option>
@@ -103,11 +93,10 @@ function NewRun({ initialWork }: { initialWork?: string }) {
           </select>
         </label>
       </div>
-      {configured && <p className="muted">Execution profile: {execution.data?.name} ({execution.data?.harness}).
-        {execution.data?.harness === "pi" && " Pi POC runs trusted local tools without an OS sandbox."}</p>}
+      <ExecutionProfileNotice selection={selection} />
       {template && <p className="muted">{workflowUI(template.workflow).stageSummary(template)}</p>}
-      <ErrorBox error={error ?? templates.error ?? execution.error} />
-      <button type="submit" disabled={busy || !workId || !execution.data || (configured && !model)}>
+      <ErrorBox error={error ?? templates.error ?? selection.error} />
+      <button type="submit" disabled={busy || !workId || !selection.ready}>
         {busy ? "Starting…" : "Create and start"}</button>
       <p className="muted">Add new manuscripts on the <a href="#/works">Works</a> page. Preparation is the workflow's first
         stage; the agent then runs automatically until it needs you.</p>
