@@ -52,7 +52,7 @@ export function RunView({ runId }: { runId: string }) {
         <div><span>Status</span><Status value={run.status} />{live && <span className="tag busy">
           {run.stage === "produce-docx" ? "formatter working" : "agent working"}</span>}{run.worker.paused && <span className="tag">paused</span>}</div>
         <div><span>Stage</span>{run.stage}{run.chapter_id ? ` · ${run.chapter_id === "_whole" ? "whole-book review" : run.chapter_id}` : ""}</div>
-        <div><span>Progress</span>{run.progress ? `${run.progress.completed}/${run.progress.total} chapters` : "—"}</div>
+        <div><span>Progress</span>{run.progress ? `${run.progress.completed}/${run.progress.total} manuscript units` : "—"}</div>
         {run.whole_book_status && <div><span>Whole book</span>{run.whole_book_status.replaceAll("_", " ")}</div>}
         <div><span>Stages</span>{run.stages.map((s) => <span key={s} className={`tag ${s === run.stage ? "busy" : ""}`}>{s}</span>)}</div>
         {!!run.passes?.length && <div><span>Passes</span>{run.passes.map((p) => (

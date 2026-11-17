@@ -24,6 +24,7 @@ export function App() {
   if (parts[0] === "works" && parts[1]) view = <WorkView workId={parts[1]} />;
   else if (parts[0] === "works") view = <Works />;
   else if (parts[0] === "runs" && parts[1] === "new") view = <Runs initialWork={parts[2]} />;
+  else if (parts[0] === "runs" && parts[1] && parts[2] === "overview") view = <Chapters runId={parts[1]} />;
   else if (parts[0] === "runs" && parts[1] && parts[2] === "chapters") view = <Chapters runId={parts[1]} chapterId={parts[3]} />;
   else if (parts[0] === "runs" && parts[1]) view = <RunView runId={parts[1]} />;
   else view = <Runs />;
@@ -47,13 +48,13 @@ export function App() {
 function ApprovalNotice() {
   const runs = useLoad(api.runs, [], useLive(allRuns));
   const waiting = (runs.data ?? []).filter(
-    (r) => r.status === "WAITING_FOR_HUMAN" && !!r.gate_chapter_id && !!r.gate_kind && r.engine_current);
+    (r) => r.status === "WAITING_FOR_HUMAN" && !!r.gate_kind && r.engine_current);
   if (!waiting.length) return null;
   return (
     <div className="approval-notice">
       {waiting.map((r) => (
         <a key={r.id} href={workflowUI(r.workflow).gateLink(r)}>
-          {r.gate_chapter_id} of {r.work_id} {r.gate_kind === "chapter_sanity" ? "is translated and awaits your approval"
+          {r.viewer_target?.kind === "overview" ? "Overview" : r.gate_chapter_id ?? "Work"} of {r.work_id} {r.gate_kind === "chapter_sanity" ? "is translated and awaits your approval"
             : r.gate_review ? `awaits your review (${reviewName(r.gate_kind ?? "")})`
             : `awaits your decision (${(r.gate_kind ?? "").replaceAll("_", " ")})`} →
         </a>

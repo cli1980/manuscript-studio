@@ -1,6 +1,6 @@
 ---
 name: literary-agent-querying
-description: Build and maintain literary-agent query packages for novels using manuscript-grounded positioning, a structured story ledger with mandatory item-by-item author approval through a review sheet, claim-level evidence control, current agent research, package drafting, and customized submission instructions. Use when identifying or ranking agents; creating or revising fiction queries, hooks, bios, metadata, comparable-title positioning, series overviews, checklists, or static package state; building, reviewing, approving, or repairing a story ledger; or, after an explicit request to build, rebuild, or regenerate the complete package for a named agent, creating a fresh terminal agent-specific ZIP and any synopsis the verified guidelines require without reusing prior on-demand output. Persist outputs under the project-root query-package folder in writable workspaces; otherwise deliver Codex artifacts.
+description: Research and rank literary agents, develop market positioning, and draft truthful pitches, queries, bios, comparisons and submission packages from a revision-bound, author-approved manuscript-analysis story ledger. Delegate manuscript reading, ledger construction, evidence auditing and story review to manuscript-analysis. Build a fresh terminal agent-specific ZIP only after an explicit named-agent complete-package request, including a synopsis only when verified guidelines require it.
 ---
 
 # Literary Agent Querying
@@ -10,7 +10,7 @@ Build a truthful, manuscript-grounded query package through a short guided dialo
 ## Governing Rules
 
 1. Treat the author as the authority on intent, identity, publication history, rights, and career goals.
-2. During a full flow, read the complete supplied novel and existing pitch materials before asking questions they already answer. When query-package artifacts already exist, inspect them, reuse approved parts by default, and repair only the requested or unsafe parts; do not reread the full novel or repeat the full intake unless the author explicitly forces a refresh. Treat positioning derived from an incomplete manuscript as provisional.
+2. During a full flow, obtain a complete, source-bound reading through manuscript-analysis and inspect designated pitch materials before asking questions they already answer. Reuse valid approved analysis and static query state; do not repeat manuscript reading or intake solely for an incremental query revision. Treat incomplete coverage as provisional and not ready for story-dependent submission prose.
 3. Ask only questions that materially affect the package. Use short conversational rounds organized by topic, not one long form.
 4. Do not invent story facts, credentials, comparable titles, market claims, personalization, submission requirements, or rights status.
 5. Distinguish an inference from an author-confirmed fact. Ask for confirmation before using a consequential inference.
@@ -23,14 +23,14 @@ Build a truthful, manuscript-grounded query package through a short guided dialo
 12. In a writable project workspace, write all generated query artifacts beneath `<project-root>/query-package/`, creating that folder when needed. The designated shared `work.json` may receive this workflow's status summary and shared descriptive metadata updates under the metadata contract; it must not contain query prose or ledger content. Do not inspect or gate output on Git status, and do not stage or commit outputs unless the user separately asks. When no writable project root exists, including web chat, create Codex artifacts instead. Never write query outputs inside an editorial-process subfolder.
 13. Preserve the two output categories defined in [references/package-spec.md](references/package-spec.md): `query-package/static/` for reusable general information and `query-package/on-demand/` for terminal ZIP products authorized by a named-agent build, rebuild, or complete-regeneration request.
 14. Read manuscript and supporting inputs only from paths or attachments explicitly designated for this querying job. If a designated input is inside an editorial-process output folder, ask for an allowed source copy or attachment instead of reading it. Never use editorial assessments, normalized editorial manuscripts, proposals, style sheets, continuity records, reports, or exports as query evidence.
-15. Treat manuscript sources as read-only evidence. Existing static pitches, previous static query drafts, and model-generated summaries are leads to verify, not factual authorities. Treat every on-demand package as a terminal deliverable, never as evidence, prerequisite state, drafting input, or conversation context for later work.
+15. Treat manuscript sources as read-only evidence. The verified, author-approved manuscript-analysis ledger is the sole shared story authority under the handoff contract. Pitches, earlier drafts and other generated summaries are leads, not authorities. Analysis cannot launder forbidden editorial inputs. Every on-demand package remains a terminal deliverable, never evidence, prerequisite state or context for later work.
 16. If neither a writable project root nor a Codex artifact facility is available, return only applicable static material in clearly labeled chat sections and state that persistent output was unavailable. Never emit an on-demand package or any of its component files into conversation context; report that the complete ZIP could not be persisted and stop.
-17. Derive category, genre, target readership, prose essence, story type, tone, and reader promise from manuscript evidence. Use author input to confirm or correct the analysis, not as a substitute for reading the novel.
+17. Derive market positioning from the shared manuscript-grounded reading profile and approved ledger. Own category/reader-promise choices, comparable-title positioning and pitch strategy; delegate disputed source interpretation or profile repair to manuscript-analysis rather than generating another reading.
 18. Recognize only one on-demand authorization class: the author explicitly asks to build, rebuild, or regenerate the complete package for a named agent. A request for a query letter, synopsis, tailoring advice, shortlist entry, priority selection, named-agent discussion, or general agent research is not authorization to create on-demand artifacts.
 19. Deliver each authorized named-agent build, rebuild, or complete regeneration as an unversioned downloadable ZIP beneath `query-package/on-demand/`. Include the mandatory package manifest and customized submission instructions, and preserve the internal layout defined in [references/package-spec.md](references/package-spec.md).
 20. Do not state an inference, character belief, or ambiguity as objective fact. Do not assert causation from narrative adjacency, merge distinct entities or events for compression, or assign knowledge or motives to a character or faction without evidence.
 21. Run the full flow only when no reusable static query-package artifacts exist or the author explicitly forces a full refresh. When static artifacts exist, show a compact freshness summary, reuse approved static parts by default, and repair only missing, requested, or unsafe static parts. Exclude `query-package/on-demand/` and all prior on-demand deliverables from artifact discovery and context assembly. Never convert a static revision or on-demand package request into a silent full refresh. Reverify time-sensitive agent status and submission requirements for every on-demand package regardless.
-22. Treat `query-package/static/story-ledger.md` as the reusable, agent-neutral story source of truth only after it passes the mandatory human review in [references/story-ledger-human-review.md](references/story-ledger-human-review.md). Build it from the complete designated manuscript according to [references/story-ledger-schema.md](references/story-ledger-schema.md), bind it to the manuscript identity, create the durable `static/story-ledger-review.md` audit record and its revision-bound `static/story-ledger-review.json` interface state, and present every synopsis-eligible atomic proposition through the shared interactive approval sheet. Require an explicit disposition for every `HG` item; approval of the sheet or ledger as a whole is insufficient. Structural accuracy or model confidence never replaces this gate. Until all units and separate final closure are explicitly confirmed, keep ledger status `awaiting-confirmation` and synopsis readiness `not-ready`. Once approved and unchanged, generate story-side package prose and any requested synopsis from the ledger without reopening the raw manuscript.
+22. Follow [the manuscript-analysis handoff](references/manuscript-analysis-handoff.md). Pin the external analysis, ledger and review identities in the static manifest; do not create query-local ledger/review copies. Require a passing source/evidence audit, an explicit disposition of every required atomic `HG` proposition, propagated corrections and separate final closure. Querying cannot grant or repair analysis approval. Reuse an unchanged approved ledger without rereading the raw manuscript; route gaps back to manuscript-analysis.
 23. Make every on-demand package independently auditable and usable. Include `package-manifest.md` and `submission-instructions.md` with a current official website or form route, or an official submission email supplied or verified from the agent or agency. Always record the agent's sample-page requirement in the manifest, including `not-requested` when applicable, and make the instructions identify exactly where and how to append, paste, upload, or attach the sample. Provide exact numbered actions and map every requested field, pasted item, and attachment to the package. Mark the package `not-ready` when no current, unambiguous submission route can be verified.
 24. Treat on-demand output as a complete, one-time product. For every authorized build or rebuild, start from an empty staging directory and reproduce the entire ZIP from approved static assets, the designated manuscript only where required to prepare submission material, and newly verified agent evidence. Never inspect, extract, quote, revise in place, copy from, or otherwise use a prior on-demand file or ZIP as context. The only exception is an explicit user request to audit a named prior package; an audit may read that package but may not promote or reuse its contents. Keep only complete `agent-package-<agent-slug>.zip` files in `query-package/on-demand/`; never leave loose synopses, letters, samples, manifests, instructions, drafts, or staging directories there.
 
@@ -75,9 +75,7 @@ page-limit trimming remain querying operations.
 
 Read [references/questionnaire.md](references/questionnaire.md) in full before interviewing the author. Read [references/package-spec.md](references/package-spec.md) in full before drafting or validating outputs.
 
-Read [references/story-ledger-schema.md](references/story-ledger-schema.md) in full before building, repairing, approving, or validating a story ledger or generating a synopsis. If the manuscript is unavailable, the skill may still build a package from the author's answers, but label all manuscript-dependent conclusions `author-supplied` and identify what remains unverified.
-
-Read [references/story-ledger-human-review.md](references/story-ledger-human-review.md) in full before creating or presenting a ledger approval sheet, processing item dispositions, changing a ledger's approval state, or reusing an approved ledger after a correction.
+Read [references/manuscript-analysis-handoff.md](references/manuscript-analysis-handoff.md) in full. Delegate reading, ledger creation/repair and story approval to the sibling [manuscript-analysis skill](../manuscript-analysis/SKILL.md). Querying consumes its verified output; it does not own those operations. If the source is unavailable, collect clearly unverified author-supplied intake but do not mark story-dependent prose or a package ready.
 
 Before beginning work, inspect the current conversation and allowed `query-package/static/` state for reusable prerequisites. These include manuscript identity and checksum, completion state, title, word count, language, market, publication and representation history, rights status, series architecture, approved structured story ledger and synopsis readiness, positioning, biography, comparisons, and the static manifest. Do not enumerate, read, extract, summarize, or otherwise load `query-package/on-demand/` or prior on-demand artifacts into context.
 
@@ -92,17 +90,16 @@ Steps 2-6 define the full flow. Skip them when reusable artifacts exist unless t
 
 ### 2. Derive the positioning profile
 
-Before asking the author to classify the book, analyze the complete novel and propose:
+Before asking the author to classify the book, consume the shared reading profile and approved ledger, then propose query-facing positioning:
 
 - category and genre or subgenre;
 - target and crossover readership;
-- prose essence, including register, cadence, density, narrative distance, interiority, and tonal character;
-- dominant story type or narrative engine;
-- tone, themes, and reader promise;
+- query register informed by the recorded prose essence and narrative engine;
+- reader promise and emphasis grounded in the recorded tone and themes;
 - plausible comparable-title functions;
 - the practical implication of each finding for the query's metadata, hook, emphasis, voice, and level of worldbuilding.
 
-For each consequential classification, record manuscript evidence, confidence, and credible alternatives. Do not classify from character age, setting, isolated tropes, or word count alone.
+For each consequential classification, cite analysis evidence/claim IDs, confidence and credible alternatives. Do not classify from isolated tropes or word count alone. Source-reading gaps return to manuscript-analysis; market choices remain querying's responsibility.
 
 ### 3. Discover and prioritize suitable agents
 
@@ -142,6 +139,10 @@ Show the manuscript-derived profile, then ask the author to confirm, correct, or
 
 Permit `unknown`, `not applicable`, and `decide with me`. Offer reasoned options when the author is unsure, but do not silently select a consequential answer.
 
+Return corrections to source interpretation, story facts or ambiguities to
+manuscript-analysis for propagation and required review. Author/rights intake
+and query strategy stay here; this interview must not create a second ledger.
+
 ### 5. Confirm before drafting
 
 Present a compact intake summary containing:
@@ -157,17 +158,15 @@ Present a compact intake summary containing:
 
 Ask the author to correct or approve the summary. Do not block on minor optional fields, but label omissions in the package manifest.
 
-Build `query-package/static/story-ledger.md` using every required section and readiness test in [references/story-ledger-schema.md](references/story-ledger-schema.md). Populate it from the complete designated manuscript, not from memory, pitches, or earlier generated summaries. Use stable IDs and locators to cross-link the causal event spine, plot threads, character and relationship arcs, revelation timing, chronology, objects and authority, controlled claims, ending resolutions, and synopsis compression profiles. After the structural and evidence audit passes, set ledger status `awaiting-confirmation` and synopsis readiness `not-ready`.
+Before story-dependent drafting, require manuscript-analysis to complete its evidence audit and item-level human review with separate final closure. Verify the exact source, ledger, review and analysis bindings under the handoff contract. Approval of this intake/positioning summary is not story approval. If required analysis is missing or stale, delegate the authorized work and keep querying `not-ready`.
 
-Create `query-package/static/story-ledger-review.md` and the synchronized `query-package/static/story-ledger-review.json` interface state according to [references/story-ledger-human-review.md](references/story-ledger-human-review.md). Read the sibling [review-approval-sheet skill](../review-approval-sheet/SKILL.md) in full, validate the JSON, and render the complete interactive approval sheet. Convert every synopsis-eligible ledger proposition into one atomic `HG` approval unit. Accept dispositions for multiple units in any order, but require each `HG` ID to be explicitly enumerated with `approve`, `qualify`, `correct`, or `keep ambiguous`. Parse the revision-bound response, then let this querying skill apply its domain rules and synchronize both records. A correction must be propagated to the ledger and must invalidate every dependent approval unit; re-present corrected units rather than treating a correction as approval.
-
-After every unit is resolved and its state has been saved, render the shared sheet's separate final-closure view. Mark the ledger `approved` and synopsis readiness `ready` only after parsing that closure response, a still-passing integrity audit, and zero pending, correction-required, or invalidated units. Author approval of positioning, a package, a synopsis, or the ledger in general is not approval of any unreviewed unit. Keep general project, author, rights, publication, and positioning state in `query-package/static/intake-summary.md`; do not duplicate the story ledger there.
+Keep general project, author, rights, publication and positioning state in `query-package/static/intake-summary.md`. Pin the approved shared analysis in the static manifest; do not duplicate its story ledger or review state.
 
 ### 6. Generate the general package
 
-Create the applicable static artifacts defined in [references/package-spec.md](references/package-spec.md). Always create a master query letter, author biography, book-positioning sheet, prioritized agent shortlist, submission checklist, package manifest, intake summary, structured story ledger, and story-ledger human-review record. Create a series overview when applicable. Do not create story-dependent query prose until the ledger's human gate passes, and do not create a general or static synopsis.
+Create the applicable static artifacts defined in [references/package-spec.md](references/package-spec.md): master query letter, author biography, book-positioning sheet, prioritized agent shortlist, submission checklist, package manifest and intake summary. Reference the shared analysis/ledger/review rather than copying them. Create a series overview when applicable. Do not create story-dependent query prose until the shared ledger's human gate passes, and do not create a general or static query-package synopsis.
 
-Derive story compression in the master query directly from the approved structured story ledger and confirmed positioning. If the query requires a story claim or interpretation absent from the ledger, update the ledger and obtain confirmation only for the consequential new inference or resolved ambiguity before continuing.
+Derive story compression in the master query from the pinned approved ledger and confirmed positioning. If a claim or interpretation is missing, stop and return it to manuscript-analysis for evidence repair and all required item re-review/closure before repinning and continuing.
 
 Keep static materials independent of any single agent. Shape the query from the confirmed positioning profile: foreground the dominant story engine, use an appropriate amount of worldbuilding, align the pitch's register with the prose essence without imitating the novel, and select metadata and comparisons for the actual readership.
 
@@ -189,25 +188,26 @@ Make the selected opening a compact query pitch, not a synopsis-like story brief
 
 Keep every agent-facing draft as temporary working text outside the `agent-package/` archive tree until all tailoring and factual corrections are complete. Then run a final prose gate on the exact text to be packaged: reread every full sentence for grammar, parallelism, modifier attachment, pronoun antecedents, idiom, punctuation, semantic ambiguity, and natural rhythm. Never validate only the changed phrase. Any later wording change invalidates this gate and the claim audit; repeat both on the final text before copying it into `agent-package/`. Do not package a query, synopsis, email body, or form answer until both checks pass.
 
-If the verified submission guidelines request a synopsis, generate `agent-package/<agent-slug>/synopsis.md` inside that agent's on-demand package. Verify first that `static/story-ledger.md` is approved, synopsis-ready, and bound to the unchanged manuscript identity. Match the requested length, weighting, formatting, and paste-or-attachment instructions. Use only the ledger and confirmed positioning, include the ending, and audit every material atomic claim against ledger IDs; do not reopen the raw manuscript or ask the author to approve the synopsis separately. Write with vivid causal movement and a continuous protagonist-centered emotional spine, using concrete story-specific details and compressing secondary intermediaries where possible; do not let the synopsis read like a ledger export. If drafting exposes a ledger gap, mark the affected synopsis profile `not-ready` and request authorization for a targeted ledger refresh or the narrowly required author confirmation before regenerating. Do not generate a synopsis when the agent's verified guidelines do not request one.
+If verified guidelines request a synopsis, generate `agent-package/<agent-slug>/synopsis.md` under the [analysis handoff's drafting rules](references/manuscript-analysis-handoff.md). Verify the pinned external ledger is approved, synopsis-ready, gate-passed and bound to unchanged source. Match the requested length/format/delivery, include the ending and audit every atomic claim. Do not copy the neutral analysis synopsis, read a prior on-demand product or require separate synopsis approval. Preserve causal/emotional movement rather than exporting ledger rows. Route gaps to manuscript-analysis and do not generate a submission synopsis when the guidelines do not request one.
 
 ### 8. Validate
 
 Check:
 
-- during ledger construction or an authorized ledger refresh, every ledger claim against the designated manuscript and its stable locator;
-- that `static/story-ledger-review.md` and `static/story-ledger-review.json` are synchronized, bound to the exact ledger and manuscript revisions, and contain one atomic `HG` unit for every synopsis-eligible proposition;
+- that the external manuscript-analysis package passed its source/evidence audit and matches the analysis/ledger/review identities pinned in the static manifest;
+- that its review records are synchronized, bound to the exact ledger/manuscript revisions and contain one atomic `HG` unit per required proposition;
 - that the complete approval sheet was presented, every synopsis-eligible `HG` unit received an explicit item-level disposition, every response was persisted, corrections were propagated, and dependent approvals were invalidated and re-reviewed;
 - that ledger status is not `approved` and synopsis readiness is not `ready` unless no human-review unit remains pending, correction-required, or invalidated and the author explicitly gave final closure;
 - during query or synopsis generation, every story claim through an atomic-claim audit: split each sentence into factual clauses and map every material clause to structured story-ledger IDs and their recorded locators without reopening an unchanged manuscript;
-- that the story ledger passes every completeness and integrity check in [references/story-ledger-schema.md](references/story-ledger-schema.md), is approved, and matches the current manuscript identity;
+- that the shared ledger satisfies [the handoff contract](references/manuscript-analysis-handoff.md), is approved and matches the current manuscript identity;
 - that facts, character beliefs, inferences, and ambiguities retain their evidentiary status and degree of certainty;
 - that no causal relationship rests only on narrative adjacency;
 - that entity identity, chronology, object provenance, motives, knowledge states, revelation timing, and ending remain accurate;
 - title, category, genre, word count, and series language across all files;
 - that category, genre, target readership, prose essence, story type, and query emphasis remain supported by the novel;
 - that the query foregrounds character, conflict, choice, and stakes rather than explaining the whole world;
-- that no synopsis exists outside an authorized specific-agent package and each generated synopsis was requested by that agent's verified guidelines, matches the requested length, weighting, and format, and includes the ending and major causal turns;
+- that no query/submission synopsis exists outside an authorized specific-agent package; the separate neutral analysis synopsis is not a submission artifact or drafting authority;
+- that each generated submission synopsis was requested by verified guidelines, matches their length/format and includes the ending and major causal turns;
 - that every synopsis claim derives from the approved structured story ledger and passed the atomic-claim audit without requiring a separate synopsis approval or raw-manuscript reread;
 - that biography claims are relevant and supported;
 - that comparable titles are real, suitable, and not presented as guarantees;
@@ -239,14 +239,14 @@ Mark the package `not-ready` if it is incomplete, was derived from or edited fro
 
 When the author requests revisions to static state, show a compact freshness summary, reuse established static prerequisites by default, regenerate only affected static artifacts, and update the static manifest. Do not run the full flow unless the author explicitly requests a full static refresh. If provenance or a changed manuscript blocks safe static reuse, mark the static artifacts `not-ready` and ask for refresh authorization. Never revise an on-demand product incrementally: a request to change, rebuild, or regenerate a named agent package must reproduce the complete package without reading the prior product.
 
-Any correction to the story ledger invalidates the affected human-review unit, its recorded dependents, and the usability of every on-demand package derived from the superseded static package. Update and re-present the approval sheet for those units and require final closure again. A correction to the master pitch, metadata, biography, comparisons, or positioning also invalidates affected on-demand packages. Regardless of invalidation, never use an existing on-demand product as a rebuild source. Reproduce a complete ZIP only after an authorized named-agent build, rebuild, or regeneration request, the corrected static package and human gate have passed validation, and any required underlying fact or inference confirmation has been recorded. An agent-specific synopsis regeneration requires a new ledger-based claim audit, not separate author approval, a raw-manuscript reread, or reuse of a prior synopsis.
+A story-ledger correction belongs to manuscript-analysis, which invalidates affected review units/dependents and requires re-review and renewed closure. Querying marks affected static drafts and products unusable, then repins only after that gate passes. Corrections to pitch, metadata, biography, comparisons or positioning also invalidate affected packages. Never use an existing on-demand product as a rebuild source. Reproduce a complete ZIP only after a new authorized named-agent request and a valid current static package and analysis gate. Fresh synopsis prose needs a new claim audit, not separate author approval or a raw-source reread.
 
 Only after the author explicitly asks to build, rebuild, or regenerate the complete package for a named agent:
 
 1. exclude all prior on-demand files and ZIPs from context and create an empty staging directory outside `query-package/on-demand/`;
 2. verify that the agent is currently open to the book's category;
 3. use official guidelines as the controlling source;
-4. use the approved static query package, with `static/story-ledger.md` as the sole story source, for story-side, metadata, comparison, and biography content;
+4. use the pinned approved external manuscript-analysis ledger as the sole story source, and approved static query metadata, comparisons, positioning and biography for the remaining content;
 5. acquire and record current agent evidence, including official source URLs or official email provenance and dates, and the required sample material and its exact placement, in `package-manifest.md` and `submission-instructions.md`;
 6. draft the query and any requested synopsis as temporary working text with the fresh-tailoring and narrative-quality rules in Step 7;
 7. after the last factual or rhetorical edit, run the final prose gate and rerun the claim audit on the exact final text; only then copy agent-facing prose into `agent-package/`;

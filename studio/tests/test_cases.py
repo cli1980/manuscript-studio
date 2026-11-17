@@ -241,7 +241,8 @@ class StudioCaseTests(unittest.TestCase):
             self.assertTrue(approved.value.ok, approved.value.text())
             expect(page.get_by_role("heading", name="DOCX generation plan", exact=True)).to_be_visible()
             current = page.request.get(run_url).json()
-            self.assertEqual((current["status"], current["finalized"], current["attempts"]), ("WAITING_FOR_HUMAN", False, 2))
+            # Preparation, shared analysis and design; native production adds no agent turn.
+            self.assertEqual((current["status"], current["finalized"], current["attempts"]), ("WAITING_FOR_HUMAN", False, 3))
             self.assertEqual(current["gate"]["kind"], "docx_generation_review")
             self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 391)
             generate = page.get_by_role("button", name="Generate editable DOCX", exact=True)
@@ -422,6 +423,7 @@ class StudioCaseTests(unittest.TestCase):
                 return {
                     "id": run_id, "workflow": "literary-translation", "template_id": "literary-translation-v1",
                     "work_id": "test-work", "status": "WAITING_FOR_HUMAN", "stage": "translate", "chapter_id": chapter,
+                    "viewer_target": {"kind": "chapter", "chapter_id": chapter},
                     "worker": {"active": False, "paused": False}, "progress": {"completed": 0, "total": 2},
                     "finalized": False, "engine_current": True, "error": None, "attempts": 1,
                     "available_actions": [], "stage_titles": {"translate": "Translation"},
@@ -457,9 +459,12 @@ class StudioCaseTests(unittest.TestCase):
                     body = [current]
                 elif path == prefix:
                     body = current
+                elif path == prefix + "/approved-sheets":
+                    body = []
                 elif path == prefix + "/chapters":
-                    body = {"prepared": True, "stages": ["translate"], "whole_book": {}, "chapters": [
-                        {"chapter_id": name, "order": i + 1, "title": name, "role": "chapter",
+                    body = {"prepared": True, "stages": ["translate"], "whole_book": {},
+                            "overview": {"title": "Test work", "source_unit_id": None, "outputs": {}}, "chapters": [
+                        {"chapter_id": name, "order": i + 1, "display_number": i + 1, "title": name, "role": "chapter",
                          "outputs": {"translate": {"status": "in_progress", "ready": False}}}
                         for i, name in enumerate(passages)]}
                 elif path.startswith(prefix + "/chapters/"):
@@ -520,6 +525,7 @@ class StudioCaseTests(unittest.TestCase):
             run = {
                 "id": run_id, "workflow": "literary-editing", "template_id": "literary-editing-v1",
                 "work_id": "test-work", "status": "WAITING_FOR_HUMAN", "stage": "developmental", "chapter_id": "_whole",
+                "viewer_target": {"kind": "overview"},
                 "worker": {"active": False, "paused": False}, "progress": {"completed": 1, "total": 1},
                 "finalized": False, "engine_current": True, "error": None, "attempts": 1,
                 "available_actions": [], "stage_titles": {"developmental": "Developmental edit"},
@@ -539,10 +545,16 @@ class StudioCaseTests(unittest.TestCase):
                     body = [run]
                 elif path == prefix:
                     body = run
+                elif path == prefix + "/approved-sheets":
+                    body = []
                 elif path == prefix + "/chapters":
                     body = {"prepared": True, "stages": ["developmental"], "whole_book": {"developmental": "in_progress"},
-                            "chapters": [{"chapter_id": "one", "order": 1, "title": "One", "role": "chapter",
+                            "overview": {"title": "Test work", "source_unit_id": None, "outputs": {}},
+                            "chapters": [{"chapter_id": "one", "order": 1, "display_number": 1, "title": "One", "role": "chapter",
                                           "outputs": {"developmental": {"status": "completed", "ready": True}}}]}
+                elif path == prefix + "/overview":
+                    body = {"work_id": "test-work", "title": "Test work", "source_unit_id": None,
+                            "prepared": True, "metadata": None, "metadata_fields": [], "source": None}
                 elif path == prefix + "/chapters/one":
                     body = {"chapter": {"chapter_id": "one", "order": 1, "title": "One", "role": "chapter"},
                             "prepared_text": "Chapter text.", "outputs": [], "reviews": [], "passage_map": None}
@@ -552,7 +564,7 @@ class StudioCaseTests(unittest.TestCase):
 
             page.route("**/api/**", serve)
             follows = "(panel, before) => !!(before.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING)"
-            for chapter, before in (("/one", ".columns"), ("", "text=Select a chapter to read it.")):
+            for chapter, before in (("/one", ".columns"), ("", ".overview-section")):
                 page.goto(f"{origin}/#/runs/{run_id}/chapters{chapter}")
                 panel = page.locator(".panel.gate")
                 expect(panel).to_have_count(1)
@@ -607,7 +619,7 @@ class StudioCaseTests(unittest.TestCase):
 
             page.route("**/api/**", serve)
             page.goto(f"{origin}/#/runs/{run_id}")
-            expect(page.locator(".facts").first).to_contain_text("1/3 chapters")
+            expect(page.locator(".facts").first).to_contain_text("1/3 manuscript units")
             expect(page.locator(".token-usage")).to_contain_text("1,500")
             expect(page.locator(".token-usage")).to_contain_text("(partial)")
             page.wait_for_timeout(1500)  # The initial load and the first snapshot settle.
@@ -618,7 +630,7 @@ class StudioCaseTests(unittest.TestCase):
             run["progress"] = {"completed": 2, "total": 3}
             run["usage"].update(total_tokens=1800, input_tokens=1500, reported_attempts=3, partial=False, warnings=[])
             state["revision"] = 2
-            expect(page.locator(".facts").first).to_contain_text("2/3 chapters")
+            expect(page.locator(".facts").first).to_contain_text("2/3 manuscript units")
             expect(page.locator(".token-usage")).to_contain_text("1,800")
             expect(page.locator(".token-usage")).not_to_contain_text("(partial)")
             self.assertEqual(requests[f"/api/runs/{run_id}"], settled + 1)
@@ -656,6 +668,179 @@ class StudioCaseTests(unittest.TestCase):
             app = create_app(server, runtime_factory=runtime, owner="case-runner")
             with TestClient(app, base_url="http://127.0.0.1:8765") as client:
                 CaseRunner(client, case).run()
+
+    @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build frontend and set STUDIO_BROWSER=1.")
+    def test_overview_is_shared_but_workflow_specific(self):
+        """Real API/engine: overview navigation is distinct, while workflows own their reading/review layouts."""
+        import base64
+        import time
+        from playwright.sync_api import expect
+        from .test_web import Scripted, translate
+
+        def check(page, origin):
+            errors = []
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            headers = {"Origin": origin}
+            for workflow, panes in (("literary-translation", 2), ("literary-editing", 1)):
+                with self.subTest(workflow=workflow):
+                    work = page.request.post(origin + "/api/works", headers=headers, data={
+                        "upload": {"name": "synthetic.md", "data": base64.b64encode(
+                            "# 故事\n\n他回来了。\n".encode()).decode()},
+                        "manuscript_language": "zh",
+                    }).json()
+                    run = page.request.post(origin + "/api/runs", headers=headers, data={
+                        "work_id": work["id"], "template_id": workflow + "-v1",
+                    }).json()
+                    run_url = origin + "/api/runs/" + run["id"]
+                    for _ in range(100):
+                        run = page.request.get(run_url).json()
+                        if run.get("gate"):
+                            break
+                        time.sleep(0.1)
+                    self.assertEqual(run["gate"]["kind"], "metadata_review")
+                    self.assertEqual(run["viewer_target"], {"kind": "overview"})
+                    overview_url = f"{origin}/#/runs/{run['id']}/overview"
+                    page.goto(overview_url)
+                    expect(page.get_by_role("heading", name="Story", exact=True)).to_be_visible()
+                    expect(page.get_by_role("region", name="Work metadata")).to_be_visible()
+                    expect(page.get_by_role("heading", name="Translation brief", exact=True)).to_have_count(
+                        1 if workflow == "literary-translation" else 0)
+                    expect(page.locator(f".columns.panes-{panes}")).to_be_visible()
+                    navigation = page.get_by_role("navigation", name="Manuscript navigation")
+                    expect(navigation.locator(".overview-entry")).to_be_visible()
+                    expect(navigation.get_by_text("Overview", exact=True)).to_be_visible()
+                    expect(navigation.locator(".overview-entry").get_by_text(
+                        "awaiting your review: metadata", exact=True)).to_have_count(1)
+                    expect(navigation.locator("ol.chapters li")).to_have_count(1)
+                    expect(navigation.locator("ol.chapters li")).to_contain_text("1.")
+                    self.assertEqual(navigation.locator("ol .overview-entry").count(), 0)
+                    navigation.locator("ol.chapters a").first.click()
+                    expect(page).to_have_url(re.compile(r"/chapters/story$"))
+                    expect(page.locator(".overview-section")).to_have_count(0)
+                    expect(page.locator(".approval-notice a").first).to_have_attribute("href", re.compile(r"/overview$"))
+                    navigation.locator(".overview-entry a").click()
+                    expect(page).to_have_url(overview_url)
+                    original = page.request.get(run_url + "/overview").json()
+                    renamed = page.request.post(run_url + "/metadata", headers=headers, data={
+                        "gate_id": run["gate"]["id"], "field": "/title", "value": "Renamed " + workflow,
+                        "rationale": "Synthetic author correction",
+                    })
+                    self.assertTrue(renamed.ok, renamed.text())
+                    expect(page.get_by_role("heading", name="Renamed " + workflow, exact=True)).to_be_visible()
+                    expect(navigation.locator(".overview-entry a")).to_have_attribute("href", re.compile(r"/overview$"))
+                    current = page.request.get(run_url + "/overview").json()
+                    self.assertEqual(current["source"]["prepared_text"], original["source"]["prepared_text"])
+                    self.assertEqual(current["source_unit_id"], original["source_unit_id"])
+                    # Whole-book findings resolve front-matter unit links to the overview.
+                    page.goto(f"{origin}/#/runs/{run['id']}/chapters/{current['source_unit_id']}")
+                    expect(page).to_have_url(overview_url)
+                    expect(page.get_by_role("region", name="Work metadata")).to_be_visible()
+                    evidence = os.environ.get("STUDIO_EVIDENCE_DIR")
+                    if evidence:
+                        page.screenshot(path=str(Path(evidence) / f"{workflow}-overview-desktop.png"), full_page=True)
+                    page.set_viewport_size({"width": 390, "height": 844})
+                    self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
+                    expect(navigation.locator(".overview-entry")).to_be_visible()
+                    if evidence:
+                        page.screenshot(path=str(Path(evidence) / f"{workflow}-overview-mobile.png"), full_page=True)
+                    page.set_viewport_size({"width": 1280, "height": 900})
+                    # Both workflows hand analysis directly to their next stage, without an analysis approval.
+                    current_run = page.request.get(run_url).json()
+                    confirmed = page.request.post(run_url + "/metadata/confirm", headers=headers, data={
+                        "gate_id": current_run["gate"]["id"],
+                        "record_revision": current_run["gate"]["record_revision"],
+                    })
+                    self.assertTrue(confirmed.ok, confirmed.text())
+                    for _ in range(100):
+                        ready = page.request.get(run_url + "/overview").json()
+                        if ready.get("analysis"):
+                            break
+                        time.sleep(0.1)
+                    self.assertIsNotNone(ready.get("analysis"))
+                    self.assertEqual(ready["analysis"]["approval_status"], "provisional")
+                    self.assertEqual(len(ready["analysis"]["documents"]), 5)
+                    analysis = page.get_by_role("region", name="Manuscript analysis")
+                    expect(analysis.get_by_text("Shared source reading", exact=False)).to_be_visible()
+                    expect(analysis.get_by_role("tab")).to_have_count(5)
+                    expect(analysis.locator("input, textarea")).to_have_count(0)
+                    analysis.get_by_role("tab", name="Synopsis", exact=True).click()
+                    expect(analysis.get_by_role("tabpanel")).to_contain_text("Synthetic synopsis")
+                    page.set_viewport_size({"width": 390, "height": 844})
+                    self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
+                    if evidence:
+                        page.screenshot(path=str(Path(evidence) / f"{workflow}-analysis-mobile.png"), full_page=True)
+                    page.set_viewport_size({"width": 1280, "height": 900})
+            self.assertEqual(errors, [])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            self.run_in_browser({}, Path(temporary) / "server", lambda: Scripted(translate), check=check)
+
+    @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build frontend and set STUDIO_BROWSER=1.")
+    def test_approved_sheet_links_download_markdown_without_disturbing_current_review(self):
+        import base64
+        import time
+        from playwright.sync_api import expect
+        from .test_web import Scripted, translate
+
+        def check(page, origin):
+            headers = {"Origin": origin}
+            work = page.request.post(origin + "/api/works", headers=headers, data={
+                "upload": {"name": "reference.md", "data": base64.b64encode("# 故事\n\n他回来了。\n".encode()).decode()},
+                "manuscript_language": "zh",
+            }).json()
+            run = page.request.post(origin + "/api/runs", headers=headers, data={
+                "work_id": work["id"], "template_id": "literary-translation-v1",
+            }).json()
+            run_url = origin + "/api/runs/" + run["id"]
+
+            def waiting(kind):
+                for _ in range(100):
+                    current = page.request.get(run_url).json()
+                    if current.get("gate", {}).get("kind") == kind and not current["worker"]["active"]:
+                        return current
+                    time.sleep(0.1)
+                self.fail(f"Did not reach {kind}")
+
+            run = waiting("metadata_review")
+            response = page.request.post(run_url + "/metadata/confirm", headers=headers, data={
+                "gate_id": run["gate"]["id"], "record_revision": run["gate"]["record_revision"],
+            })
+            self.assertTrue(response.ok, response.text())
+            run = waiting("brief_samples")
+            response = page.request.post(run_url + "/reply", headers=headers, data={
+                "gate_id": run["gate"]["id"], "text": "S1 choose A: Preserve the plain voice.",
+            })
+            self.assertTrue(response.ok, response.text())
+            run = waiting("translation_brief")
+            approved = page.request.get(run_url + "/approved-sheets").json()
+            self.assertEqual(len(approved), 1)
+            page.goto(f"{origin}/#/runs/{run['id']}/overview")
+            active = page.locator(".panel.gate")
+            expect(active).to_be_visible()
+            draft = active.get_by_placeholder("General comment (optional)")
+            draft.fill("Unsent feedback must stay in this review.")
+            history = page.get_by_role("region", name="Approved sheets")
+            link = history.get_by_role("link", name="Translation samples · revision 1")
+            expect(link).to_have_attribute("download", "")
+            self.assertIsNone(link.get_attribute("target"))
+            requests = []
+            page.on("request", lambda request: requests.append(request.method))
+            url = page.url
+            tabs = len(page.context.pages)
+            with page.expect_download() as started:
+                link.click()
+            download = started.value
+            self.assertTrue(download.suggested_filename.endswith(".md"))
+            self.assertEqual(Path(download.path()).read_bytes(), b"S1: A / B\n")
+            self.assertEqual(len(page.context.pages), tabs)
+            expect(page).to_have_url(url)
+            expect(draft).to_have_value("Unsent feedback must stay in this review.")
+            self.assertFalse(any(method != "GET" for method in requests))
+            unchanged = page.request.get(run_url).json()
+            self.assertEqual(unchanged["gate"]["id"], run["gate"]["id"])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            self.run_in_browser({}, Path(temporary) / "server", lambda: Scripted(translate), check=check)
 
     def run_in_browser(self, case, server, runtime, *, check=None):
         """Serve the studio on its own port and make every reviewer choice by clicking its pages.

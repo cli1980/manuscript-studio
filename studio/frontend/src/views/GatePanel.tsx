@@ -36,7 +36,7 @@ export function GatePanel({ run, perform, inViewer = false, comments, commentLab
   if (page) {
     return (
       <div className="panel gate">
-        <h2>{run.status === "WAITING_FOR_ACCEPTANCE" ? run.acceptance?.title : run.gate ? ui.decisionCopy(run.gate).heading : ""}</h2>
+        <h2>{run.status === "WAITING_FOR_ACCEPTANCE" ? run.acceptance?.title : run.gate ? ui.decisionCopy(run.gate, run.viewer_target).heading : ""}</h2>
         <p>Decisions happen in the review viewer, beside the text.</p>
         <a className="button" href={page}>Open the review viewer</a>
       </div>
@@ -48,7 +48,7 @@ export function GatePanel({ run, perform, inViewer = false, comments, commentLab
   if (gate.kind === "docx_generation_review") {
     return <DocxDelivery key={gate.id} run={run} perform={perform} />;
   }
-  const copy = ui.decisionCopy(gate);
+  const copy = ui.decisionCopy(gate, run.viewer_target);
   const reply: Reply = (text, sent) => perform(async () => {
     const next = await api.reply(run.id, gate.id, text);
     sent?.();

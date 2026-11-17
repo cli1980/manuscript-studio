@@ -20,10 +20,13 @@ BACKUP_DIR = ".manuscript-studio-backups"
 DEPENDENCIES = {
     name: ("prepare-manuscript", "review-approval-sheet")
     for name in (
-        "literary-editing", "literary-translation", "literary-agent-querying",
+        "literary-editing", "literary-translation", "manuscript-analysis",
     )
 }
 DEPENDENCIES["interior-design"] = ("prepare-manuscript",)
+DEPENDENCIES["literary-agent-querying"] = ("manuscript-analysis",)
+DEPENDENCIES["literary-editing"] = ("manuscript-analysis",)
+DEPENDENCIES["literary-translation"] = ("manuscript-analysis",)
 
 
 def assert_plain_path(path: Path) -> None:

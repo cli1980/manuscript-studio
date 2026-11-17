@@ -2,13 +2,14 @@
 
 Map domain records into the shared schema without transferring domain authority to the interface.
 
-## Literary-agent querying
+## Manuscript analysis: story ledger
 
 - Bind the sheet to ledger revision, manuscript checksum, and review revision.
 - Use one atomic story proposition per item.
 - Show evidence, permitted wording, qualification, prohibited overstatement, prior response, and reopened reason.
 - Define `approve` as resolve, `qualify` as resolve with a required note, `correct` as reopen with a required note, and `keep ambiguous` as resolve.
-- Let querying propagate corrections, invalidate dependents, rebuild compression profiles, and require final closure.
+- Let manuscript analysis propagate corrections, invalidate dependents, rebuild compression profiles, and require separate final closure.
+- Querying consumes the passed ledger gate; it does not own ledger corrections or grant story approval. Other consumers must declare their review requirements and never relabel a draft as author-approved.
 
 ## Literary editing
 

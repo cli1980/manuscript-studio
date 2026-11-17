@@ -17,6 +17,7 @@ from workflow.src.service import WorkflowService
 from workflow.src.storage import Store, digest, now
 from workflow.tests.test_execution import profile_data
 from workflow.tests.interior_fixture import apply_target, proposal_for
+from workflow.tests.analysis_fixture import analyze
 
 HAS_WEB = importlib.util.find_spec("fastapi") and importlib.util.find_spec("httpx")
 ORIGIN = "http://127.0.0.1:8765"
@@ -281,7 +282,7 @@ class Scripted:
     def run(self, request, on_event, on_thread):
         on_thread("scripted-thread")
         on_event("test.turn", {})
-        return self.action(request)
+        return analyze(request) if context(request)["stage"] == "analysis" else self.action(request)
 
 
 @unittest.skipUnless(HAS_WEB, "Install studio/requirements.txt for web API tests.")
@@ -328,6 +329,144 @@ class WebApiTests(unittest.TestCase):
                 self.assertFalse(usage["partial"])
             self.assertEqual(len(list(engine.store.events())), before)
         self.assertNotIn("usage", self.client.get("/api/runs").json()[0])
+
+    def test_approved_sheets_use_only_closed_immutable_snapshots_and_preserve_scope(self):
+        work = self.post("/api/works", {"upload": {
+            "name": "original.md", "data": base64.b64encode(self.source.read_bytes()).decode()},
+            "manuscript_language": "zh"}).json()
+        run = self.post("/api/runs", {"template_id": "literary-editing-v1", "work_id": work["id"], "start": False}).json()
+        run_id = run["id"]
+        path = f"/api/runs/{run_id}/approved-sheets"
+        self.assertEqual(self.client.get(path).json(), [])
+        with WorkflowService(Path(self.temp.name) / "server") as svc, svc.open_run(run_id) as engine:
+            engine.advance(Scripted(prepare))
+            revision, state = engine.store.load()
+            pending = sheet("1", False)
+            approved = sheet("2", True)
+            pending_snapshot = engine.checkpoint(write(engine.workspace, "history/pending.json", pending), "review_sheet")
+            approved_snapshot = engine.checkpoint(write(engine.workspace, "history/approved.json", approved), "review_sheet")
+            context_snapshot = engine.checkpoint(write(engine.workspace, "history/context.md", "Saved context.\n"), "document")
+
+            def receipt(identity, snapshot, parsed, *, epoch=1, chapter="story", source="human"):
+                gate = {**copy.deepcopy(state["gate"]), "id": identity + "-gate", "kind": "editorial_review",
+                        "stage": "line", "chapter_id": chapter, "instance": f"line/{epoch}/{chapter}/1",
+                        "attempt": 1, "sheet": snapshot, "documents": [context_snapshot]}
+                return {"id": identity, "created_at": now(), "gate": gate, "text": "Recorded author response",
+                        "parsed": parsed, "decision_source": source}
+
+            first = receipt("start-first", None, {"type": "final-closure"})
+            second = receipt("start-second", None, {"type": "final-closure"})
+            feedback = receipt("feedback", pending_snapshot, {"type": "feedback"})
+            dispositions = receipt("items-only", pending_snapshot, {"type": "dispositions", "dispositions": []})
+            closed = receipt("closed", approved_snapshot, {"type": "final-closure"})
+            closed["gate"]["binding"] = context_snapshot
+            implied = receipt("implied", pending_snapshot, {
+                "type": "dispositions", "implied_closure": True,
+                "dispositions": [{"item_id": item["id"], "decision": "approve", "note": "Keep this wording.", "effect": "resolve"}
+                                 for item in pending["items"]],
+            }, epoch=2, chapter="_whole", source="delegated-automation")
+            state["receipts"].extend([first, feedback, dispositions, closed, second, implied])
+            state["passes"] = [
+                {"number": number, "stage": "line", "epoch": number, "receipt_id": start["id"],
+                 "started_at": start["created_at"], "completed_at": now(), "accepted": None, "result": None, "restarts": 0}
+                for number, start in enumerate((first, second), 1)]
+            state["restarts"].append({"kind": "stage", "superseded_receipt_ids": ["closed"]})
+            engine.store.save(revision, state, "fixture.history")
+            before = engine.store.load()
+            events = len(engine.store.events())
+            write(engine.workspace, "history/approved.json", {**approved, "title": "Overwritten workspace draft"})
+            write(engine.workspace, "history/context.md", "Changed working context.\n")
+
+        history = self.client.get(path)
+        self.assertEqual(history.status_code, 200, history.text)
+        entries = history.json()
+        self.assertEqual([r["receipt_id"] for r in entries], ["implied", "closed"])
+        self.assertEqual([(r["pass_number"], r["scope"]) for r in entries], [(2, "Whole book"), (1, "故事")])
+        self.assertTrue(entries[1]["superseded"])
+        self.assertEqual(entries[0]["decision_source"], "delegated-automation")
+        saved = self.client.get(path + "/closed.md")
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.content, b"Saved context.\n")
+        self.assertEqual(saved.headers["x-content-sha256"], context_snapshot["sha256"])
+        self.assertIn("attachment;", saved.headers["content-disposition"])
+        self.assertIn('.md"', saved.headers["content-disposition"])
+        self.assertIn("text/markdown", saved.headers["content-type"])
+        implied_view = self.client.get(path + "/implied.md")
+        self.assertEqual(implied_view.status_code, 200)
+        self.assertIn("# Passage map", implied_view.text)
+        self.assertIn("## PM001:", implied_view.text)
+        self.assertIn("Recorded decision: Approve", implied_view.text)
+        self.assertIn("Keep this wording.", implied_view.text)
+        self.assertIn("Whole book", implied_view.text)
+        self.assertEqual(implied_view.headers["x-content-sha256"], digest(implied_view.content))
+        self.assertEqual(self.client.get(path + "/closed").status_code, 404)  # No historical viewer API.
+        for identity in ("feedback", "items-only", "start-first", "missing", approved_snapshot["sha256"]):
+            self.assertEqual(self.client.get(path + "/" + identity + ".md").status_code, 404)
+        with WorkflowService(Path(self.temp.name) / "server") as svc, svc.open_run(run_id) as engine:
+            self.assertEqual(engine.store.load(), before)
+            self.assertEqual(len(engine.store.events()), events)
+            engine.store.root.joinpath("objects", approved_snapshot["sha256"]).write_bytes(b"corrupt snapshot")
+        corrupted = self.client.get(path + "/closed.md")
+        self.assertEqual(corrupted.status_code, 400)
+        self.assertIn("checksum", corrupted.json()["detail"])
+
+    def test_overview_is_a_read_only_projection_with_stable_source_identity(self):
+        front_text = "# 故事\n\n献给读者。\n"
+        body_text = "他回来了。\n"
+        self.source.write_bytes((front_text + "\n" + body_text).encode())
+
+        def prepare_with_opening(request):
+            prepared = prepare(request)
+            work_id = context(request)["required_work_id"]
+            root = Path(request.cwd) / "prepared" / work_id / "revisions/r0001"
+            manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+            manifest["chapters"][0].update(chapter_id="book-opening", sha256=digest(front_text.encode()))
+            manifest["chapters"][0]["source_spans"][0]["locator"] = "Title and dedication"
+            manifest["chapters"][1]["sha256"] = digest(body_text.encode())
+            manifest["chapters"][1]["source_spans"][0]["locator"] = "Body"
+            manifest["scope"]["chapter_ids"][0] = "book-opening"
+            write(request.cwd, str((root / "chapters/0001.md").relative_to(request.cwd)), front_text)
+            write(request.cwd, str((root / "chapters/0002.md").relative_to(request.cwd)), body_text)
+            write(request.cwd, str((root / "manifest.json").relative_to(request.cwd)), manifest)
+            return prepared
+
+        for template in ("literary-editing-v1", "literary-translation-v1"):
+            with self.subTest(template=template):
+                work = self.post("/api/works", {
+                    "upload": {"name": "original.md", "data": base64.b64encode(self.source.read_bytes()).decode()},
+                    "manuscript_language": "zh"}).json()
+                created = self.post("/api/runs", {"template_id": template, "work_id": work["id"], "start": False}).json()
+                run_id = created["id"]
+                path = f"/api/runs/{run_id}"
+                initial = self.client.get(path + "/overview").json()
+                self.assertEqual((initial["prepared"], initial["source_unit_id"], initial["source"]), (False, None, None))
+                with WorkflowService(Path(self.temp.name) / "server") as svc, svc.open_run(run_id) as engine:
+                    before = engine.advance(Scripted(prepare_with_opening))
+                    source_hashes = copy.deepcopy(before["prepared"]["files"])
+                self.assertEqual(before["gate"]["chapter_id"], "book-opening")
+                overview = self.client.get(path + "/overview").json()
+                index = self.client.get(path + "/chapters").json()
+                self.assertEqual(overview["source_unit_id"], "book-opening")
+                self.assertEqual(overview["title"], "Story")
+                self.assertEqual(overview["source"]["prepared_text"], front_text)
+                self.assertEqual(overview["metadata"]["metadata"]["title"], "Story")
+                self.assertEqual(index["overview"]["source_unit_id"], "book-opening")
+                self.assertEqual([(c["chapter_id"], c["order"], c["display_number"]) for c in index["chapters"]],
+                                 [("story", 2, 1)])
+                self.assertEqual(self.client.get(path).json()["viewer_target"], {"kind": "overview"})
+                listed = next(r for r in self.client.get("/api/runs").json() if r["id"] == run_id)
+                self.assertEqual(listed["viewer_target"], {"kind": "overview"})
+                with WorkflowService(Path(self.temp.name) / "server") as svc, svc.open_run(run_id) as engine:
+                    self.assertEqual(engine.state(), before)
+                    self.assertEqual(engine.state()["prepared"]["files"], source_hashes)
+                renamed = self.post(path + "/metadata", {"gate_id": before["gate"]["id"], "field": "/title",
+                                                         "value": "Renamed work", "rationale": "Author's title"})
+                self.assertEqual(renamed.status_code, 200, renamed.text)
+                renamed_overview = self.client.get(path + "/overview").json()
+                self.assertEqual((renamed_overview["title"], renamed_overview["source_unit_id"]),
+                                 ("Renamed work", "book-opening"))
+                self.assertEqual(renamed_overview["source"]["prepared_text"], front_text)
+                self.assertEqual(renamed.json()["viewer_target"], {"kind": "overview"})
 
     def test_literary_editing_interior_design_form_save_revision_and_approval(self):
         calls = []
@@ -527,10 +666,12 @@ class WebApiTests(unittest.TestCase):
         stale = self.post(f"/api/runs/{run_id}/metadata/confirm", {"gate_id": run["gate"]["id"], "record_revision": 9})
         self.assertEqual(stale.status_code, 400)
         self.assertEqual(run["gate"]["chapter_id"], "front-matter")  # Metadata review is on the front matter.
+        self.assertEqual(run["viewer_target"], {"kind": "overview"})
         self.post(f"/api/runs/{run_id}/metadata/confirm", {"gate_id": run["gate"]["id"], "record_revision": 1})
         run = self.settle(run_id)
         # The sample poll: each original beside its variants; one choice per sample, reasons optional.
         self.assertEqual((run["gate"]["kind"], run["gate"]["chapter_id"]), ("brief_samples", "front-matter"))
+        self.assertEqual(run["viewer_target"], {"kind": "overview"})
         self.assertEqual([row["label"] for row in run["gate"]["sheet"]["items"][0]["details"][:2]], ["Original", "A"])
         self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"], "text": "S1 choose A: keeps the restraint"})
         run = self.settle(run_id)
@@ -550,6 +691,7 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual([r["kind"] for r in front["reviews"]], ["metadata_review", "translation_brief"])
         self.assertIn("Tale", front["reviews"][1]["documents"][0]["text"])
         self.assertEqual((run["gate"]["kind"], run["gate"]["chapter_id"]), ("chapter_sanity", "front-matter"))
+        self.assertEqual(run["viewer_target"], {"kind": "overview"})
         # A correction after brief approval updates working documents, while approval history keeps the old version.
         self.post(f"/api/runs/{run_id}/reply", {"gate_id": run["gate"]["id"],
                                               "text": "Use Fable for 故事 and warmer narration."})
@@ -614,7 +756,12 @@ class WebApiTests(unittest.TestCase):
 
         chapters = self.client.get(f"/api/runs/{run_id}/chapters").json()
         self.assertTrue(chapters["prepared"])
+        self.assertEqual([c["chapter_id"] for c in chapters["chapters"]], ["story"])
+        self.assertTrue(chapters["overview"]["outputs"]["translate"]["ready"])
         self.assertEqual(chapters["chapters"][0]["outputs"]["translate"]["ready"], True)
+        overview = self.client.get(f"/api/runs/{run_id}/overview").json()
+        self.assertEqual(overview["source"]["outputs"][0]["text"], "Story\n")
+        self.assertEqual(overview["source"]["reviews"][1], final_brief)
         chapter = self.client.get(f"/api/runs/{run_id}/chapters/story").json()
         self.assertEqual((chapter["prepared_text"], chapter["outputs"][0]["text"]), ("# 故事\n\n他回来了。\n",
                                                                                    "He returned.\n"))

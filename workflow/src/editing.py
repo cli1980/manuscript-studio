@@ -6,6 +6,7 @@ import json
 import sys
 import uuid
 
+from .analysis import ANALYSIS_STAGE, CONSUMER_INSTRUCTIONS
 from .interior import DESIGN_STAGE, MANUSCRIPT_APPROVAL, InteriorDesignPhase
 from .prepared import WHOLE, PreparedManuscriptEngine
 from .storage import digest, now, plain, read_bytes
@@ -290,6 +291,8 @@ class EditingEngine(InteriorDesignPhase, PreparedManuscriptEngine):
         return artifact
 
     def stage_prompt(self, state, stage):
+        if stage["id"] == ANALYSIS_STAGE:
+            return self.analysis_prompt(state)
         if stage["id"] == DESIGN_STAGE:
             return self.design_prompt(state)
         agent = state["definition"]["agents"][stage["agent"]]
@@ -300,6 +303,7 @@ class EditingEngine(InteriorDesignPhase, PreparedManuscriptEngine):
             "work_record": state["prepared"]["work_record"] if state["prepared"] else None,
             "domain_state": state["domain_state"], "user_receipt": state["next_input"],
             "metadata_approval": state.get("metadata_approval"),
+            "manuscript_analysis": self.analysis_handoff(state),
             "skills": [str(self.root / "skills" / name / "SKILL.md") for name in agent["skills"]],
             "python_executable": sys.executable,
         }
@@ -330,4 +334,4 @@ class EditingEngine(InteriorDesignPhase, PreparedManuscriptEngine):
             context["metadata"] = work["metadata"]
             context["metadata_record_revision"] = work["record_revision"]
         text = PREPARATION if stage.get("preparation") else EDITING
-        return text + "\n\n" + RETURN + json.dumps(context, ensure_ascii=False, indent=2)
+        return text + "\n\n" + RETURN + CONSUMER_INSTRUCTIONS + json.dumps(context, ensure_ascii=False, indent=2)

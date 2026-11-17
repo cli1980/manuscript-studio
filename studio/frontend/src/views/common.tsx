@@ -52,7 +52,9 @@ export function reviewName(kind: string) {
 const REVIEW_NAMES: Record<string, string> = { pass_review: "pass result", pass_choice: "next pass" };
 
 const DOCUMENT_TITLES: Record<string, string> = { "glossary.md": "Glossary", "voice.md": "Voice notes",
-  "brief-samples.md": "Sample translations" };
+  "brief-samples.md": "Sample translations", "analysis-manifest.md": "Analysis Manifest",
+  "story-ledger.md": "Story Ledger", "chapter-summaries.md": "Chapter Summaries",
+  "synopsis.md": "Synopsis", "reading-profile.md": "Reading Profile" };
 
 export function documentTitle(path: string) {
   const name = path.split("/").pop() ?? path;

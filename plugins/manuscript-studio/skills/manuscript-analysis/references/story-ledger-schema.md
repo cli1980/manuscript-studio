@@ -1,6 +1,12 @@
 # Structured Story Ledger Schema
 
-Use this schema for `query-package/static/story-ledger.md`. The ledger becomes the approved, agent-neutral story source for query pitches and on-demand synopses only after its evidence audit and mandatory item-by-item human approval both pass. Build or repair it from the complete designated manuscript, bind it to that manuscript version, and generate synopses from it without reopening the raw manuscript only after explicit author closure.
+Use this document contract for `story-ledger.md` in the analysis revision defined
+by [analysis-contract.md](analysis-contract.md). Manuscript analysis owns ledger
+construction, evidence auditing, repair and human review. Consumers pin that
+revision instead of creating their own story ledger. For querying, the ledger
+becomes an approved story source only after its evidence audit and mandatory
+item-by-item human approval both pass. A completed but unapproved reading is
+not a query-ready ledger.
 
 The ledger is not a chapter summary. It is a linked model of what happens, why it happens, who knows what, how characters and relationships change, and what resolves. Use stable IDs so every synopsis clause can be traced without relying on narrative adjacency or model memory.
 ## Contents
@@ -21,7 +27,7 @@ The ledger is not a chapter summary. It is a linked model of what happens, why i
 - [13. Synopsis compression map](#13-synopsis-compression-map)
 - [14. Completeness and integrity audit](#14-completeness-and-integrity-audit)
 - [15. Mandatory human review gate](#15-mandatory-human-review-gate)
-- [On-demand synopsis generation](#on-demand-synopsis-generation)
+- [Consumer synopsis generation](#consumer-synopsis-generation)
 
 
 ## Controlled values
@@ -267,13 +273,17 @@ Complete this audit before opening the human review, but do not mark synopsis re
 - the compression map can produce micro, standard, and extended selections without inventing transitions;
 - no unresolved gap affects a `P0` or `P1` claim.
 
-Record audit counts and failures at the end of the ledger. Approval of general positioning does not cure a failed ledger audit. A passing evidence audit changes the ledger to `awaiting-confirmation`, human-review gate `open`, and synopsis readiness `not-ready`.
+Record audit counts and failures at the end of the ledger. Approval of general
+positioning does not cure a failed audit. A passing evidence audit leaves the
+ledger `awaiting-confirmation` and synopsis readiness `not-ready`. Open the
+human-review gate when review is requested or a consumer requires it; otherwise
+record `not-built`, never `passed`. Querying always requires the complete gate.
 
 ## 15. Mandatory human review gate
 
-Read [story-ledger-human-review.md](story-ledger-human-review.md) in full. Create `query-package/static/story-ledger-review.md`, bind it to the exact ledger and manuscript identities, and convert every synopsis-eligible story proposition into a single atomic `HG` approval unit.
+Read [story-ledger-human-review.md](story-ledger-human-review.md) in full. Create `story-ledger-review.md` beside the analysis ledger, bind it to the exact ledger and manuscript identities, and convert every synopsis-eligible story proposition into a single atomic `HG` approval unit.
 
-Create the synchronized `query-package/static/story-ledger-review.json`, validate and render it through the sibling shared approval-sheet skill, and present the complete interactive sheet. The Markdown review remains the authoritative domain audit record; the JSON is the revision-bound interface state. The author may dispose multiple items in one response and in any order, but every disposition must explicitly enumerate its `HG` ID. Parse against the saved revision and persist every answer in both records. Never treat silence, approval of a range without enumerated IDs, positioning approval, package approval, or blanket approval of the ledger as item confirmation.
+Create the synchronized `story-ledger-review.json` beside the analysis ledger, validate and render it through the sibling shared approval-sheet skill, and present the complete interactive sheet. The Markdown review remains the authoritative domain audit record; the JSON is the revision-bound interface state. The author may dispose multiple items in one response and in any order, but every disposition must explicitly enumerate its `HG` ID. Parse against the saved revision and persist every answer in both records. Never treat silence, approval of a range without enumerated IDs, positioning approval, package approval, or blanket approval of the ledger as item confirmation.
 
 A correction invalidates the originating unit and every recorded dependent. Propagate the correction, re-audit the affected ledger records, and present each corrected unit again. Do not count a correction as approval.
 
@@ -281,17 +291,23 @@ After all units are resolved and saved, render a separate final-closure submissi
 
 The gate fails while any unit is `pending`, `correction-required`, or `invalidated`, while a required ambiguity lacks safe wording, while the review and ledger revisions differ, or before explicit final closure. Any later material ledger correction reopens the affected units and invalidates final closure.
 
-## On-demand synopsis generation
+## Consumer synopsis generation
 
-When an agent's verified guidelines request a synopsis, generate it only as a fresh component of that agent's complete one-time package. Do not inspect, quote, summarize, or reuse any prior synopsis or other on-demand output.
+A neutral analysis synopsis and an agent-facing submission synopsis are different
+products. The former belongs in the analysis revision; the latter remains owned
+by `literary-agent-querying`, under its
+named-agent authorization, current-guidelines and terminal-ZIP rules.
 
-1. Verify that the ledger is `approved`, synopsis readiness is `ready` or applicable `ready-with-open-items`, the human-review gate is `passed`, the review artifact matches the ledger revision, and the ledger is bound to the unchanged manuscript identity. Do not reopen the raw manuscript.
-2. Start from an empty staged synopsis file and select the closest compression profile, then adjust only for the newly verified length, format, or emphasis.
-3. Draft from selected event, thread, arc, revelation, and resolution IDs. Preserve causal edges, knowledge timing, and required qualifications.
-4. Include the ending and material resolution. Do not manufacture closure for deliberately open series threads.
-5. Split the draft into atomic clauses and map every material clause to ledger IDs.
-6. Remove or rewrite any clause that lacks a ledger source, overstates its claim type, violates prohibited wording, leaks an attribute across an ambiguous identity or time boundary, assigns unsupported motive or knowledge, or invents causation.
-7. Record claim-audit counts, ledger revision, `Build mode: fresh-reproduction`, and `Prior on-demand source: none` in the on-demand manifest.
-8. Place the synopsis only inside the complete staged ZIP; never persist or deliver it as a loose on-demand file.
+Derive either from the linked event/thread/arc/revelation/resolution records.
+Preserve causality, knowledge timing, the ending, and required qualifications.
+Audit every material clause against ledger IDs. Remove wording that invents
+causation or motive, merges identities, or states a belief as objective fact.
+Label an unapproved analysis synopsis as provisional; it cannot bypass the
+querying consumer's mandatory approved-ledger gate.
 
-If generation exposes a missing fact or causal connection, stop. Mark the ledger `not-ready` for the affected synopsis profile and request authorization for a targeted ledger refresh from the manuscript or a narrowly scoped author confirmation. Do not silently revisit the manuscript, guess, or seek separate approval of otherwise grounded synopsis prose.
+If drafting reveals missing evidence, stop the affected claim/profile and route
+the correction through manuscript analysis. Refresh source evidence only within
+the authorized scope, invalidate dependent approvals and re-review corrected
+units. Do not use pitches, prior submission synopses or on-demand packages as
+ledger evidence. Query-specific build and claim-audit instructions belong to the
+querying consumer, not this standalone skill.

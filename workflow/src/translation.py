@@ -6,6 +6,7 @@ import json
 import re
 import sys
 
+from .analysis import ANALYSIS_STAGE, CONSUMER_INSTRUCTIONS
 from .prepared import WHOLE, PreparedManuscriptEngine
 from .storage import digest, now, read_bytes
 
@@ -158,6 +159,8 @@ class TranslationEngine(PreparedManuscriptEngine):
         return {"max": value, "unit": self.size_unit(state["manuscript_language"])} if value and state["manuscript_language"] else None
 
     def stage_prompt(self, state, stage):
+        if stage["id"] == ANALYSIS_STAGE:
+            return self.analysis_prompt(state)
         agent = state["definition"]["agents"][stage["agent"]]
         item = self.current_iteration(state) if stage.get("iterate") else None
         whole = bool(item and item["chapter_id"] == WHOLE)
@@ -177,6 +180,7 @@ class TranslationEngine(PreparedManuscriptEngine):
             "map_exceptions_approval": state["approvals"].get("map_exceptions"),
             "sanity_approval": state["approvals"].get("chapter_sanity"),
             "metadata_approval": state.get("metadata_approval"),
+            "manuscript_analysis": self.analysis_handoff(state),
             "brief_samples_approval": state["approvals"].get("brief_samples") if stage.get("front_matter") else None,
             "translation_brief_approval": (state.get("front_matter_approvals") or {}).get("translation_brief"),
             "previous_outputs": state["outputs"], "continuity": state["continuity"],
@@ -189,7 +193,7 @@ class TranslationEngine(PreparedManuscriptEngine):
             context["metadata"] = work["metadata"]
             context["metadata_record_revision"] = work["record_revision"]
             context["metadata_provenance"] = work.get("metadata_provenance", {})
-        return PROMPT + json.dumps(context, ensure_ascii=False, indent=2)
+        return PROMPT + CONSUMER_INSTRUCTIONS + json.dumps(context, ensure_ascii=False, indent=2)
 
     def check_result(self, state, stage, result):
         if stage.get("iterate") and result["outcome"] != "blocked" and not result["state_path"]:

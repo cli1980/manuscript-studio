@@ -49,6 +49,12 @@ button.link { border: none; background: none; color: #1f5fbf; padding: 0; text-a
 .list { list-style: none; padding: 0; margin: 0; }
 .list li { padding: 0.35rem 0.3rem; border-bottom: 1px solid #eceff2; }
 .list li.selected { background: #eef4fb; }
+.overview-entry { padding: 0.7rem; border: 1px solid #dde2e7; border-radius: 4px; overflow-wrap: anywhere; }
+.overview-entry > a { display: block; font-weight: bold; margin-bottom: 0.4rem; }
+.overview-entry.selected { background: #eef4fb; border-color: #b6cbe5; }
+.viewer-navigation h2 { font-size: 1rem; margin: 1rem 0 0.4rem; }
+.approved-sheets { margin-top: 1.4rem; font-size: 0.9rem; }
+.sheet-history { max-height: 26rem; overflow: auto; overflow-wrap: anywhere; }
 .row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin: 0.4rem 0; }
 fieldset { border: 1px solid #dde2e7; border-radius: 4px; margin: 0.6rem 0; }
 fieldset label { display: block; margin: 0.2rem 0; }
@@ -142,7 +148,7 @@ h2 .tag.status { font-size: 0.8rem; vertical-align: middle; }
 .tag.md-accepted { background: #dff3e4; color: #1d5e2f; }
 .tag.md-rejected { background: #f6e3e3; color: #7a2626; }
 .documents { border: 1px solid #dde2e7; border-radius: 10px; margin: 0.8rem 0; background: #fff; }
-.doc-tabs { display: flex; gap: 0.2rem; border-bottom: 1px solid #dde2e7; padding: 0.4rem 0.6rem 0; }
+.doc-tabs { display: flex; flex-wrap: wrap; gap: 0.2rem; border-bottom: 1px solid #dde2e7; padding: 0.4rem 0.6rem 0; }
 .doc-tabs button { border: 1px solid transparent; border-bottom: none; background: none; padding: 0.45rem 0.9rem;
   border-radius: 8px 8px 0 0; cursor: pointer; color: #444; }
 .doc-tabs button.active { border-color: #dde2e7; background: #fff; color: #111; font-weight: 600; margin-bottom: -1px; }

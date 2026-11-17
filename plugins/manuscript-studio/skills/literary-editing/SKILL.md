@@ -7,6 +7,15 @@ description: Review and edit book-length literary manuscripts through profession
 
 Route each request to the appropriate professional editorial service. Keep the source and workspace separate, review first, and change nothing until the user explicitly approves identified proposals.
 
+When the host supplies `manuscript_analysis`, reuse the
+[shared source reading](../manuscript-analysis/references/workflow-handoff.md)
+instead of creating a competing story ledger. Developmental editing still
+reads the complete manuscript and makes an independent assessment. Line/copy
+editing uses it only as continuity context. Analysis is neither a verdict nor
+an approved proposal. When current text no longer matches its source basis,
+read current text and later editorial records rather than assuming old facts
+remain true.
+
 ## Governing Contract
 
 Follow these rules in every service:

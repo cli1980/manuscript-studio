@@ -10,6 +10,7 @@ import threading
 import uuid
 from pathlib import Path
 
+from .analysis import ANALYSIS_STAGE, ManuscriptAnalysisPhase
 from .engine import SKILLS, Engine, WorkflowError, module_at
 from .storage import digest, json_bytes, now, plain, read_bytes
 
@@ -46,7 +47,7 @@ def metadata_digest(work):
     return digest(json.dumps(value, sort_keys=True, ensure_ascii=False).encode())
 
 
-class PreparedManuscriptEngine(Engine):
+class PreparedManuscriptEngine(ManuscriptAnalysisPhase, Engine):
     @classmethod
     def preflight(cls, template):
         module_at(SKILLS / "prepare-manuscript/scripts/validate_preparation.py").validators()
@@ -54,7 +55,8 @@ class PreparedManuscriptEngine(Engine):
     @classmethod
     def initial_state(cls, template, **fields):
         state = super().initial_state(template, **fields)
-        state.update(prepared=None, chapters=[], iterations=[], continuity={}, continuity_seed={},
+        state.update(prepared=None, analysis=None, analysis_input=None,
+                     chapters=[], iterations=[], continuity={}, continuity_seed={},
                      metadata_approval=None, metadata_versions=[], front_matter_approvals={})
         return state
 
@@ -203,6 +205,8 @@ class PreparedManuscriptEngine(Engine):
 
     def before_turn(self, state):
         stage = self.stage_def(state)
+        if stage["id"] == ANALYSIS_STAGE and not state.get("analysis_input"):
+            state["analysis_input"] = digest(read_bytes(self._work_path(state)))
         if not stage.get("iterate"):
             return
         item = self.current_iteration(state)
@@ -221,7 +225,9 @@ class PreparedManuscriptEngine(Engine):
         raise NotImplementedError
 
     def on_completed(self, state, stage, result):
-        if stage.get("preparation"):
+        if stage["id"] == ANALYSIS_STAGE:
+            self.complete_analysis(state, result)
+        elif stage.get("preparation"):
             self._prepared(state, result["work_record"])
             self._verify_consolidation(state)
             self._advance_stage(state)
@@ -260,6 +266,8 @@ class PreparedManuscriptEngine(Engine):
                 "started_at": None, "completed_at": None, "restarts": []}
 
     def reset_stage(self, state, stage):
+        if stage.get("preparation") or stage["id"] == ANALYSIS_STAGE:
+            state.update(analysis=None, analysis_input=None)
         if stage.get("preparation"):
             state.update(prepared=None, chapters=[], iterations=[], outputs=[], continuity={},
                          metadata_approval=None, stage_iterations={}, front_matter_approvals={})
@@ -397,6 +405,7 @@ class PreparedManuscriptEngine(Engine):
             "manuscript_language": state["manuscript_language"], "output_language": self.output_language(state),
             "prepared_revision": state["prepared"]["base"]["preparation"]["current_revision"],
             "metadata_confirmed": state.get("metadata_approval"),
+            "manuscript_analysis": state.get("analysis"),
             "front_matter_reviews": {kind: {"receipt_id": a["receipt_id"], "decision_source": a["decision_source"],
                                             "documents": {d["path"]: d["sha256"] for d in a["documents"]}}
                                      for kind, a in (state.get("front_matter_approvals") or {}).items()},
@@ -487,6 +496,7 @@ class PreparedManuscriptEngine(Engine):
         self.preparation.validate(self.file(prepared["work_record"]), check_sources=True)
         if work["metadata"][language_key(work)] != state["manuscript_language"]:
             raise ValueError("Manuscript language metadata differs from the run; reconcile the configuration.")
+        self.verify_analysis(state)
 
     def _prepared(self, state, relative):
         path = self.file(relative)

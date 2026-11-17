@@ -26,6 +26,7 @@ from . import run_e2e
 from . import monitor_performance
 from .test_execution import profile_data
 from .interior_fixture import apply_target, proposal_for
+from .analysis_fixture import analyze, analysis_context
 
 TRANSLATION = "literary-translation-v1"
 FORMATTING = "manuscript-formatting-v1"
@@ -41,12 +42,15 @@ def result(outcome="completed", **fields):
 class ScriptedRuntime:
     """A deterministic test double, never presented as a model translation."""
 
-    def __init__(self, action):
+    def __init__(self, action, *, analysis_action=analyze):
         self.action = action
+        self.analysis_action = analysis_action
 
     def run(self, request, on_event, on_thread):
         on_thread("test-thread")
         on_event("test.turn", {"model": request.model})
+        if self.analysis_action and '{\n  "stage"' in request.prompt and analysis_context(request)["stage"] == "analysis":
+            return self.analysis_action(request)
         return self.action(request)
 
 
@@ -158,6 +162,7 @@ class WorkflowTests(unittest.TestCase):
         """Prepare, confirm metadata and the translation brief on the front matter, and translate the front matter."""
         self.engine.advance(ScriptedRuntime(self.preparation))
         self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+        self.engine.advance(ScriptedRuntime(analyze))
         if self.engine.state()["workflow"] == "literary-translation":
             self.approve_brief()
             self.translate_chapter()
@@ -235,6 +240,8 @@ class WorkflowTests(unittest.TestCase):
         return result("needs_human_input", gate="translation_brief", message="Proposed glossary, voice, and samples.")
 
     def approve_brief(self):
+        if self.engine.state()["stage"] == "analysis":
+            self.engine.advance(ScriptedRuntime(analyze))
         self.engine.advance(ScriptedRuntime(self.samples_gate))
         self.engine.reply(self.engine.state()["gate"]["id"], "S1 choose A: keeps the restraint")
         self.engine.advance(ScriptedRuntime(self.brief_gate))
@@ -244,6 +251,109 @@ class WorkflowTests(unittest.TestCase):
         # Receipts for the story chapter (metadata review and the front matter are covered by prepare()).
         return [r for r in self.engine.state()["receipts"]
                 if r["gate"]["kind"] != "metadata_review" and r["gate"].get("chapter_id") != "front-matter"]
+
+    def test_analysis_handoff_is_frozen_provisional_and_survives_reopen(self):
+        self.engine.advance(ScriptedRuntime(self.preparation))
+        state = self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+        self.assertEqual((state["stage"], state["status"]), ("analysis", "READY"))
+        receipts = copy.deepcopy(state["receipts"])
+        state = self.engine.advance(ScriptedRuntime(analyze))
+        self.assertEqual((state["stage"], state["status"]), ("brief", "READY"))
+        self.assertEqual(state["receipts"], receipts)  # No manufactured analysis approval.
+        analysis = copy.deepcopy(state["analysis"])
+        self.assertEqual(analysis["approval_status"], "provisional")
+        self.assertEqual(len(analysis["coverage"]), len(state["chapters"]))
+        self.assertEqual(len(analysis["artifacts"]), 5)
+        self.reopen()
+        handoff = json.loads(self.prompt(self.engine.state())[self.prompt(self.engine.state()).index('{\n  "stage"'):])[
+            "manuscript_analysis"]
+        self.assertEqual(handoff["manifest"]["sha256"], analysis["manifest"]["sha256"])
+        self.assertTrue(handoff["current_text_matches_source"])
+        files = self.engine.delivery_files(self.engine.state())
+        for artifact in [analysis["manifest"], *analysis["artifacts"].values()]:
+            self.assertEqual(digest(files[artifact["path"]]), artifact["sha256"])
+        ledger = analysis["artifacts"]["ledger"]
+        self.write(ledger["path"], "Changed after completion")
+        with self.assertRaisesRegex(ValueError, "analysis changed"):
+            self.engine.advance(ScriptedRuntime(self.samples_gate))
+
+    def test_analysis_rejects_incomplete_stale_forged_or_changed_packages(self):
+        mutations = ("missing-unit", "wrong-order", "stale-source", "bad-quote", "outside-path",
+                     "bad-hash", "empty-file", "failed-audit", "claimed-approval", "metadata-edit")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                self.new_engine()
+                self.engine.advance(ScriptedRuntime(self.preparation))
+                self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+
+                def malformed(request):
+                    response = analyze(request)
+                    manifest = json.loads(self.engine.file(response["state_path"]).read_bytes())
+                    if mutation == "missing-unit":
+                        manifest["coverage"].pop()
+                    elif mutation == "wrong-order":
+                        manifest["coverage"].reverse()
+                    elif mutation == "stale-source":
+                        manifest["basis"]["source_sha256"] = "0" * 64
+                    elif mutation == "bad-quote":
+                        manifest["coverage"][0]["evidence"][0]["quote"] = "Invented source quote"
+                    elif mutation == "outside-path":
+                        manifest["artifacts"]["ledger"]["path"] = "../outside.md"
+                    elif mutation == "bad-hash":
+                        manifest["artifacts"]["ledger"]["sha256"] = "0" * 64
+                    elif mutation == "empty-file":
+                        artifact = manifest["artifacts"]["ledger"]
+                        self.write(artifact["path"], "")
+                        artifact["sha256"] = digest(b"")
+                    elif mutation == "failed-audit":
+                        manifest["evidence_audit"] = "failed"
+                    elif mutation == "claimed-approval":
+                        manifest["approval_status"] = "approved"
+                    elif mutation == "metadata-edit":
+                        work = json.loads(self.engine._work_path(self.engine.state()).read_bytes())
+                        work["metadata"]["title"] = "Unauthorized analysis metadata edit"
+                        self.write(self.engine.state()["prepared"]["work_record"], work)
+                    self.write(response["state_path"], manifest)
+                    return response
+
+                with self.assertRaisesRegex(ValueError, "[Aa]nalysis"):
+                    self.engine.advance(ScriptedRuntime(malformed, analysis_action=None))
+                self.assertIsNone(self.engine.state()["analysis"])
+                self.assertEqual((self.engine.state()["stage"], self.engine.state()["status"]), ("analysis", "FAILED"))
+
+    def test_analysis_restart_creates_new_revision_and_blocks_partial_reading(self):
+        self.engine.advance(ScriptedRuntime(self.preparation))
+        self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+        self.engine.advance(ScriptedRuntime(analyze))
+        old = copy.deepcopy(self.engine.state()["analysis"])
+        state = self.engine.restart_stage("analysis", reason="Refresh the reading")
+        self.assertIsNone(state["analysis"])
+        self.assertIsNotNone(state["metadata_approval"])
+        self.assertFalse((self.workspace / old["manifest"]["path"]).exists())
+        state = self.engine.advance(ScriptedRuntime(
+            lambda request: result("blocked", message="Partial reading; ending unavailable."), analysis_action=None))
+        self.assertEqual((state["status"], state["stage"], state["analysis"]), ("BLOCKED", "analysis", None))
+        self.engine.retry()
+        state = self.engine.advance(ScriptedRuntime(analyze))
+        self.assertNotEqual(state["analysis"]["analysis_id"], old["analysis_id"])
+        self.assertEqual(state["stage"], "brief")
+
+    def test_editing_analysis_precedes_pass_selection_and_marks_changed_text(self):
+        state = self.start_editing()
+        self.assertEqual(state["gate"]["kind"], "pass_choice")
+        self.assertIsNotNone(state["analysis"])
+        manifest = state["analysis"]["manifest"]
+        self.choose("run line")
+        state = self.engine.state()
+        handoff = self.engine.analysis_handoff(state)
+        self.assertTrue(handoff["current_text_matches_source"])
+        path = next(iter(state["manuscript"].values()))
+        self.write(path, self.engine.file(path).read_text(encoding="utf-8") + "\nChanged text.\n")
+        handoff = self.engine.analysis_handoff(state)
+        self.assertFalse(handoff["current_text_matches_source"])
+        self.assertEqual(handoff["manifest"], manifest)
+        self.assertEqual(handoff["basis_kind"], "prepared-source")
+        self.assertEqual(handoff["approval_status"], "provisional")
 
     def prepare_v2(self, request):
         response = self.preparation(request)
@@ -268,7 +378,7 @@ class WorkflowTests(unittest.TestCase):
             self.engine.reply(gate["id"], "looks fine")
         self.assertEqual(self.engine.state()["receipts"], [])
         state = self.engine.reply(gate["id"], "confirm metadata")
-        self.assertEqual((state["stage"], state["status"]), ("brief", "READY"))  # The translation brief follows.
+        self.assertEqual((state["stage"], state["status"]), ("analysis", "READY"))  # Shared analysis precedes the brief.
         self.assertIsNone(state["next_input"])
         approval = state["metadata_approval"]
         self.assertEqual((approval["record_revision"], approval["sha256"], approval["decision_source"]),
@@ -307,6 +417,7 @@ class WorkflowTests(unittest.TestCase):
     def test_translation_brief_is_reviewed_with_the_front_matter(self):
         self.engine.advance(ScriptedRuntime(self.preparation))
         self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+        self.engine.advance(ScriptedRuntime(analyze))
         for action, error in ((lambda r: result(), "completes when the user approves"),
                               (lambda r: result("needs_human_input", gate="translation_brief"), "sample choices"),
                               (lambda r: self.samples_gate(r, original=False), "needs an 'Original' row")):
@@ -399,6 +510,7 @@ class WorkflowTests(unittest.TestCase):
     def test_metadata_edits_after_confirmation_are_history_only(self):
         self.engine.advance(ScriptedRuntime(self.prepare_v2))
         self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+        self.engine.advance(ScriptedRuntime(analyze))
         receipts = len(self.engine.state()["receipts"])
         with self.assertRaisesRegex(ValueError, "locked"):
             self.engine.edit_metadata("/manuscript_language", "fr")
@@ -443,7 +555,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotEqual(state["gate"]["id"], gate["id"])
         self.assertIn("Edited outside the gate", state["gate"]["message"])
         self.engine.reply(state["gate"]["id"], "confirm metadata")
-        self.assertEqual(self.engine.state()["stage"], "brief")
+        self.assertEqual(self.engine.state()["stage"], "analysis")
 
     def test_editable_v2_metadata_does_not_change_prepared_source_identity(self):
         self.engine.advance(ScriptedRuntime(self.prepare_v2))
@@ -1104,11 +1216,11 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "undeclared gate"):
             registry.validate(template)
         template = registry.get(TRANSLATION)
-        template["stages"].append(template["stages"].pop(4))  # Acceptance after export.
+        template["stages"].append(template["stages"].pop(-2))  # Acceptance after export.
         with self.assertRaisesRegex(ValueError, "export must be the final stage"):
             registry.validate(template)
         template = registry.get(TRANSLATION)
-        template["stages"].insert(0, template["stages"].pop(2))  # The brief before preparation.
+        template["stages"].insert(0, template["stages"].pop(3))  # The brief before preparation.
         with self.assertRaisesRegex(ValueError, "front-matter stage"):
             registry.validate(template)
         template = registry.get(TRANSLATION)
@@ -1132,7 +1244,7 @@ class WorkflowTests(unittest.TestCase):
             },
             "source_inventory": {"title": "Synthetic fixture"},
             "expected_output": {
-                "stage_sequence": ["prepare", "metadata", "brief", "translate", "accept", "export"],
+                "stage_sequence": ["prepare", "metadata", "analysis", "brief", "translate", "accept", "export"],
                 "required_files": ["state.sqlite3", "export/manifest.json", "export/glossary.md", "export/voice.md"],
             },
             "checks": [
@@ -1190,7 +1302,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(self.engine.state()["receipts"]), 10)  # Includes whole-book closure.
         self.assertEqual(report["automated_checks"]["closure-receipts"]["status"], "passed")
         self.assertEqual(report["automated_checks"]["stage-order"]["evidence"],
-                         ["prepare", "metadata", "brief", "translate", "accept", "export"])
+                         ["prepare", "metadata", "analysis", "brief", "translate", "accept", "export"])
         # A completed run can finish its human evidence review without another model call.
         evidence = iter(["pass", "Synthetic test evidence"] * 4)
         with contextlib.redirect_stdout(io.StringIO()):
@@ -2386,7 +2498,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_literary_editing_passes_are_chosen_accepted_and_repeatable(self):
         state = self.start_editing()
-        self.assertEqual(self.engine.stage_ids(state), ["prepare", "metadata", "passes", "approve-manuscript", "interior-design", "produce-docx", "accept", "export"])
+        self.assertEqual(self.engine.stage_ids(state), ["prepare", "metadata", "analysis", "passes", "approve-manuscript", "interior-design", "produce-docx", "accept", "export"])
         # After metadata review the user chooses a pass, or proceeds to manuscript approval.
         self.assertEqual((state["stage"], state["status"], state["gate"]["kind"]), ("passes", "WAITING_FOR_HUMAN", "pass_choice"))
         self.assertEqual(self.engine.gate_commands(state, state["gate"]),
@@ -2526,7 +2638,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(self.engine.finalized(state))
         self.assertEqual([self.engine.store.content(o) for o in state["outputs"]], prepared)
         template = registry.get("literary-editing-v1")
-        template["stages"][2]["options"].append({"stage": "prepare", "title": "Prepare again"})
+        next(s for s in template["stages"] if s["id"] == "passes")["options"].append({"stage": "prepare", "title": "Prepare again"})
         with self.assertRaisesRegex(ValueError, "must be an agent stage other than preparation"):
             registry.validate(template)
 

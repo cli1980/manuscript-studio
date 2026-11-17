@@ -31,15 +31,34 @@ when given with `--allow-origin` (for a local preview proxy).
   items and the separate closure, exact command replies, metadata edits and
   revision-bound confirmation, and final acceptance behind an explicit
   finalization notice. Every reply is validated by the same parser as the CLI.
-- **Chapters** (inside a run) shows each prepared chapter once preparation is
-  complete, beside every stage's completed output for that chapter. Translation
-  decisions and final acceptance take place here. After the last chapter is
+- **Review viewer** (inside a run) has an unnumbered **Overview**, opened by
+  clicking the book title, above the chapter navigation. Front matter is not a
+  numbered chapter: its original content, provenance and translated/edited text
+  remain available in Overview. Metadata is shared; workflow adapters
+  define their own additions and reading layout. Translation includes its brief
+  and source/translation panes, while editing shows its current-text view.
+  Approved brief snapshots remain distinct from evolving working documents.
+  Review links and notices resolve to Overview or the appropriate
+  chapter without changing stored gate IDs or source hashes. Display numbering
+  starts with the body; processing progress says "manuscript units" because
+  source front/back matter still participates in processing and export.
+  The viewer shows each chapter beside its completed stage output. Translation
+  decisions and final acceptance take place here. After the last manuscript unit is
   saved, whole-book consistency starts automatically. Its approval sheet stays
   available while browsing chapters, with a source/translation link on each
   finding. Decide every fix, then confirm separate closure; a clean review asks
   for explicit confirmation that no inconsistencies were found. Approved fixes
   are verified before final acceptance, and each chapter lists its applied
-  consistency fixes. Whole-book progress is separate from the chapter count.
+  consistency fixes. Whole-book progress is separate from manuscript-unit progress.
+  The **Approved Sheets** reference list includes this run's closed review
+  sheets, newest first, labeled by chapter/whole-book scope, stage, pass and
+  revision. Clicking a link downloads a `.md` file directly, without opening
+  another window or leaving the current review. Downloads use the exact saved
+  approved Markdown when bound to the review; JSON-only sheets receive a plain
+  Markdown export with their recorded decisions and closure receipt.
+  Current workspace files are never substituted for approved snapshots.
+  Superseded approvals are marked historical; unresolved drafts and feedback
+  exchanges are not listed as approvals.
 
 Pages stay current without polling. One server thread fingerprints every run (state revision, last visible
 event, worker status) and every work (publication log) once a second, and `GET /api/live/stream` pushes the
@@ -282,7 +301,7 @@ this is not credential isolation from agent tools.
 ## Interior-design review in literary editing
 
 Start a new literary-editing run, or restart an older run whose engine has changed.
-After preparation and metadata review, run and accept any editing passes, or
+After preparation, metadata review and shared manuscript analysis, run and accept any editing passes, or
 finish with zero passes. Choose **Review manuscript**, inspect the candidate
 chapters under **Approve manuscript for formatting**, and choose
 **Approve manuscript and continue**. This approval freezes the

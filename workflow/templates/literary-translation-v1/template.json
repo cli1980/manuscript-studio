@@ -12,9 +12,14 @@
       "skills": ["prepare-manuscript"],
       "model": null
     },
+    "analysis": {
+      "skill": "manuscript-analysis",
+      "skills": ["prepare-manuscript", "manuscript-analysis", "review-approval-sheet"],
+      "model": null
+    },
     "translate": {
       "skill": "literary-translation",
-      "skills": ["prepare-manuscript", "literary-translation", "review-approval-sheet"],
+      "skills": ["prepare-manuscript", "manuscript-analysis", "literary-translation", "review-approval-sheet"],
       "model": null
     }
   },
@@ -38,6 +43,8 @@
     {"id": "prepare", "kind": "agent", "agent": "prepare", "preparation": true, "gates": ["question"],
      "owns": ["prepared/"]},
     {"id": "metadata", "kind": "metadata_review"},
+    {"id": "analysis", "kind": "agent", "agent": "analysis",
+     "gates": ["question"], "owns": ["manuscript-analysis/"]},
     {"id": "brief", "kind": "agent", "agent": "translate", "front_matter": true,
      "gates": ["brief_samples", "translation_brief", "question"]},
     {"id": "translate", "kind": "agent", "agent": "translate", "iterate": "chapters",

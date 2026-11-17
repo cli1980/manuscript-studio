@@ -152,6 +152,7 @@ class InteriorDesignPhase(DocxProductionPhase):
                        for name in state["definition"]["agents"]["interior-design"]["skills"]],
             "work_record": state["prepared"]["work_record"],
             "metadata": json.loads(self._work_path(state).read_bytes())["metadata"],
+            "manuscript_analysis": self.analysis_handoff(state),
             "production_capabilities": {"formats": ["editable-docx"], "rendering": False,
                                         "print_certification": False},
             "format_target": state.get("format_target"),
@@ -191,6 +192,8 @@ class InteriorDesignPhase(DocxProductionPhase):
             "Keep styles, alignment and section variants explicit; never fabricate metadata or page values. "
             "Preserve the previous proposal's human-edited choices unless the receipt requests a change; "
             "increment revision for a new proposal. Use a fresh reading if the manuscript changed. "
+            "manuscript_analysis is provisional prepared-source context, not design authority; when its "
+            "current_text_matches_source is false, do not substitute it for reading the current manuscript. "
             "Set edition_brief.purpose to format_target.purpose, the user's pre-authoring choice. "
             "Use purpose_guidance to inform the specification and explain the design rationale; purpose is "
             "not inferred from the manuscript or evidence of completed print checks. "

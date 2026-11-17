@@ -24,7 +24,7 @@ Skills-only plugin installation does not require the formatter checkout.
 
 ## Install as a ChatGPT and Codex plugin
 
-The six skills live in one canonical directory, `plugins/manuscript-studio/skills/`.
+The seven skills live in one canonical directory, `plugins/manuscript-studio/skills/`.
 The skills-only `manuscript-studio` plugin uses these files directly; the standalone
 installer copies from the same source. Add this GitHub repository as a marketplace:
 
@@ -61,7 +61,7 @@ python scripts/install_skills.py --list
 python scripts/install_skills.py --dry-run
 ```
 
-Install all six skills into `~/.agents/skills/`:
+Install all seven skills into `~/.agents/skills/`:
 
 ```text
 python scripts/install_skills.py
@@ -73,8 +73,9 @@ Or install selected skills:
 python scripts/install_skills.py literary-editing literary-agent-querying
 ```
 
-Editing, translation, querying, and formatting also install the shared
-`prepare-manuscript` and `review-approval-sheet` skills to preserve sibling references. Complete skill
+Editing, translation and analysis install shared preparation and review skills.
+Querying installs `manuscript-analysis` and its transitive dependencies;
+interior design installs preparation. These dependencies preserve sibling references. Complete skill
 folders are copied, including references, scripts, tests, agent metadata, and
 assets; Python bytecode and cache directories are excluded.
 
@@ -182,6 +183,19 @@ New work records use schema version 2; version-1 records remain readable.
 record, and `enrich` computes missing extent and applies evidence-bound proposals
 from the preparation agent. Neither operation edits manuscript text.
 
+### `manuscript-analysis`
+
+Reads verified preparation and produces chapter summaries, a full neutral
+synopsis, a reading profile and an evidence-bound story ledger. Owns characters,
+relationships, causal events, plot threads, chronology, knowledge/revelations,
+object provenance, resolutions and atomic story-claim review. Querying consumes
+the approved ledger instead of maintaining a second one.
+
+The initial skill reuses the existing Markdown ledger and review contracts under
+`manuscript-analysis/revisions/<analysis-id>/`; its JSON review state uses the
+shared approval interface. It does not yet add a machine-readable story-graph
+validator, automatic novel analysis or Studio/CLI workflow stages.
+
 ### `literary-editing`
 
 Runs manuscript assessment, developmental editing, line editing, copyediting, specialist review, proofreading, and final QA. It keeps the manuscript source separate from the editorial workspace, presents proposed changes for approval, and applies only decisions the author accepts.
@@ -197,7 +211,13 @@ Translates literary works chapter by chapter using source analysis, a living glo
 
 ### `literary-agent-querying`
 
-Reads and positions a novel, builds a synopsis-complete story ledger, researches and prioritizes suitable literary agents, and prepares reusable query materials. Existing approved artifacts are reused by default. Only an explicit request to build a package for a specific agent creates an on-demand ZIP, including a synopsis only when that agent's verified guidelines request one.
+Consumes the source-bound, item-by-item approved ledger from `manuscript-analysis`,
+develops market positioning, researches and prioritizes literary agents, and
+prepares queries, bios, comparisons and submission materials. Its static manifest
+pins the external analysis rather than copying the ledger/review. Only an
+explicit named-agent complete-package request authorizes an on-demand ZIP,
+including a submission synopsis only when verified guidelines request one.
+The neutral analysis synopsis is not a query artifact or submission authority.
 
 ### `interior-design`
 

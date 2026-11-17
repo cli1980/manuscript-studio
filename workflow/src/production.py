@@ -197,6 +197,6 @@ class DocxProductionPhase:
         if not state.get("production"):
             return super().delivery_files(state)
         job = self.verify_docx_candidate(state)
-        return {"document.docx": self.store.content(job["result"]["docx"]),
+        return {**super().delivery_files(state), "document.docx": self.store.content(job["result"]["docx"]),
                 "docx-build.json": self.store.content(job["result"]["manifest"]),
                 "design-proposal.json": self.store.content(state["design_approval"]["proposal"])}

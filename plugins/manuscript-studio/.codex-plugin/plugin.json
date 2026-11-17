@@ -1,7 +1,7 @@
 {
   "name": "manuscript-studio",
   "version": "0.4.1",
-  "description": "Shared manuscript preparation and literary skills for editing, translation, interior-design proposals, querying, and approval.",
+  "description": "Shared manuscript preparation, analysis, editing, translation, interior-design proposals, querying, and approval.",
   "author": {
     "name": "Lin Shaw",
     "url": "https://github.com/cli1980"
@@ -15,6 +15,7 @@
     "literary-agents",
     "manuscripts",
     "manuscript-preparation",
+    "manuscript-analysis",
     "interior-design",
     "query-letters",
     "approval-workflow"
@@ -23,7 +24,7 @@
   "interface": {
     "displayName": "Manuscript Studio",
     "shortDescription": "Literary manuscript workflows",
-    "longDescription": "Prepare verified chapter Markdown, assess and edit literary manuscripts, translate Chinese-English prose, propose evidence-bound book interior designs, and develop literary-agent query materials. Interior design returns a structured proposal, not generated DOCX/PDF or approval; native intake and production integration are separate work. Interactive literary reviews require a Codex-compatible inline visualization surface; other environments use revision-bound text decisions. File access, Python, dependencies, and web research depend on the host. See the runtime support guide linked from the project website.",
+    "longDescription": "Prepare verified chapter Markdown, analyze manuscript plot and characters through a shared evidence-bound story ledger, assess and edit literary manuscripts, translate Chinese-English prose, propose book interior designs, and develop literary-agent query materials. Interior design returns a structured proposal, not generated DOCX/PDF or approval. Analysis supplies skill-level reading and review contracts; automatic analysis workflow integration is separate work. Interactive literary reviews require a Codex-compatible inline visualization surface; other environments use revision-bound text decisions. File access, Python, dependencies, and web research depend on the host. See the runtime support guide linked from the project website.",
     "developerName": "Lin Shaw",
     "category": "Productivity",
     "capabilities": [

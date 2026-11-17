@@ -6,8 +6,8 @@ Use this protocol after a manuscript-grounded story ledger passes its structural
 
 Create two synchronized artifacts:
 
-- `query-package/static/story-ledger-review.md`: the authoritative, human-readable audit record and disposition history;
-- `query-package/static/story-ledger-review.json`: the revision-bound interaction state consumed by the shared approval-sheet renderer and parser.
+- `story-ledger-review.md` beside the analysis ledger: the authoritative, human-readable audit record and disposition history;
+- `story-ledger-review.json` beside the analysis ledger: the revision-bound interaction state consumed by the shared approval-sheet renderer and parser.
 
 Bind both to:
 
@@ -18,7 +18,7 @@ Bind both to:
 
 Both files are durable package state. The Markdown record controls domain meaning and provenance; the JSON controls the current review interface and must never silently override the Markdown record. Keep their item IDs, revision, statuses, decisions, responses, and gate state synchronized. Do not keep approvals only in chat.
 
-Read the sibling [review-approval-sheet skill](../../review-approval-sheet/SKILL.md) in full before creating, validating, rendering, or parsing the JSON interface. Use its schema and query adapter. If the sibling skill is unavailable, preserve the same IDs, revision envelope, item-level semantics, and separate final closure through the fallback in this document.
+Read the sibling [review-approval-sheet skill](../../review-approval-sheet/SKILL.md) in full before creating, validating, rendering, or parsing the JSON interface. Use its schema and manuscript-analysis adapter. Manuscript analysis, not querying or the renderer, owns correction propagation and approval state. If interactive rendering is unavailable, preserve the same IDs, revision envelope, item-level semantics, and separate final closure through the fallback in this document.
 
 ## Approval units
 
@@ -63,7 +63,7 @@ Review-status values:
 
 ## Present the approval sheet
 
-Map each `HG` record to one shared-interface item. Include the proposition in `summary`; put originating ledger IDs, manuscript locator, claim type and confidence, permitted wording, required qualification, prohibited overstatement, and dependents in labeled `details`; and declare only the four query decisions below. Validate the JSON before presentation and render it as an interactive UI. The UI is the default review surface because it provides navigation, compact status, per-item decisions, required correction text, and a revision-bound batch submission without asking the author to edit Markdown directly.
+Map each `HG` record to one shared-interface item. Include the proposition in `summary`; put originating ledger IDs, manuscript locator, claim type and confidence, permitted wording, required qualification, prohibited overstatement, and dependents in labeled `details`; and declare only the four ledger decisions below. Validate the JSON before presentation and render it as an interactive UI. The UI is the default review surface because it provides navigation, compact status, per-item decisions, required correction text, and a revision-bound batch submission without asking the author to edit Markdown directly.
 
 The author may return dispositions for many units in one response. Each disposition must identify its `HG` ID and one of:
 

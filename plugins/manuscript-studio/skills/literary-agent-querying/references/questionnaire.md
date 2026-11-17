@@ -28,7 +28,11 @@ Establish:
 - target market or territory, if already decided;
 - any deadline or submission window.
 
-During a full flow, read the complete manuscript and existing materials before continuing. When reusing approved artifacts, do not reread the novel solely because the user requested an incremental revision or an on-demand package.
+During a full flow, obtain complete source-bound reading through
+[manuscript-analysis](../../manuscript-analysis/SKILL.md) and inspect designated
+existing materials before continuing. Querying consumes its reading profile and
+approved ledger rather than rebuilding them. When reusing approved artifacts,
+do not reread the novel solely for an incremental revision or on-demand package.
 
 ### Round 2: Book identity and provisional classification
 
@@ -47,7 +51,10 @@ Explain that publication and submission history can affect available rights and 
 
 ### Round 3: Story engine
 
-Acquire enough information to answer:
+Use the shared analysis/approved ledger to answer the following. Ask only for
+query emphasis or missing author intent; return factual gaps to manuscript
+analysis for evidence repair and required review rather than building a second
+story model:
 
 - Who is the principal protagonist?
 - What destabilizes the protagonist's existing life?

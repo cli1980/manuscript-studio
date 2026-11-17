@@ -62,15 +62,25 @@ class InstallerTests(unittest.TestCase):
 
     def test_review_dependency_is_installed_with_query_skill(self):
         self.make_skill("literary-agent-querying")
+        self.make_skill("manuscript-analysis")
         self.make_skill("prepare-manuscript")
         self.make_skill("review-approval-sheet")
         self.install(["literary-agent-querying"])
         self.assertTrue((self.destination / "review-approval-sheet/SKILL.md").is_file())
         self.assertTrue((self.destination / "prepare-manuscript/SKILL.md").is_file())
+        self.assertTrue((self.destination / "manuscript-analysis/SKILL.md").is_file())
         self.assertFalse((self.destination / "alpha").exists())
+
+    def test_missing_analysis_dependency_fails_without_writing(self):
+        for name in ("literary-agent-querying", "prepare-manuscript", "review-approval-sheet"):
+            self.make_skill(name)
+        with self.assertRaisesRegex(ValueError, "manuscript-analysis"):
+            self.install(["literary-agent-querying"])
+        self.assertFalse(self.destination.exists())
 
     def test_missing_dependency_fails_without_writing(self):
         self.make_skill("literary-editing")
+        self.make_skill("manuscript-analysis")
         self.make_skill("prepare-manuscript")
         with self.assertRaisesRegex(ValueError, "review-approval-sheet"):
             self.install(["literary-editing"])
@@ -86,10 +96,20 @@ class InstallerTests(unittest.TestCase):
 
     def test_missing_preparation_dependency_fails_without_writing(self):
         self.make_skill("literary-translation")
+        self.make_skill("manuscript-analysis")
         self.make_skill("review-approval-sheet")
         with self.assertRaisesRegex(ValueError, "prepare-manuscript"):
             self.install(["literary-translation"])
         self.assertFalse(self.destination.exists())
+
+    def test_editing_and_translation_install_shared_analysis_transitively(self):
+        for name in ("literary-editing", "literary-translation", "manuscript-analysis",
+                     "prepare-manuscript", "review-approval-sheet"):
+            self.make_skill(name)
+        for consumer in ("literary-editing", "literary-translation"):
+            self.install([consumer])
+            for dependency in ("manuscript-analysis", "prepare-manuscript", "review-approval-sheet"):
+                self.assertTrue((self.destination / dependency / "SKILL.md").is_file())
 
     def test_dry_run_does_not_create_destination(self):
         messages = self.install(dry_run=True)
@@ -310,6 +330,27 @@ class InstallerTests(unittest.TestCase):
 
 
 class RepositoryTests(unittest.TestCase):
+    def test_selected_analysis_and_query_installations_preserve_handoff_resources(self):
+        for selection, expected in (
+            ("manuscript-analysis", {"manuscript-analysis", "prepare-manuscript", "review-approval-sheet"}),
+            ("literary-agent-querying", {
+                "literary-agent-querying", "manuscript-analysis", "prepare-manuscript", "review-approval-sheet",
+            }),
+        ):
+            with self.subTest(selection=selection), tempfile.TemporaryDirectory() as temporary:
+                destination = Path(temporary) / "skills"
+                installer.install_skills(destination, [selection])
+                self.assertEqual({path.name for path in destination.iterdir()}, expected)
+                for filename in ("analysis-contract.md", "story-ledger-schema.md", "story-ledger-human-review.md"):
+                    self.assertTrue((destination / "manuscript-analysis/references" / filename).is_file())
+                self.assertFalse((destination / "literary-agent-querying/references/story-ledger-schema.md").exists())
+                for document in destination.rglob("*.md"):
+                    for link in re.findall(r"\[[^\]]+\]\(([^)]+)\)", document.read_text(encoding="utf-8")):
+                        if re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:", link) or link.startswith("#"):
+                            continue
+                        self.assertTrue((document.parent / link.split("#", 1)[0]).exists(),
+                                        f"Broken selected-install link in {document}: {link}")
+
     def test_installed_suite_preserves_resources_and_relative_links(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "skills"
@@ -317,7 +358,7 @@ class RepositoryTests(unittest.TestCase):
             available = installer.available_skills(installer.SKILLS_ROOT)
             self.assertEqual(set(available), {
                 "literary-editing", "literary-translation", "literary-agent-querying",
-                "interior-design", "review-approval-sheet", "prepare-manuscript",
+                "interior-design", "review-approval-sheet", "prepare-manuscript", "manuscript-analysis",
             })
             self.assertEqual({path.name for path in destination.iterdir()}, set(available))
             for name, source in available.items():

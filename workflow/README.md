@@ -4,9 +4,7 @@ A local CLI over the generalized workflow engine (M1, see
 [docs/m1-design.md](docs/m1-design.md)). The literary translation template is:
 
 ```text
-prepare → metadata review → translation brief → translate (per chapter, passage human gates) → whole-book consistency → accept → Markdown export
-                                                                                  ↓ optional derived run
-                                                                         format → verified DOCX
+prepare → metadata review → manuscript analysis → translation brief → translate (per chapter, passage human gates) → whole-book consistency → accept → Markdown export
 ```
 
 Literary drafting and source-grounded prose/fidelity review stay together in the
@@ -20,6 +18,7 @@ Implementation modules live in `workflow/src/`:
 | `registry.py` | Discovers `templates/*/template.json`, validates them, resolves engine classes, computes the engine identity |
 | `engine.py` | Base engine: lifecycle, lock, stage walker, template-declared gates, receipts, acceptance, export, retry, stage restart |
 | `prepared.py` | Shared preparation stage, prepared-package verification, per-chapter iterations, restart chapter, metadata review |
+| `analysis.py` | Shared source-bound analysis stage, coverage/evidence/hash validation, frozen downstream handoff and export |
 | `translation.py` | `literary-translation-v1` prompts, translation gate rules, chapter completion, accepted-output publication |
 | `editing.py` | `literary-editing-v1`: developmental, line, and copy editing passes chosen by the user, each chapter by chapter with a whole-book pass |
 | `interior.py` | Embedded interior-design proposal hand-off, native human review and manuscript/design approval lifecycle |
@@ -200,6 +199,23 @@ records the field as a confirmed user edit. The engine also snapshots each
 version into the run's object store and logs a `metadata.edited` event. Every
 edit at the gate presents a new gate ID, so a confirmation always refers to the
 record you last saw. `/manuscript_language` is locked once the run exists.
+
+After metadata confirmation, both literary editing and translation run
+`manuscript-analysis` before their workflow-specific stages. It produces a
+source-bound story ledger, chapter summaries, full neutral synopsis, reading
+profile and manifest. The engine checks the thin JSON binding envelope and
+freezes the Markdown documents, then hands them directly to the next agents
+through `manuscript_analysis`. No extra analysis approval is required.
+
+The common Studio Overview exposes these documents as provisional source
+context. Coverage is an agent assertion with checked unit identities and quotes,
+not proof of semantic accuracy or author approval. Editing later marks the
+handoff as historical when the manuscript text changes. Current text, metadata
+and consumer-specific approvals retain authority. Snapshots are included in
+accepted publication/export. See the
+[handoff contract](../plugins/manuscript-studio/skills/manuscript-analysis/references/workflow-handoff.md).
+Existing run definitions and approvals are not silently migrated; use a fresh
+run for the new sequence.
 
 To continue, reply to the current gate with a response file containing exactly
 `confirm metadata` (the service's `confirm_metadata` also binds the inspected

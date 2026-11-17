@@ -528,6 +528,84 @@ status, owner, and relevant issue or implementation links. Use these statuses:
      target, diffs for line and copy editing, single-language reading,
      highlighting of sheet item locations) do not touch decision logic, and so
      several editing stages and the whole-book pass fit in one view.
+- **Work Overview** (owner direction, 2026-11-16; prerequisite
+  before manuscript-analysis workflow integration):
+  - The book title opens an unnumbered Overview outside the chapter list. The
+    viewer API projects it separately; body display numbering starts at one,
+    without renaming source units or changing preparation order or hashes.
+    Whole-book progress is not a chapter-list entry. Processing counts are
+    labeled manuscript units so preserved front/back matter is not miscounted
+    as narrative chapters.
+  - Common metadata and workflow-owned content compose separately. Translation
+    adds its brief/current-versus-approved documents and paired reading panes;
+    editing uses its own text view without translation-only sections. The
+    workflow UI adapters own these differences rather than one fixed layout.
+  - Explicit overview/chapter viewer targets drive review links and notices.
+    Source-unit links to front matter resolve to Overview. Stored
+    gates, atomic/revision bindings, approval history, source content and
+    translation/editing/export iteration are unchanged. Work/run identity,
+    not mutable title text, keys the route; pending metadata title edits update
+    its display without rewriting the prepared heading.
+  - Implemented and verified: 14 API checks plus 10 browser/case checks with
+    one expected live-model skip, frontend typecheck/build, and desktop/390 px
+    layouts. Regressions cover arbitrary front-matter IDs, source/dedication
+    preservation, read-only state/hash projection, title changes without source
+    rewrites, review routing, workflow-specific layouts, approved/current brief
+    snapshots, translation completion, native DOCX delivery and status isolation.
+    Evidence is in the ignored
+    `.workflow-runs/title-viewer-final-20261116T203032Z/` directory. No live
+    workflow or formatter submodule changed. No manuscript-analysis stage is
+    wired by this change.
+  - **Naming clarification (owner, 2026-11-16):** use Overview, not "title
+    section," for this work-level container. Front Matter names the actual
+    manuscript content inside it. UI labels, routes, API projections and
+    workflow adapter terminology follow Overview; metadata `/title` fields and
+    original title text remain unchanged. Verified with 24 API/browser/case
+    checks (one expected live-model skip), frontend typecheck/build, and LF
+    checks. The isolated build and screenshots are under the ignored
+    `.workflow-runs/overview-rename-20261116T204420Z/` directory. Deployment was
+    deferred while the developmental-editing worker was active. The new API
+    and bundle are now applied together after the run reached idle manuscript
+    acceptance; run state, events and publication-log fingerprints are unchanged.
+- **Approved-sheet references in the viewer** (owner direction, 2026-11-16):
+  - A run-wide Approved Sheets list beside the chapter navigation links to
+    closed review sheets, newest first, with chapter/Overview/whole-book scope,
+    stage, pass and revision.
+  - Owner correction (2026-11-16): the separate approval-reference viewer is
+    premature. Keep the links but download Markdown directly, with no new
+    window or page navigation. The viewer component, query routing, historical
+    detail API and reference-only styles are removed. The active approval
+    controls and unsent feedback remain in place.
+  - Only explicit final closure or the engine's complete resolving/implied
+    closure qualifies. Item submissions, feedback, unapproved drafts and
+    sheet-less decisions do not masquerade as approved sheets. Superseded
+    closures remain available but are marked historical, not current authority.
+  - Downloads use the checksum-verified approved Markdown binding verbatim,
+    never evolving workspace files. JSON-only sheets receive a plain Markdown
+    export of the saved sheet, recorded decisions and closure receipt, without
+    rewriting any snapshot. No engine state, gate binding, approval rule or
+    manuscript content changes.
+  - Initial reference-viewer verification: 15 API checks and 11 browser/case checks with one expected
+    live-model skip, frontend typecheck/build, desktop/390 px layouts and LF
+    checks. Regressions cover explicit/implied closure, draft exclusion,
+    repeated-pass scope, supersession, checksum integrity, changed workspace
+    files, reference deep links, no approval controls/posts, and preserved
+    unsent feedback in the original tab. Screenshots and the isolated build
+    are under `.workflow-runs/approved-sheets-20261116T214406Z/` (ignored).
+  - Refreshed Studio on the same data root only after its worker became idle.
+    Verified the saved-sheet list/detail and Overview against the existing run;
+    its state, event history and work publication logs are unchanged. No
+    manuscript approval, cancellation, data migration or submodule change.
+  - Direct-download verification passes: frontend typecheck/build and 26
+    API/browser/case checks with one expected live-model skip. Updated checks
+    verify attachment headers, exact approved Markdown despite workspace
+    changes, JSON-only Markdown exports, and a browser download with no new
+    tab, navigation, approval submission or loss of unsent feedback.
+  - Refreshed the idle Studio on its existing data root. The live download
+    matches the pinned approved Markdown hash, the historical JSON review
+    endpoint is gone, and run state, events and publication logs are unchanged.
+    Build/evidence: `.workflow-runs/approved-downloads-20261116T220318Z/`
+    (ignored). UTF-8/LF and whitespace checks pass.
 - **Metadata review on the front-matter chapter** (owner decision, 2026-10-28;
   implemented after the 黑松石 run completed, in `d9896c5`):
   - Every prepared work starts with exactly one front-matter unit, split
@@ -1624,21 +1702,125 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 
 ### M5 - Shared manuscript analysis
 
-- **Status:** `planned`; planning recorded 2026-11-16. No skill, schema,
-  validator, workflow stage or review UI is implemented by this entry.
+- **Status:** `in_progress`; initial standalone skill/contract extraction
+  started 2026-11-16. Shared workflow integration is implemented and verified
+  for the document-based handoff; machine-readable story-graph validation
+  remains future work.
 - **Owner:** `cli1980`.
 - **Planning branch:** `feature/manuscript-understanding-plan`.
+- **Implementation branch:** `feature/manuscript-analysis`.
 - **Owner-confirmed direction (2026-11-16):** create a `manuscript-analysis`
   skill; define its outputs and handoffs to actual workflows and downstream
   skills, including translation and developmental editing; track delivery as
-  a milestone. The skill name `manuscript-analysis` is owner-confirmed; the
-  contract and integration choices below are proposals, not
+  a milestone. Subsequently directed extraction of shared reading/ledger
+  capabilities from querying, leaving research, pitch and submission work in
+  that skill. Intake may come directly from preparation; raw manuscripts
+  automatically delegate to `prepare-manuscript` before analysis. The skill
+  name `manuscript-analysis` is owner-confirmed; other proposed contract and
+  integration choices below are not
   additional owner-approved requirements.
 - **Outcome:** one reusable, evidence-bound account of what a manuscript says
   and how its narrative unfolds, rather than separate, incompatible summaries
   inferred by each consumer. Extraction remains preparation's responsibility;
   literary evaluation, translation, editing and design remain consumer tasks.
   This milestone does not change the existing highest-priority DOCX work.
+- **First-slice implementation:** added the
+  [analysis skill](plugins/manuscript-studio/skills/manuscript-analysis/SKILL.md)
+  and [document handoff contract](plugins/manuscript-studio/skills/manuscript-analysis/references/analysis-contract.md).
+  Moved the existing linked story-ledger and atomic human-review protocols out
+  of querying, preserving causal, knowledge, identity, resolution, qualification,
+  correction-invalidation and separate-closure requirements. Added chapter
+  summaries, a neutral full synopsis and a reading profile to the analysis
+  contract. Querying now pins the external approved ledger through its
+  [consumer adapter](plugins/manuscript-studio/skills/literary-agent-querying/references/manuscript-analysis-handoff.md);
+  it retains market positioning, research, pitch, submission synopsis drafting,
+  samples and terminal ZIP rules. Its mandatory story-approval gate is not
+  weakened. Analysis depends on preparation/review; querying installs analysis
+  transitively. That first slice was instruction-based skill composition;
+  the subsequent host composition is recorded below.
+- **Initial verification:** 76 installer/listing, query sample/ZIP and shared
+  approval checks pass with four expected platform/runtime skips. Selected
+  analysis-only and query-only installations preserve all required resources
+  and relative links without making analysis depend on querying. Missing analysis
+  dependencies fail before installation writes. These are packaging/interface
+  regressions, not live-model reading accuracy or workflow-integration evidence.
+- **Contract staging:** the first slice deliberately preserves the migrated
+  Markdown ledger/domain-review authorities and shared review JSON. The proposed
+  `understanding.json`/per-unit JSON design below remains future work, not a
+  second authority shipped alongside that ledger. The host integration below
+  wires the document package into translation and editing without introducing
+  that proposed graph.
+- **Integration prerequisite (owner direction, 2026-11-16):** close the
+  overview/chapter-viewer separation first, with common items and
+  workflow-specific structure; see the cross-cutting Work Overview
+  decision. This prerequisite is implemented and verified, preserving actual
+  front-matter content and processing.
+- **Workflow composition (owner direction, 2026-11-16):** hook analysis into
+  both literary editing and translation after preparation, with direct
+  downstream handoff. Existing metadata confirmation remains the end of
+  intake: preparation -> metadata confirmation -> analysis -> translation
+  briefing or editing-pass selection. No additional analysis approval gate
+  is introduced; genuine questions/blockers still stop progress.
+  - A shared agent stage produces the five document-contract outputs plus a
+    thin JSON source/coverage/hash envelope, not a duplicate JSON story graph.
+    The engine checks exact ordered unit coverage, quoted source evidence,
+    source/manifest identities, artifact paths/hashes, audit assertion and
+    provisional status before advancing and freezing snapshots.
+  - Translation, editing and design receive the same `manuscript_analysis`
+    context with qualifications and source binding. Changed editorial text is
+    explicitly marked as not matching the original reading; downstream stages
+    still read and validate current text and retain their own human gates.
+    Analysis cannot authorize edits or satisfy querying's author-review policy.
+    For design this is provisional context for IDP-R02 only; IDP-R08's exact
+    preparation and IDP-R15's approval boundaries remain unchanged under the
+    [design contract](tools/formattor/docs/interior-design-and-production.md).
+  - The common Overview presents the package without approval controls.
+    Snapshots and provenance persist in run state and accepted publication/
+    export; analysis/preparation restarts invalidate dependent analysis.
+    Existing runs and approvals are not migrated, cancelled or replayed.
+  - Verification: 137 combined workflow/profile/API/usage tests pass; 34
+    installer checks pass with three platform skips; 11 browser/case checks
+    pass with one live-model skip. Coverage includes missing/partial/stale
+    bindings, invented quotes, invalid paths/hashes, false approval, metadata
+    tampering, frozen snapshots, restart invalidation, changed editorial text,
+    both Overview layouts at desktop/390 px, and the native DOCX lifecycle.
+    Frontend build and LF checks pass. These synthetic regressions do not
+    establish live-model reading accuracy or literary quality.
+  - Studio refreshed on the same workspace after confirming no active worker.
+    The existing run's raw state/revision, event history, and all 106 saved
+    source/artifact/history files remain unchanged; no approval or migration
+    was performed. The updated sequence applies to new/restarted runs.
+  - Owner accepts the current integration for now, with the rendering
+    improvement below requested as follow-up. This approves the implementation,
+    not generated story claims, live-model reading accuracy or the full M5 plan.
+
+#### Planned follow-up: Human-friendly analysis rendering
+
+- **Status:** `planned`; owner-requested, not implemented.
+- **Owner-confirmed separation:** raw analysis data is the handoff interface
+  for downstream workflows/skills; human-friendly analysis is what the UI
+  exposes. Replace direct raw-artifact presentation in Overview with a
+  reader-facing projection, not a user-selectable raw-data mode.
+- **Reader-facing content:** present the synopsis, chapter summaries,
+  characters/relationships, plot threads and reading profile as readable
+  narrative sections. Keep meaningful qualifications, uncertainty, incomplete
+  coverage and stale-source warnings visible; filtering must not imply approval
+  or make the analysis appear more certain than it is.
+- **Downstream-only technical content:** retain internal record IDs, checksums,
+  machine paths, binding/coverage records and producer/audit bookkeeping in
+  the raw handoff, not the analysis UI. Translate useful source references and
+  readiness limitations into human-readable labels rather than exposing their
+  raw record structure.
+- **Rendering design, pending:** determine the projection schema, content
+  grouping, layout and labels within that separation. A raw-data toggle is
+  not part of the requested UI.
+- **Boundary and verification:** implement a presentation projection, not
+  destructive cleanup of canonical artifacts. Preserve the complete package
+  and downstream handoff hashes. Derive the UI view from the same analysis
+  without inventing a competing factual authority. Future checks must cover
+  retained meaning, qualifications and source references, exclusion of raw
+  technical data from the UI, unchanged downstream consumption, and desktop/
+  mobile rendering. No implementation or verification is claimed yet.
 
 #### Proposed skill boundary and inputs
 

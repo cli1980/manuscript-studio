@@ -203,6 +203,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
             detail["stages"] = engine.stage_ids(state)
             detail["stage_titles"] = {o["stage"]: o["title"] for s in state.get("definition", {}).get("stages", [])
                                       for o in s.get("options", [])}
+            detail["viewer_target"] = viewer_target(state)
             if engine.retired or not detail["engine_current"] or state["status"] in ("COMPLETED", "CANCELLED"):
                 detail.pop("gate", None)
                 return detail
@@ -244,7 +245,10 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
     def runs(work_id: str | None = None, svc: WorkflowService = Depends(service)):
         result = []
         for row in reversed(svc.list_runs(work_id=work_id)):
-            summary = svc.get_run(row["id"], include_usage=False)
+            with svc.open_run(row["id"]) as engine:
+                state = engine.state()
+                summary = svc.run_view(engine, state, include_usage=False)
+                summary["viewer_target"] = viewer_target(state)
             result.append({**summary, "created_at": row["created_at"], "updated_at": row["updated_at"],
                            "worker": workers.status(row["id"])})
         return result
@@ -412,6 +416,41 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
 
     # ----- chapter browser (inside a run) --------------------------------------------------
 
+    def viewer_target(state):
+        """Presentation scope only; stored gates and their approval bindings stay unchanged."""
+        gate = state.get("gate")
+        if not gate:
+            return None
+        chapter_id = gate.get("chapter_id")
+        front = next((c for c in state.get("chapters") or [] if c["role"] == "front_matter"), None)
+        if not chapter_id or chapter_id == WHOLE or (front and chapter_id == front["chapter_id"]):
+            return {"kind": "overview"}
+        return {"kind": "chapter", "chapter_id": chapter_id}
+
+    def overview_identity(svc, state, metadata):
+        front = next((c for c in state.get("chapters") or [] if c["role"] == "front_matter"), None)
+        # Review edits are run-local until confirmation publishes them to the work.
+        title = metadata["metadata"].get("title") if metadata else None
+        return {"work_id": state["work_id"], "title": title or svc.get_work(state["work_id"])["title"],
+                "source_unit_id": front["chapter_id"] if front else None}
+
+    @app.get("/api/runs/{run_id}/overview")
+    def overview(run_id: str, svc: WorkflowService = Depends(service)):
+        with svc.open_run(run_id) as engine:
+            state = engine.state()
+            metadata = engine.metadata_view(state) if state.get("prepared") else None
+            identity = overview_identity(svc, state, metadata)
+            source_id = identity["source_unit_id"]
+            analysis = engine.analysis_handoff(state) if hasattr(engine, "analysis_handoff") else None
+            return {**identity, "prepared": bool(state.get("prepared")),
+                    "metadata": metadata,
+                    "analysis": ({key: analysis[key] for key in (
+                        "analysis_id", "approval_status", "qualifications", "coverage_verification",
+                        "current_text_matches_source")} | {
+                            "documents": documents(engine, analysis["artifacts"].values())} if analysis else None),
+                    "metadata_fields": svc.metadata_fields(),
+                    "source": chapter_content(engine, state, source_id) if source_id else None}
+
     def pass_keys(state):
         """Chosen passes (e.g. editing) by key "<number>-<stage>", so a repeated pass gets its own entry."""
         titles = {o["stage"]: o["title"] for s in state["definition"].get("stages", []) for o in s.get("options", [])}
@@ -434,6 +473,89 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                 groups[key].append(item)
         return groups
 
+    def approved_sheet_receipts(state):
+        """Closure receipts, not workspace files, establish which sheet revisions were approved."""
+        starts = {p["receipt_id"]: p for p in state.get("passes") or []}
+        current_pass = None
+        result = []
+        for receipt in state.get("receipts") or []:
+            current_pass = starts.get(receipt["id"], current_pass)
+            gate, parsed = receipt["gate"], receipt["parsed"]
+            if gate.get("sheet") and (parsed["type"] == "final-closure" or parsed.get("implied_closure")):
+                number = current_pass["number"] if current_pass and current_pass["stage"] == gate["stage"] else None
+                result.append((receipt, number))
+        return list(reversed(result))
+
+    def approved_sheet_summary(engine, state, receipt, pass_number):
+        gate = receipt["gate"]
+        snapshot = gate["sheet"]
+        sheet = json.loads(engine.store.content(snapshot))
+        chapter_id = gate.get("chapter_id")
+        unit = next((c for c in state.get("chapters") or [] if c["chapter_id"] == chapter_id), None)
+        scope = ("Whole book" if chapter_id == WHOLE else "Overview"
+                 if not chapter_id or (unit and unit.get("role") == "front_matter")
+                 else (unit or {}).get("title") or chapter_id)
+        stages = {s["id"]: s.get("title") or s["id"] for s in state["definition"]["stages"]}
+        stages.update({o["stage"]: o["title"] for s in state["definition"]["stages"] for o in s.get("options", [])
+                       if o.get("stage")})
+        superseded = any(receipt["id"] in r.get("superseded_receipt_ids", []) for r in state.get("restarts") or [])
+        return {"receipt_id": receipt["id"], "sheet_id": sheet["sheet_id"], "revision": sheet["revision"],
+                "title": sheet["title"], "sha256": snapshot["sha256"], "created_at": receipt["created_at"],
+                "decision_source": receipt["decision_source"], "kind": gate["kind"], "stage": gate["stage"],
+                "stage_title": stages.get(gate["stage"], gate["stage"]), "chapter_id": chapter_id, "scope": scope,
+                "pass_number": pass_number, "attempt": gate.get("attempt"), "superseded": superseded,
+                "implied_closure": bool(receipt["parsed"].get("implied_closure"))}
+
+    @app.get("/api/runs/{run_id}/approved-sheets")
+    def approved_sheets(run_id: str, svc: WorkflowService = Depends(service)):
+        with svc.open_run(run_id) as engine:
+            state = engine.state()
+            return [approved_sheet_summary(engine, state, receipt, number)
+                    for receipt, number in approved_sheet_receipts(state)]
+
+    @app.get("/api/runs/{run_id}/approved-sheets/{receipt_id}.md")
+    def download_approved_sheet(run_id: str, receipt_id: str, svc: WorkflowService = Depends(service)):
+        with svc.open_run(run_id) as engine:
+            state = engine.state()
+            selected = next(((r, n) for r, n in approved_sheet_receipts(state) if r["id"] == receipt_id), None)
+            if selected is None:
+                raise HTTPException(404, "Unknown approved sheet.")
+            receipt, number = selected
+            gate = receipt["gate"]
+            summary = approved_sheet_summary(engine, state, receipt, number)
+            binding = gate.get("binding")
+            if binding and binding["path"].lower().endswith(".md"):
+                # Download the exact approved document, never its evolving workspace copy.
+                data = engine.store.content(binding)
+            else:
+                sheet = json.loads(engine.store.content(gate["sheet"]))
+                decisions = {d["id"]: d["label"] for d in sheet["decisions"]}
+                dispositions = {d["item_id"]: d for d in receipt["parsed"].get("dispositions", [])}
+                lines = [f"# {sheet['title']}", "", f"Sheet: {sheet['sheet_id']}", f"Revision: {sheet['revision']}",
+                         f"Approved: {receipt['created_at']}", f"Decision source: {receipt['decision_source']}",
+                         f"Scope: {summary['scope']}", f"Stage: {summary['stage_title']}",
+                         f"Approval receipt: {receipt['id']}", f"Sheet SHA-256: {summary['sha256']}", ""]
+                if summary["pass_number"] is not None:
+                    lines.extend([f"Pass: {summary['pass_number']}", ""])
+                if summary["superseded"]:
+                    lines.extend(["> Superseded by a restart. Historical reference only.", ""])
+                for item in sheet["items"]:
+                    lines.extend([f"## {item['id']}: {item['summary']}", ""])
+                    for row in item["details"]:
+                        lines.extend([f"### {row['label']}", "", row["value"], ""])
+                    response = dispositions.get(item["id"]) or item.get("response") or {}
+                    decision = response.get("decision")
+                    lines.extend([f"Recorded decision: {decisions.get(decision, decision or 'See closure receipt')}", ""])
+                    if response.get("note"):
+                        lines.extend([response["note"], ""])
+                lines.extend(["## Closure receipt", "", receipt["text"], ""])
+                data = "\n".join(lines).encode("utf-8")
+            name = re.sub(r"[^A-Za-z0-9_.-]", "_",
+                          f"{summary['sheet_id']}-r{summary['revision']}-{receipt_id[:8]}")[:150] + ".md"
+            return Response(data, media_type="text/markdown; charset=utf-8",
+                            headers={"Content-Disposition": f'attachment; filename="{name}"',
+                                     "X-Content-SHA256": digest(data)})
+
     @app.get("/api/runs/{run_id}/chapters")
     def chapters(run_id: str, svc: WorkflowService = Depends(service)):
         with svc.open_run(run_id) as engine:
@@ -454,7 +576,19 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                                                          and "chapter_sanity" in (state.get("approvals") or {}))}
                 result.append({key: chapter.get(key) for key in ("chapter_id", "order", "title", "role", "sha256")}
                               | {"outputs": outputs})
-            return {"prepared": bool(state.get("prepared")), "stages": stages, "chapters": result,
+            metadata = engine.metadata_view(state) if state.get("prepared") else None
+            overview = overview_identity(svc, state, metadata)
+            overview["outputs"] = next((c["outputs"] for c in result if c["role"] == "front_matter"), {})
+            body = [c for c in result if c["role"] != "front_matter"]
+            number = 0
+            for record in body:
+                if record["role"] in ("chapter", "standalone"):
+                    number += 1
+                    record["display_number"] = number
+                else:
+                    record["display_number"] = None
+            return {"prepared": bool(state.get("prepared")), "stages": stages, "chapters": body,
+                    "overview": overview,
                     "stage_info": {key: keys[key] for key in stages if key in keys},
                     "whole_book": {stage: next((i["status"] for i in groups[stage] if i["chapter_id"] == WHOLE), None)
                                    for stage in stages}}
@@ -462,42 +596,43 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
     @app.get("/api/runs/{run_id}/chapters/{chapter_id}")
     def chapter(run_id: str, chapter_id: str, svc: WorkflowService = Depends(service)):
         with svc.open_run(run_id) as engine:
-            state = engine.state()
-            if not state.get("prepared"):
-                raise HTTPException(409, "Chapters are available after preparation completes.")
-            record = next((c for c in state["chapters"] if c["chapter_id"] == chapter_id), None)
-            if record is None:
-                raise HTTPException(404, "Unknown chapter.")
-            prepared = engine.store.content(state["prepared"]["files"][record["path"]]).decode("utf-8")
-            outputs = []
-            if state.get("manuscript"):
-                # Editing works on one text: show it as it stands now, beside the original, once a pass changed it.
-                current = engine.file(state["manuscript"][chapter_id]).read_bytes()
-                if current.decode("utf-8") != prepared:
-                    outputs.append({"stage": "current", "title": "Edited text", "attempt": None,
-                                    "sha256": digest(current), "text": current.decode("utf-8")})
-            else:
-                for stage, items in chapter_records(engine, state).items():
-                    item = next((i for i in items if i["chapter_id"] == chapter_id), None)
-                    if item and item["status"] == "completed" and item.get("output"):
-                        outputs.append({"stage": stage, "attempt": item["attempt"], "sha256": item["output"]["sha256"],
-                                        "text": engine.store.content(item["output"]).decode("utf-8"),
-                                        "consistency_changes": item["output"].get("consistency_changes", [])})
-            map_path = engine.workspace / "translation" / "maps" / f"{chapter_id}.json"
-            passage_map = json.loads(map_path.read_text(encoding="utf-8")) if map_path.is_file() else None
-            # Completed front-matter reviews: the shared metadata and each workflow's own (e.g. translation brief).
-            reviews = []
-            if record["role"] == "front_matter":
-                if state.get("metadata_approval"):
-                    reviews.append({"kind": "metadata_review", "record_revision": state["metadata_approval"]["record_revision"],
-                                    "decision_source": state["metadata_approval"]["decision_source"], "documents": []})
-                for kind, approval in (state.get("front_matter_approvals") or {}).items():
-                    reviews.append({"kind": kind, "created_at": approval["created_at"],
-                                    "decision_source": approval["decision_source"],
-                                    "current_documents": current_documents(engine, state, approval["documents"]),
-                                    "documents": documents(engine, approval["documents"])})
-            return {"chapter": {k: record.get(k) for k in ("chapter_id", "order", "title", "role", "sha256", "supplied_title")},
-                    "prepared_text": prepared, "outputs": outputs, "passage_map": passage_map, "reviews": reviews}
+            return chapter_content(engine, engine.state(), chapter_id)
+
+    def chapter_content(engine, state, chapter_id):
+        if not state.get("prepared"):
+            raise HTTPException(409, "Chapters are available after preparation completes.")
+        record = next((c for c in state["chapters"] if c["chapter_id"] == chapter_id), None)
+        if record is None:
+            raise HTTPException(404, "Unknown chapter.")
+        prepared = engine.store.content(state["prepared"]["files"][record["path"]]).decode("utf-8")
+        outputs = []
+        if state.get("manuscript"):
+            # Editing works on one text: show it as it stands now, beside the original, once a pass changed it.
+            current = engine.file(state["manuscript"][chapter_id]).read_bytes()
+            if current.decode("utf-8") != prepared:
+                outputs.append({"stage": "current", "title": "Edited text", "attempt": None,
+                                "sha256": digest(current), "text": current.decode("utf-8")})
+        else:
+            for stage, items in chapter_records(engine, state).items():
+                item = next((i for i in items if i["chapter_id"] == chapter_id), None)
+                if item and item["status"] == "completed" and item.get("output"):
+                    outputs.append({"stage": stage, "attempt": item["attempt"], "sha256": item["output"]["sha256"],
+                                    "text": engine.store.content(item["output"]).decode("utf-8"),
+                                    "consistency_changes": item["output"].get("consistency_changes", [])})
+        map_path = engine.workspace / "translation" / "maps" / f"{chapter_id}.json"
+        passage_map = json.loads(map_path.read_text(encoding="utf-8")) if map_path.is_file() else None
+        reviews = []
+        if record["role"] == "front_matter":
+            if state.get("metadata_approval"):
+                reviews.append({"kind": "metadata_review", "record_revision": state["metadata_approval"]["record_revision"],
+                                "decision_source": state["metadata_approval"]["decision_source"], "documents": []})
+            for kind, approval in (state.get("front_matter_approvals") or {}).items():
+                reviews.append({"kind": kind, "created_at": approval["created_at"],
+                                "decision_source": approval["decision_source"],
+                                "current_documents": current_documents(engine, state, approval["documents"]),
+                                "documents": documents(engine, approval["documents"])})
+        return {"chapter": {k: record.get(k) for k in ("chapter_id", "order", "title", "role", "sha256", "supplied_title")},
+                "prepared_text": prepared, "outputs": outputs, "passage_map": passage_map, "reviews": reviews}
 
     # ----- frontend ------------------------------------------------------------------------
 

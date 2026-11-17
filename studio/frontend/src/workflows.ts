@@ -33,7 +33,10 @@ export interface DecisionCopy {
 export const WHOLE_BOOK = "_whole";
 
 const viewer = (runId: string, chapterId?: string | null) =>
-  `#/runs/${runId}/chapters${chapterId && chapterId !== WHOLE_BOOK ? `/${encodeURIComponent(chapterId)}` : ""}`;
+  chapterId && chapterId !== WHOLE_BOOK ? `#/runs/${runId}/chapters/${encodeURIComponent(chapterId)}`
+    : `#/runs/${runId}/overview`;
+
+export interface OverviewReviewGroup { title: string; kinds: string[] }
 
 const sizeOf = (output: ChapterDetail["outputs"][number]) =>
   `${output.attempt != null ? `attempt ${output.attempt} · ` : ""}${output.sha256.slice(0, 10)}`;
@@ -45,6 +48,9 @@ export class WorkflowUI {
 
   /** Who answers the reviewer's feedback in this workflow's decisions. */
   get agentName(): string { return "agent"; }
+
+  get frontMatterLabel(): string { return "Front Matter"; }
+  get overviewReviewGroups(): OverviewReviewGroup[] { return []; }
 
   /** How the start form describes a run of this template. Stages chosen at a select stage run in its place. */
   stageSummary(template: Template): string {
@@ -76,8 +82,10 @@ export class WorkflowUI {
 
   // ----- decisions -------------------------------------------------------------------------
 
-  decisionCopy(gate: Gate): DecisionCopy {
-    return { heading: `Your review: ${reviewName(gate.kind)}${gate.chapter_id && gate.chapter_id !== WHOLE_BOOK ? ` · ${gate.chapter_id}` : ""}` };
+  decisionCopy(gate: Gate, target?: RunSummary["viewer_target"]): DecisionCopy {
+    const location = target?.kind === "overview" ? "Overview"
+      : gate.chapter_id && gate.chapter_id !== WHOLE_BOOK ? gate.chapter_id : null;
+    return { heading: `Your review: ${reviewName(gate.kind)}${location ? ` · ${location}` : ""}` };
   }
 
   /** The chapter status shown while a decision on it is pending. */
@@ -87,7 +95,7 @@ export class WorkflowUI {
   }
 
   /** A notice after the reviewer's reply, e.g. that a chapter is approved; null for none. */
-  afterReply(_gate: Gate, _text: string): string | null { return null; }
+  afterReply(_gate: Gate, _text: string, _target?: RunSummary["viewer_target"]): string | null { return null; }
 
   // ----- chapter viewer --------------------------------------------------------------------
 
@@ -107,45 +115,52 @@ export class ChapterViewerWorkflowUI extends WorkflowUI {
 
   override decisionPage(run: RunDetail) {
     if (run.production && (run.gate?.kind === "docx_generation_review" || run.status === "WAITING_FOR_ACCEPTANCE")) return null;
-    if (run.status === "WAITING_FOR_HUMAN" && run.gate) return viewer(run.id, run.gate.chapter_id);
+    if (run.status === "WAITING_FOR_HUMAN" && run.gate) return this.gateLink(run);
     if (run.status === "WAITING_FOR_ACCEPTANCE" && run.acceptance) return viewer(run.id);
     return null;
   }
 
   override landingPage(runId: string) { return viewer(runId); }
 
-  override gateLink(run: RunSummary) { return viewer(run.id, run.gate_chapter_id); }
+  override gateLink(run: RunSummary) {
+    return viewer(run.id, run.viewer_target?.kind === "chapter" ? run.viewer_target.chapter_id : null);
+  }
 }
 
 /** Literary translation: two panes, the original beside the translation. The chapter approval presents the
  *  assembled draft in the translation pane, where inline comments are feedback. */
 export class TranslationWorkflowUI extends ChapterViewerWorkflowUI {
   override get agentName() { return "translator"; }
+  override get frontMatterLabel() { return "Front-matter translation"; }
+  override get overviewReviewGroups(): OverviewReviewGroup[] {
+    return [{ title: "Translation brief", kinds: ["brief_samples", "translation_brief"] }];
+  }
 
   override stageVerb(stage: string) { return stage === "translate" ? "translating" : super.stageVerb(stage); }
 
-  override decisionCopy(gate: Gate): DecisionCopy {
+  override decisionCopy(gate: Gate, target?: RunSummary["viewer_target"]): DecisionCopy {
     if (gate.kind === "translation_consistency") return {
       heading: "Whole-book consistency review",
       intro: "All chapters are translated. Review objective inconsistencies across the book. After closure, approved fixes "
         + "are applied and checked against the source before final acceptance.",
       commandLabels: { "confirm consistency": "Confirm no inconsistencies" },
     };
-    if (gate.kind !== "chapter_sanity") return super.decisionCopy(gate);
+    if (gate.kind !== "chapter_sanity") return super.decisionCopy(gate, target);
+    const front = target?.kind === "overview";
     return {
-      heading: `Approve ${gate.chapter_id}`,
-      intro: gate.sheet ? "The final check proposes edits. Decide each one; the chapter is approved at closure." : undefined,
-      message: gate.sheet ? undefined : "No textual changes proposed. The chapter is ready for review. Approve it or send feedback.",
-      commandLabels: { "approve chapter": "Approve chapter" },
+      heading: front ? "Approve front-matter translation" : `Approve ${gate.chapter_id}`,
+      intro: gate.sheet ? `The final check proposes edits. Decide each one; the ${front ? "front matter" : "chapter"} is approved at closure.` : undefined,
+      message: gate.sheet ? undefined : `No textual changes proposed. The ${front ? "front matter" : "chapter"} is ready for review. Approve it or send feedback.`,
+      commandLabels: { "approve chapter": front ? "Approve front matter" : "Approve chapter" },
     };
   }
 
   override awaitingLabel(gate: Gate) { return gate.kind === "chapter_sanity" ? "awaiting your approval" : super.awaitingLabel(gate); }
 
-  override afterReply(gate: Gate, text: string) {
+  override afterReply(gate: Gate, text: string, target?: RunSummary["viewer_target"]) {
     // Only the approval command or the edit sheet's closure approves the chapter; item decisions do not.
     const approved = gate.kind === "chapter_sanity" && (gate.commands.includes(text) || text === gate.sheet?.submission.closure_command);
-    return approved ? `${gate.chapter_id} is approved. The workflow continues automatically; after all chapters are saved, `
+    return approved ? `${target?.kind === "overview" ? "Front matter" : gate.chapter_id} is approved. The workflow continues automatically; after all manuscript units are saved, `
       + "the whole-book consistency review starts here." : null;
   }
 
@@ -170,10 +185,11 @@ const EDITING_VERBS: Record<string, string> = { developmental: "developmental re
  *  chooses passes one at a time; pass choices and whole-book decisions show at the end of the viewer. */
 export class EditingWorkflowUI extends ChapterViewerWorkflowUI {
   override get agentName() { return "editor"; }
+  override get frontMatterLabel() { return "Front-matter editing"; }
 
-  override decisionCopy(gate: Gate): DecisionCopy {
+  override decisionCopy(gate: Gate, target?: RunSummary["viewer_target"]): DecisionCopy {
     return gate.kind === "interior_design_review"
-      ? { heading: "Review formatting specification" } : super.decisionCopy(gate);
+      ? { heading: "Review formatting specification" } : super.decisionCopy(gate, target);
   }
 
   override stageVerb(stage: string) { return EDITING_VERBS[stage] ?? super.stageVerb(stage); }

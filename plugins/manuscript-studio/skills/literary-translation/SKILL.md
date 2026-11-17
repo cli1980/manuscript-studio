@@ -23,6 +23,13 @@ For a new project, or an existing project missing a verified prepared source, `g
 
 Use the shared `work.json` and its current revision manifest as the source handoff. Read chapters in manifest order and preserve the prepared source files. Update only `workflows.literary-translation` under the [shared status contract](../prepare-manuscript/references/preparation-contract.md#downstream-status-and-ownership), pointing to the translation project's actual state location. Bind the operation and chapter scope to the prepared revision. Chapter completion is not whole-work completion.
 
+When the host supplies `manuscript_analysis`, consume the source-bound
+[shared analysis handoff](../manuscript-analysis/references/workflow-handoff.md)
+for the glossary, voice record, samples and chapter/whole-book context. Reuse
+the existing story ledger, synopsis and chapter summaries, respecting evidence
+and qualifications. They are provisional context, not author-approved facts,
+translation choices or a replacement for reading the source passages.
+
 Read and reuse the [shared manuscript metadata](../prepare-manuscript/references/manuscript-metadata.md).
 Use `manuscript_language` for the designated input, not `original_language`.
 Preserve user edits and record the fields used; shared metadata may be enriched

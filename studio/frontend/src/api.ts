@@ -28,6 +28,25 @@ export interface Sheet {
   submission: { instruction: string; rules: string[]; closure_command: string; closure_label: string };
 }
 
+export interface ApprovedSheetSummary {
+  receipt_id: string;
+  sheet_id: string;
+  revision: string;
+  title: string;
+  sha256: string;
+  created_at: string;
+  decision_source: string;
+  kind: string;
+  stage: string;
+  stage_title: string;
+  chapter_id: string | null;
+  scope: string;
+  pass_number: number | null;
+  attempt: number | null;
+  superseded: boolean;
+  implied_closure: boolean;
+}
+
 export interface Gate {
   id: string;
   kind: string;
@@ -96,7 +115,10 @@ export interface MetadataView {
 
 export interface MetadataField { field: string; group: "author" | "suggested" | "computed"; kind: string; options: string[]; pattern: string | null; minimum: number | null }
 
+export type ViewerTarget = { kind: "overview" } | { kind: "chapter"; chapter_id: string };
+
 export interface RunSummary {
+  viewer_target: ViewerTarget | null;
   production?: {
     id: string; status: string; plan_sha256: string; proposal_sha256: string; accepted: boolean;
     notice: string; attempts: number; error?: { code: string; message: string } | null;
@@ -235,8 +257,10 @@ export interface WorkDetail extends Omit<WorkSummary, "runs" | "artifacts"> {
 
 export interface ChapterIndex {
   prepared: boolean;
+  overview: { work_id: string; title: string; source_unit_id: string | null;
+    outputs: Record<string, { status: string; attempt: number; ready: boolean; saving?: boolean }> };
   stages: string[];
-  chapters: { chapter_id: string; order: number; title: string | null; role: string; outputs: Record<string, { status: string; attempt: number; ready: boolean; saving?: boolean }> }[];
+  chapters: { chapter_id: string; order: number; display_number: number | null; title: string | null; role: string; outputs: Record<string, { status: string; attempt: number; ready: boolean; saving?: boolean }> }[];
   // Chosen passes (e.g. editing) among the stages, keyed "<number>-<stage>": the stage and a readable title.
   stage_info?: Record<string, { stage: string; title: string }>;
   whole_book: Record<string, string | null>;
@@ -255,6 +279,19 @@ export interface ChapterDetail {
   reviews: { kind: string; record_revision?: number; created_at?: string; decision_source: string;
     current_documents?: { path: string; sha256: string; text: string }[];
     documents: { path: string; sha256: string; text: string }[] }[];
+}
+
+export interface Overview {
+  work_id: string;
+  title: string;
+  source_unit_id: string | null;
+  prepared: boolean;
+  analysis?: { analysis_id: string; approval_status: "provisional"; qualifications: string[];
+    coverage_verification: string; current_text_matches_source: boolean;
+    documents: { path: string; sha256: string; text: string }[] } | null;
+  source: ChapterDetail | null;
+  metadata: MetadataView | null;
+  metadata_fields: MetadataField[];
 }
 
 export interface WorkflowEvent { id: number; created_at: string; kind: string; payload: Record<string, unknown> }
@@ -298,6 +335,10 @@ export const api = {
   events: (id: string, after: number) => request<{ events: WorkflowEvent[]; last_id: number }>(`/api/runs/${id}/events?after=${after}`),
   live: () => request<LiveSnapshot>("/api/live"),
   chapters: (id: string) => request<ChapterIndex>(`/api/runs/${id}/chapters`),
+  overview: (id: string) => request<Overview>(`/api/runs/${id}/overview`),
+  approvedSheets: (id: string) => request<ApprovedSheetSummary[]>(`/api/runs/${id}/approved-sheets`),
+  approvedSheetDownload: (id: string, receipt: string) =>
+    `/api/runs/${id}/approved-sheets/${encodeURIComponent(receipt)}.md`,
   chapter: (id: string, chapter: string) => request<ChapterDetail>(`/api/runs/${id}/chapters/${encodeURIComponent(chapter)}`),
   create: (payload: unknown) => post<RunDetail>("/api/runs", payload),
   editWorkMetadata: (id: string, payload: { field: string; value: unknown; rationale: string }) => post<WorkDetail>(`/api/works/${encodeURIComponent(id)}/metadata`, payload),

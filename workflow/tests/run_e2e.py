@@ -170,6 +170,8 @@ class CaseRuntime:
                 "only when you recommend accepting that exact final artifact. For completed preparation, "
                 "recommend response='confirm metadata' only when you recommend confirming the saved shared "
                 "metadata unchanged at the following metadata review gate; otherwise use needs_review. For "
+                "completed manuscript analysis no human approval follows: use action='accept', response='continue' "
+                "only to indicate completion (it grants no approval). "
                 "a blocked result use needs_review with an explanatory reason. This is a user-authorized "
                 "automation policy, not evidence that a human reviewed the text. Continue to use source-grounded "
                 "fidelity review, not general stylistic polishing."
