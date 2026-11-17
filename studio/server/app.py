@@ -144,6 +144,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         except ValueError:
             detail["metadata"], detail["metadata_history"] = None, []
         detail["metadata_fields"] = svc.metadata_fields()
+        detail["metadata_editor_run"] = svc.metadata_editor_run(work_id)
         detail["publications"] = [{key: record.get(key) for key in (
             "id", "created_at", "artifact", "version", "status", "review_status", "stage", "run_id", "workflow",
             "bytes", "contract")} for record in svc.work_publications(work_id)]
@@ -431,6 +432,8 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         front = next((c for c in state.get("chapters") or [] if c["role"] == "front_matter"), None)
         # Review edits are run-local until confirmation publishes them to the work.
         title = metadata["metadata"].get("title") if metadata else None
+        if (state.get("finalized") or state["status"] == "CANCELLED") and not svc._unfinished(state["work_id"]):
+            title = svc.get_work(state["work_id"])["title"]
         return {"work_id": state["work_id"], "title": title or svc.get_work(state["work_id"])["title"],
                 "source_unit_id": front["chapter_id"] if front else None}
 
@@ -439,11 +442,25 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         with svc.open_run(run_id) as engine:
             state = engine.state()
             metadata = engine.metadata_view(state) if state.get("prepared") else None
+            editor_run = svc.metadata_editor_run(state["work_id"])
+            edit_target = None
+            if metadata and editor_run == run_id:
+                if svc._unfinished(state["work_id"]) == run_id:
+                    if state["status"] != "RUNNING" and engine.summary(state)["engine_current"]:
+                        edit_target = "run"
+                else:
+                    shared = svc.get_work_metadata(state["work_id"])
+                    record = svc.work_metadata_version(state["work_id"], shared["record_revision"])
+                    if record["preparation"]["current_revision"] is not None:
+                        metadata = {**shared, "locked": metadata["locked"], "unknown": [], "stale": [],
+                                    "source_differences": []}
+                        edit_target = "work"
             identity = overview_identity(svc, state, metadata)
             source_id = identity["source_unit_id"]
             analysis = engine.analysis_handoff(state) if hasattr(engine, "analysis_handoff") else None
             return {**identity, "prepared": bool(state.get("prepared")),
                     "metadata": metadata,
+                    "metadata_edit": {"target": edit_target, "run_id": editor_run},
                     "analysis": ({key: analysis[key] for key in (
                         "analysis_id", "approval_status", "qualifications", "coverage_verification",
                         "current_text_matches_source")} | {

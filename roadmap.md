@@ -22,6 +22,71 @@ their remaining work is not removed by this priority change.
 
 ## Cross-cutting decisions
 
+- **Analysis execution-budget trial (owner direction, 2026-11-17):** try a
+  30-minute active-turn budget before implementing recoverable analysis jobs.
+  Studio was restarted on the same workspace with `--timeout 1800`, then the
+  failed analysis was retried without a stage/workflow reset. All 131 existing
+  workspace files were verified unchanged before retry. This is a running-server
+  override, not a change to the CLI/profile defaults. The retry completed in
+  88.67 seconds using preserved analysis files and advanced to editing-pass
+  selection. This demonstrates successful draft reuse on that attempt, not
+  that a from-scratch full analysis fits within 30 minutes. The checkpointed-job
+  proposal remains unimplemented.
+
+- **Minimal preparation intake and deferred metadata audit (owner direction,
+  2026-11-17):** narrow pre-preparation user input to what is actually needed
+  to start, and let users complete other fields while auditing the outcome.
+  The uncommitted contributor/precedence patch was reverted at the owner's
+  request; the committed manuscript-analysis/Overview work remains unchanged.
+  - **Previous gap:** upload already required only a manuscript file, with an
+    optional language hint. A separate pre-workflow "About this manuscript"
+    form nevertheless exposes title, contributors, audience, edition and series
+    fields early, while extraction uses field-ownership rules that can prevent
+    explicit source credits from becoming suggestions.
+  - **Approved intake:** for a new Studio work, require only the manuscript.
+    Default to whole-work preparation; derive work IDs, revision IDs and output
+    locations in the host. Ask for source/scope clarification only if genuinely
+    ambiguous or inaccessible. Workflow/model selection is execution setup,
+    not a reason to request manuscript metadata.
+  - **Approved preparation:** preserve source text and produce the verified
+    chapter package plus draft metadata. Extract explicit titles, bylines and
+    credits; detect language and measure extent. Optional descriptive guesses
+    remain qualified suggestions, and unsupported fields stay unknown.
+    Do not infer authorship or require optional metadata for extraction readiness.
+  - **Approved audit:** move optional metadata entry out of the initial form
+    into the existing post-preparation review, not another gate. Show prepared
+    content, extracted/detected values, suggestions and unknown fields. Let users
+    correct credits/title and optionally fill audience, edition, series, genres
+    and other details there; only genuine preparation blockers need resolution.
+  - **Approved authority boundary:** preparation produces candidates; user
+    corrections at audit define the shared metadata consumed downstream.
+    Keep one versioned shared authority, not competing user/prepared records or
+    per-field pre-intake override machinery. On reruns, preserve reviewed user
+    metadata and present source discrepancies at audit rather than allowing the
+    preparation agent to overwrite it. Original manuscript text stays immutable.
+  - **Status:** owner approved the single-entry design and requested implementation.
+    Implemented and verified locally. The pre-workflow
+    form/language hint and field-owner split are removed. All optional metadata
+    is edited in Overview, including later shared-record corrections. The host
+    adopts reviewed library values on reruns instead of asking agents to merge
+    or mutate a prior-record file; discrepancies remain visible at audit.
+    The existing preparation -> metadata review -> analysis sequence is unchanged.
+    This direction supersedes the earlier pre-preparation form placement,
+    not the user's authority to supply or correct metadata.
+  - **Verification:** 34 preparation tests and 139 combined workflow/profile/
+    API/usage tests pass. The typed-metadata API check also verifies valid
+    post-preparation entries, rejection of invalid values, and unchanged
+    approved snapshots. All 11 browser/case checks pass with one live-model
+    skip; 34 installer checks pass with three platform skips. Desktop/mobile
+    audit entry, later corrections, host-owned rerun retention, explicit credit
+    extraction, original-source preservation, frontend build and LF/diff checks
+    are covered. These are synthetic regressions, not live-model accuracy proof.
+  - **Studio update:** started the tested build with a new empty workspace
+    after confirming no active workers. Verified zero works/runs and unchanged
+    hashes for all six source/library files in the immediately previous
+    workspace. Existing workspaces, metadata and histories were not migrated,
+    cancelled or deleted.
+
 - **Outdated-run cancellation unblock (2026-11-15):** engine changes no longer
   disable Stop on unfinished, unfinalized, idle runs. Execution with outdated
   code remains refused, while cancellation retains artifacts/history and releases
@@ -56,6 +121,8 @@ Agreed in the 2026-10-26 planning session:
   proposals; inference field groups must not remove manual entry.
   Verified: 76 workflow/API tests, 30 preparation tests and a browser regression
   saving a user-chosen title absent from the manuscript pass, as does the build.
+  The initial-form placement is superseded by the 2026-11-17 minimal-intake
+  direction above; user-confirmed values remain authoritative.
 - **Language may be unknown at intake** (owner clarification, 2026-11-15).
   There is no Chinese default or mandatory language entry. Preparation infers the
   language from manuscript text and must establish it before becoming ready;

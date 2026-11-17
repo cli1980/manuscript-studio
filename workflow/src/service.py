@@ -565,6 +565,13 @@ class WorkflowService:
         with self.open_run(run_id) as engine:
             return engine.metadata_view(engine.state())
 
+    def metadata_editor_run(self, work_id):
+        active = self._unfinished(work_id)
+        if active:
+            return active
+        return next((row["id"] for row in reversed(self.list_runs(work_id=work_id))
+                     if self._load_state(row["path"]).get("prepared")), None)
+
     def edit_metadata(self, run_id, field, value, rationale="Explicit metadata edit.", *, gate_id=None, actor=None):
         with self.open_run(run_id) as engine:
             return engine.summary(engine.edit_metadata(field, value, reason=rationale, gate_id=gate_id,
@@ -611,7 +618,7 @@ class WorkflowService:
             kind = ("people" if field == "/contributors" else "extent" if field == "/extent" else "enum" if "enum" in item
                     else "list" if ref.endswith("/terms") else "language" if ref.endswith("/language")
                     else "number" if any(t in str(item.get("type")) for t in ("number", "integer")) else "text")
-            group = "author" if field in helper.AUTHOR else "computed" if field in helper.COMPUTED else "suggested"
+            group = "computed" if field in helper.COMPUTED else "suggested"
             options = item.get("enum") or (item["items"]["properties"]["roles"]["items"]["enum"] if kind == "people" else [])
             result.append({"field": field, "group": group, "kind": kind,
                            "options": [option for option in options if option is not None],
@@ -643,6 +650,8 @@ class WorkflowService:
             if head is None:
                 raise ValueError("This work has no confirmed metadata yet; confirm it in a run first.")
             work = json.loads(library.read(head))
+            if work["preparation"]["current_revision"] is None:
+                raise ValueError("Prepare the manuscript first; enter metadata at the Overview audit.")
             helper.put(work["metadata"], field, value)
             helper.record(work, field, "user_edit", actor=actor or self.owner, rationale=rationale, review="confirmed")
             work["record_revision"] += 1

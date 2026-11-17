@@ -151,7 +151,8 @@ export function Chapters({ runId, chapterId }: { runId: string; chapterId?: stri
             {!chapterId && pending && !here && <p><a className="button" href={ui.gateLink(run.data!)}>
               Open {pending.chapter_id} for your decision</a></p>}
             {notice && <div className="banner final">{notice}</div>}
-            {!chapterId && overview.data && run.data && <Overview data={overview.data} run={run.data} />}
+            {!chapterId && overview.data && run.data && <Overview data={overview.data} run={run.data}
+              onSaved={async () => { await Promise.all([overview.reload(), run.reload(), index.reload()]); }} />}
             <ErrorBox error={detail.error} />
             {detail.data && (
               <>

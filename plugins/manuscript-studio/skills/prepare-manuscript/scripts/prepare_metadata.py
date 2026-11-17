@@ -21,15 +21,9 @@ import validate_preparation as contract
 
 SKILL = Path(__file__).resolve().parents[1]
 FIELDS = contract.load_json(SKILL / "schemas/manuscript-metadata.schema.json")["$defs"]["field"]["enum"]
-# Field groups (see references/manuscript-metadata.md): the user provides AUTHOR fields after intake
-# (initialized empty, never proposed by an agent); agents propose SUGGESTED fields with evidence for the
-# user to confirm; language may be inferred during preparation and extent is measured from its revision.
-AUTHOR = {
-    "/contributors", "/audience", "/edition/label", "/edition/status",
-    "/series/name", "/series/position", "/series/relationship",
-}
+# Preparation proposes draft metadata; users correct or complete it at the audit.
 COMPUTED = {"/manuscript_language", "/extent"}
-SUGGESTED = set(FIELDS) - AUTHOR - COMPUTED
+SUGGESTED = set(FIELDS) - COMPUTED
 INFERABLE = {"/manuscript_language", "/work_type", "/form", "/genres", "/keywords", "/description"}
 
 
@@ -180,7 +174,6 @@ def enrich(work, manifest, texts, proposals, actor):
         if previous and (previous["review_status"] == "confirmed" or previous["origin"] in ("provided", "user_edit")):
             skipped.append(field)
             continue
-        contract.require(field not in AUTHOR, f"{field} is provided by the user, not proposed by an agent.")
         contract.require(proposal["origin"] in ("extracted", "inferred"), "Invalid proposal origin.")
         if proposal["origin"] == "inferred":
             contract.require(field in INFERABLE, f"{field} requires explicit source information, not inference.")
@@ -220,6 +213,12 @@ def enrich(work, manifest, texts, proposals, actor):
                confidence=proposal["confidence"], review="proposed")
         contract.schema_check(contract.validators()[0], candidate, "proposal")
         contract.require(not missing(proposal["value"]), "Do not propose an empty value.")
+        if field == "/contributors":
+            quotes = [" ".join(evidence["quote"].split()).casefold() for evidence in proposal["evidence"]]
+            contract.require(all(person["name"].strip() and any(
+                " ".join(person["name"].split()).casefold() in quote for quote in quotes)
+                for person in proposal["value"]),
+                "Every extracted contributor name must appear in quoted source credits.")
         if (not missing(field_value(work["metadata"], field))
                 or field in work["metadata_provenance"]):
             skipped.append(field)

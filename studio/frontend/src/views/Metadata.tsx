@@ -1,12 +1,11 @@
 import { useState } from "react";
-import type { MetadataField } from "../api";
+import type { MetadataField, MetadataView } from "../api";
 import { FieldEditor, prepare, type Person } from "./widgets";
 
 type Provenance = Record<string, { origin: string; review_status: string; confidence: string | null; evidence?: unknown[] }>;
 
 const GROUPS: { id: MetadataField["group"]; title: string; note: string }[] = [
-  { id: "author", title: "Provided by you", note: "Only you know these. They start empty when the manuscript is added; agents never fill them." },
-  { id: "suggested", title: "Manuscript details", note: "Provide these yourself or review source-supported suggestions. Your confirmed values take precedence." },
+  { id: "suggested", title: "Review and complete", note: "Correct source-supported suggestions or add missing information. Optional fields may stay empty; your corrections take precedence." },
   { id: "computed", title: "Detected or measured", note: "Language is detected from the manuscript during preparation; extent is measured from the prepared text." },
 ];
 
@@ -66,7 +65,7 @@ export function MetadataTable({ metadata, fields, provenance = {}, locked = [], 
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<unknown>(null);
-  const [reason, setReason] = useState("Author input");
+  const [reason, setReason] = useState("User correction");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -106,7 +105,7 @@ export function MetadataTable({ metadata, fields, provenance = {}, locked = [], 
                           <FieldEditor field={field} value={draft} onChange={setDraft} />
                           {CLUES[field.field] && <div className="muted">{CLUES[field.field]}</div>}
                           <div className="row">
-                            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" size={24} />
+                            <label>Reason for change <input value={reason} onChange={(e) => setReason(e.target.value)} size={24} /></label>
                             <button disabled={busy} onClick={() => void save(field)}>Save</button>
                             <button disabled={busy} onClick={() => setEditing(null)}>Cancel</button>
                           </div>
@@ -115,7 +114,7 @@ export function MetadataTable({ metadata, fields, provenance = {}, locked = [], 
                       ) : (
                         <>
                           <span className={empty(value) ? "muted" : ""}>{display(field, value)}</span>
-                          {empty(value) && group.id === "author" && CLUES[field.field] && <div className="muted clue">{CLUES[field.field]}</div>}
+                          {empty(value) && CLUES[field.field] && <div className="muted clue">{CLUES[field.field]}</div>}
                         </>
                       )}
                     </td>
@@ -124,7 +123,7 @@ export function MetadataTable({ metadata, fields, provenance = {}, locked = [], 
                     </td>
                     <td>{editable && editing !== field.field && (
                       <button className="link" onClick={() => { setEditing(field.field); setDraft(structuredClone(value ?? null)); setError(null); }}>
-                        {empty(value) && group.id === "author" ? "Add" : "Edit"}
+                        {empty(value) ? "Add" : "Edit"}
                       </button>)}
                       {onSave && !editable && <span className="muted">locked</span>}
                     </td>
@@ -139,64 +138,18 @@ export function MetadataTable({ metadata, fields, provenance = {}, locked = [], 
   );
 }
 
-// Optional user input before a workflow, including titles preparation can fill when missing.
-export function AuthorForm({ metadata, fields, onSave, onDone }: {
-  metadata: Record<string, unknown>;
-  fields: MetadataField[];
-  onSave: (field: string, value: unknown, reason: string) => Promise<void>;
-  onDone: () => void;
-}) {
-  const author = fields.filter((field) => field.group === "author" || field.field === "/title" || field.field === "/subtitle");
-  const initial = () => Object.fromEntries(author.map((f) => [f.field, structuredClone(valueAt(metadata, f.field) ?? null)]));
-  const [values, setValues] = useState<Record<string, unknown>>(initial);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const changed = author.filter((f) => JSON.stringify(values[f.field] ?? null) !== JSON.stringify(valueAt(metadata, f.field) ?? null));
-
-  async function save() {
-    const problems: Record<string, string> = {};
-    const ready = changed.map((field) => {
-      const checked = prepare(field, values[field.field]);
-      if (checked.error) problems[field.field] = checked.error;
-      return { field, value: checked.value };
-    });
-    setErrors(problems);
-    if (Object.keys(problems).length) return;
-    setBusy(true);
-    try {
-      for (const { field, value } of ready) {
-        try {
-          await onSave(field.field, value, "Provided by the author before starting a workflow");
-        } catch (exc) {
-          problems[field.field] = exc instanceof Error ? exc.message : String(exc);
-        }
-      }
-      setErrors({ ...problems });
-      setSaved(!Object.keys(problems).length);
-      onDone();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form className="panel author-form" onSubmit={(e) => { e.preventDefault(); void save(); }}>
-      <h2>About this manuscript</h2>
-      <p className="muted">Fill in what you know before starting a workflow. Everything is optional and can be changed later;
-        agents suggest missing fields during preparation. Your saved values take precedence.</p>
-      {author.map((field) => (
-        <div key={field.field} className="form-row">
-          <label>{LABELS[field.field] ?? field.field}</label>
-          <div>
-            <FieldEditor field={field} value={values[field.field]} onChange={(v) => { setSaved(false); setValues({ ...values, [field.field]: v }); }} />
-            {CLUES[field.field] && <div className="muted clue">{CLUES[field.field]}</div>}
-            {errors[field.field] && <div className="error">{errors[field.field]}</div>}
-          </div>
-        </div>
-      ))}
-      <button type="submit" disabled={busy || !changed.length}>{busy ? "Saving…" : `Save ${changed.length || ""} change${changed.length === 1 ? "" : "s"}`.replace("  ", " ")}</button>
-      {saved && !changed.length && <span className="muted"> Saved.</span>}
-    </form>
-  );
+export function MetadataDifferences({ view, fields }: { view: MetadataView; fields: MetadataField[] }) {
+  const differences = view.source_differences ?? [];
+  if (!differences.length) return null;
+  return <details>
+    <summary>Prepared source differs from previously reviewed metadata ({differences.length})</summary>
+    <p>Your reviewed values are retained. You can correct them in this editor.</p>
+    <ul>{differences.map((difference) => {
+      const field = fields.find((item) => item.field === difference.field);
+      return field && <li key={difference.field}>
+        {LABELS[field.field]}: previous review: {display(field, difference.reviewed_value)};
+        {" "}source suggests: {display(field, difference.source_value)}.
+      </li>;
+    })}</ul>
+  </details>;
 }

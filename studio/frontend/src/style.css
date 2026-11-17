@@ -79,14 +79,24 @@ table.metadata tr.group th { color: #46525e; text-transform: uppercase; font-siz
 table.metadata thead th { background: #eef1f4; }
 .metadata-group h3 { margin: 1rem 0 0.1rem; font-size: 1rem; }
 .metadata-group p { margin: 0 0 0.4rem; font-size: 0.85rem; }
+.metadata input:not([type="checkbox"]), .metadata select, .metadata textarea {
+  max-width: 100%; box-sizing: border-box;
+}
+@media (max-width: 760px) {
+  table.metadata, table.metadata tbody, table.metadata tr, table.metadata th, table.metadata td {
+    display: block; width: auto;
+  }
+  table.metadata td, table.metadata th { overflow-wrap: anywhere; }
+  table.metadata tr { border-bottom: 1px solid #dde2e7; padding-bottom: 0.5rem; }
+  table.metadata th, table.metadata td { border-bottom: 0; }
+  .metadata .row > label { max-width: 100%; }
+}
 .clue { font-size: 0.8rem; }
 .terms { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; border: 1px solid #c9d1da; border-radius: 4px; padding: 0.25rem; background: #fff; }
 .terms input { border: none; outline: none; min-width: 10rem; flex: 1; }
 .chip { background: #e5eef9; border-radius: 12px; padding: 0.1rem 0.25rem 0.1rem 0.55rem; font-size: 0.85rem; }
 .chip button { border: none; background: none; padding: 0 0.3rem; margin: 0; cursor: pointer; }
 .people .person { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 0.35rem; }
-.author-form .form-row { display: grid; grid-template-columns: 12rem 1fr; gap: 0.6rem; align-items: start; margin: 0.45rem 0; }
-.author-form .form-row > label { font-weight: 600; padding-top: 0.3rem; }
 button.primary { background: #1f5fbf; border-color: #1f5fbf; color: #fff; font-weight: 600; }
 button.primary:hover:not(:disabled) { background: #184c99; }
 button.primary:disabled { background: #8eaedc; border-color: #8eaedc; opacity: 1; }

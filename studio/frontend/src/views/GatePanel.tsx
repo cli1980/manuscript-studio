@@ -4,7 +4,7 @@ import { Documents, documentTitle, TextBlock } from "./common";
 import { Markdown } from "./Markdown";
 import { workflowUI } from "../workflows";
 import { clearComments, CommentSummary, composeComments, loadComments, type InlineComment } from "./CommentableText";
-import { MetadataTable } from "./Metadata";
+import { MetadataDifferences, MetadataTable } from "./Metadata";
 import { AgentFeedback } from "./AgentFeedback";
 import { SamplePoll } from "./SamplePoll";
 import type { ReviewedText } from "../reviewText";
@@ -149,8 +149,10 @@ function MetadataGate({ run, gate, perform }: { run: RunDetail; gate: Gate; perf
   const view = run.metadata!;
   return (
     <>
-      <p>Inspect the shared metadata (record revision {view.record_revision}). Unknown: {view.unknown.join(", ") || "none"}.
-        Stale: {view.stale.join(", ") || "none"}. Each edit creates a new revision and a new gate.</p>
+      <p>Review the prepared manuscript and its draft metadata (revision {view.record_revision}).
+        Correct extracted values or fill in missing information here. Optional fields may remain unknown.
+        Each saved correction is versioned.</p>
+      <MetadataDifferences view={view} fields={run.metadata_fields ?? []} />
       <MetadataTable metadata={view.metadata} provenance={view.provenance} locked={view.locked} fields={run.metadata_fields ?? []}
         onSave={async (field, value, rationale) => {
           await api.editMetadata(run.id, { field, value, rationale, gate_id: gate.id });

@@ -31,12 +31,12 @@ class StudioCaseTests(unittest.TestCase):
     """Each case gets a fresh server root and app; no model runtime is started unless a case asks for one."""
 
     @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build frontend and set STUDIO_BROWSER=1.")
-    def test_intake_language_starts_blank_and_does_not_block_upload(self):
+    def test_intake_requires_only_a_manuscript_and_defers_metadata_to_overview(self):
         from playwright.sync_api import expect
 
         def check(page, origin):
             page.goto(origin + "/#/works")
-            expect(page.get_by_label("Language hint (optional)")).to_have_value("")
+            expect(page.get_by_label("Language hint (optional)")).to_have_count(0)
             page.locator('input[type="file"]').set_input_files({
                 "name": "story.md", "mimeType": "text/markdown",
                 "buffer": b"# A story\n\nThe morning light fell across the empty room.\n",
@@ -48,16 +48,10 @@ class StudioCaseTests(unittest.TestCase):
             self.assertTrue(added.value.ok, added.value.text())
             self.assertIsNone(added.value.json()["manuscript_language"])
             expect(page.get_by_text("language pending preparation", exact=False)).to_be_visible()
-            author = page.locator(".author-form")
-            title = author.locator(".form-row").filter(has=page.locator("label").filter(has_text=re.compile("^Title$"))).locator("input")
-            subtitle = author.locator(".form-row").filter(has=page.locator("label").filter(has_text=re.compile("^Subtitle$"))).locator("input")
-            expect(title).to_be_visible()
-            expect(subtitle).to_be_visible()
-            title.fill("My own title, not present in the manuscript")
-            with page.expect_response(lambda r: r.url.endswith("/metadata") and r.request.method == "POST") as saved:
-                author.get_by_role("button", name=re.compile("^Save")).click()
-            self.assertTrue(saved.value.ok, saved.value.text())
-            expect(page.get_by_role("heading", name="My own title, not present in the manuscript", exact=True)).to_be_visible()
+            expect(page.locator(".author-form")).to_have_count(0)
+            expect(page.get_by_role("heading", name="About this manuscript", exact=True)).to_have_count(0)
+            expect(page.locator(".metadata button")).to_have_count(0)
+            expect(page.get_by_text("Start a workflow to prepare this manuscript and review its metadata.")).to_be_visible()
             workflow = page.get_by_role("heading", name="Start a workflow", exact=True).locator("..")
             workflow.get_by_role("combobox").select_option("literary-translation-v1")
             workflow.locator("summary").filter(has_text="Advanced").click()
@@ -271,11 +265,13 @@ class StudioCaseTests(unittest.TestCase):
             expect(page.get_by_role("link", name="Download accepted DOCX", exact=True)).to_be_visible()
             page.goto(origin + "/#/works/" + work["id"])
             expect(page.get_by_role("heading", name="Story", exact=True)).to_be_visible()
+            page.get_by_role("link", name="Review and edit metadata in Overview", exact=True).click()
             expect(page.locator(".metadata tr").filter(
                 has=page.locator("th").filter(has_text=re.compile("^Title$")))).to_contain_text("Story")
             expect(page.locator(".metadata tr").filter(
                 has=page.locator("th").filter(has_text=re.compile("^Manuscript language$")))).to_contain_text("zh")
             expect(page.get_by_role("heading", name="Detected or measured", exact=True)).to_be_visible()
+            page.goto(origin + "/#/works/" + work["id"])
             with page.expect_download() as published:
                 page.get_by_role("link", name="literary-editing/v001/document.docx", exact=True).click()
             self.assertEqual(digest(Path(published.value.path()).read_bytes()), current["production"]["docx"]["sha256"])
@@ -721,12 +717,26 @@ class StudioCaseTests(unittest.TestCase):
                     navigation.locator(".overview-entry a").click()
                     expect(page).to_have_url(overview_url)
                     original = page.request.get(run_url + "/overview").json()
-                    renamed = page.request.post(run_url + "/metadata", headers=headers, data={
-                        "gate_id": run["gate"]["id"], "field": "/title", "value": "Renamed " + workflow,
-                        "rationale": "Synthetic author correction",
-                    })
-                    self.assertTrue(renamed.ok, renamed.text())
+                    title_row = page.locator(".metadata tr").filter(
+                        has=page.locator("th").filter(has_text=re.compile("^Title$")))
+                    title_row.get_by_role("button", name="Edit", exact=True).click()
+                    title_row.locator("input").first.fill("Renamed " + workflow)
+                    with page.expect_response(lambda r: r.url == run_url + "/metadata") as renamed:
+                        title_row.get_by_role("button", name="Save", exact=True).click()
+                    self.assertTrue(renamed.value.ok, renamed.value.text())
                     expect(page.get_by_role("heading", name="Renamed " + workflow, exact=True)).to_be_visible()
+                    contributors = page.locator(".metadata tr").filter(
+                        has=page.locator("th").filter(has_text=re.compile("^Contributors$")))
+                    contributors.get_by_role("button", name="Add", exact=True).click()
+                    contributors.get_by_role("button", name="Add person", exact=True).click()
+                    contributors.get_by_placeholder("Full name", exact=True).fill("A. Writer")
+                    page.set_viewport_size({"width": 390, "height": 844})
+                    self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 391)
+                    page.set_viewport_size({"width": 1280, "height": 900})
+                    with page.expect_response(lambda r: r.url == run_url + "/metadata") as credited:
+                        contributors.get_by_role("button", name="Save", exact=True).click()
+                    self.assertTrue(credited.value.ok, credited.value.text())
+                    expect(contributors).to_contain_text("A. Writer (author)")
                     expect(navigation.locator(".overview-entry a")).to_have_attribute("href", re.compile(r"/overview$"))
                     current = page.request.get(run_url + "/overview").json()
                     self.assertEqual(current["source"]["prepared_text"], original["source"]["prepared_text"])
@@ -765,6 +775,16 @@ class StudioCaseTests(unittest.TestCase):
                     expect(analysis.locator("input, textarea")).to_have_count(0)
                     analysis.get_by_role("tab", name="Synopsis", exact=True).click()
                     expect(analysis.get_by_role("tabpanel")).to_contain_text("Synthetic synopsis")
+                    # The same Overview editor remains available after the audit; approval stays a snapshot.
+                    audience = page.locator(".metadata tr").filter(
+                        has=page.locator("th").filter(has_text=re.compile("^Audience$")))
+                    expect(audience.get_by_role("button", name="Add", exact=True)).to_be_visible()
+                    audience.get_by_role("button", name="Add", exact=True).click()
+                    audience.locator("select").select_option("adult")
+                    with page.expect_response(lambda r: r.url == run_url + "/metadata") as completed:
+                        audience.get_by_role("button", name="Save", exact=True).click()
+                    self.assertTrue(completed.value.ok, completed.value.text())
+                    expect(audience).to_contain_text("adult")
                     page.set_viewport_size({"width": 390, "height": 844})
                     self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
                     if evidence:

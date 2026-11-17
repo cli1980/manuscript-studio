@@ -238,7 +238,7 @@
     {
       "action": "post",
       "path": "/api/works/$dig.id/metadata",
-      "status": 200,
+      "status": 400,
       "payload": {
         "field": "/title",
         "value": "Dig",
@@ -246,16 +246,9 @@
       },
       "expect": [
         {
-          "path": "metadata.metadata.title",
-          "value": "Dig"
-        },
-        {
-          "path": "metadata.provenance./title.review_status",
-          "value": "confirmed"
-        },
-        {
-          "path": "metadata.record_revision",
-          "value": 2
+          "path": "detail",
+          "op": "contains",
+          "value": "Prepare the manuscript first"
         }
       ]
     },
@@ -295,7 +288,7 @@
     {
       "action": "post",
       "path": "/api/works/$dig.id/metadata",
-      "status": 200,
+      "status": 400,
       "payload": {
         "field": "/contributors",
         "value": [
@@ -319,11 +312,9 @@
       },
       "expect": [
         {
-          "path": "metadata.metadata.contributors.name",
-          "value": [
-            "A Writer",
-            "T One"
-          ]
+          "path": "detail",
+          "op": "contains",
+          "value": "Prepare the manuscript first"
         }
       ]
     },
@@ -347,7 +338,7 @@
     {
       "action": "post",
       "path": "/api/works/$dig.id/metadata",
-      "status": 200,
+      "status": 400,
       "payload": {
         "field": "/genres",
         "value": [
@@ -358,15 +349,16 @@
       },
       "expect": [
         {
-          "path": "metadata.metadata.genres.*len",
-          "value": 2
+          "path": "detail",
+          "op": "contains",
+          "value": "Prepare the manuscript first"
         }
       ]
     },
     {
       "action": "post",
       "path": "/api/works/$dig.id/metadata",
-      "status": 200,
+      "status": 400,
       "payload": {
         "field": "/series/position",
         "value": 2,
@@ -374,8 +366,9 @@
       },
       "expect": [
         {
-          "path": "metadata.metadata.series.position",
-          "value": 2
+          "path": "detail",
+          "op": "contains",
+          "value": "Prepare the manuscript first"
         }
       ]
     },
@@ -404,7 +397,7 @@
     {
       "action": "post",
       "path": "/api/works/$dig.id/metadata",
-      "status": 200,
+      "status": 400,
       "payload": {
         "field": "/audience",
         "value": "adult",
@@ -412,8 +405,9 @@
       },
       "expect": [
         {
-          "path": "metadata.metadata.audience",
-          "value": "adult"
+          "path": "detail",
+          "op": "contains",
+          "value": "Prepare the manuscript first"
         }
       ]
     },

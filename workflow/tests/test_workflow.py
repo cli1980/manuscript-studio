@@ -1634,34 +1634,47 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(state["carried_from"], {"run_id": old_id, "chapter_id": "chapter-1"})
         self.assertEqual(self.engine.file("translation/glossary.md").read_text(encoding="utf-8"),
                          "# Glossary\nThrough chapter-1.\n")
-        prior = self.engine.state()["prior_work_record"]
-        self.assertIn('"prior_work_record": ' + json.dumps(prior["path"]),
-                      self.engine.stage_prompt(self.engine.state(), self.engine.stage_def(self.engine.state())))
-        # A preparation that re-infers metadata instead of consolidating on the work's record is refused.
-        try:
-            self.engine.advance(ScriptedRuntime(self.preparation))
-            error = self.engine.state()["error"] or ""
-        except (ValueError, WorkflowError) as exc:
-            error = str(exc)
-        self.assertIn("changed metadata the work already had", error)
-        if self.engine.state()["status"] == "FAILED":
-            self.engine.retry()
+        self.assertNotIn("prior_work_record", self.engine.stage_prompt(
+            self.engine.state(), self.engine.stage_def(self.engine.state())))
+        # The agent creates a fresh draft. The host, not the agent, retains reviewed metadata.
+        def fresh_draft(request):
+            response = self.preparation(request)
+            path = Path(request.cwd) / response["work_record"]
+            work = json.loads(path.read_bytes())
+            work["metadata"]["genres"] = ["Different source suggestion"]
+            self.write(response["work_record"], work)
+            return response
 
-        def consolidating(request):
-            result = self.preparation(request)
-            path = Path(request.cwd) / result["work_record"]
-            work, record = json.loads(path.read_text(encoding="utf-8")), json.loads(Path(prior["path"]).read_text(encoding="utf-8"))
-            record.update(discovery=work["discovery"], preparation=work["preparation"], workflows=work["workflows"])
-            path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
-            return result
-
-        self.engine.advance(ScriptedRuntime(consolidating))
+        self.engine.advance(ScriptedRuntime(fresh_draft))
         view = self.service.get_metadata(new_id)
         self.assertEqual(view["metadata"]["genres"], ["Literary fiction"])  # Kept from the work's record.
         self.assertEqual(view["provenance"]["/genres"]["review_status"], "confirmed")
+        self.assertTrue(any(d["field"] == "/genres" for d in view["source_differences"]))
         with self.assertRaises(WorkflowError) as refused:
             self.service.restart_workflow(old_id, reason="again")
         self.assertEqual(refused.exception.code, "run_cancelled")
+
+    def test_metadata_is_entered_at_audit_and_cleared_values_survive_repreparation(self):
+        self.service.stop(self.run_id)
+        with self.assertRaisesRegex(ValueError, "Prepare the manuscript first"):
+            self.service.edit_work_metadata(self.work_id, "/title", "Too early")
+        self.run_id = self.service.create_run(TRANSLATION, work_id=self.work_id)
+        self.reopen()
+        self.engine.advance(ScriptedRuntime(self.preparation))
+        for field, value in (("/title", None), ("/contributors", []), ("/subtitle", "Reviewed subtitle")):
+            self.engine.edit_metadata(field, value, gate_id=self.engine.state()["gate"]["id"])
+        self.engine.reply(self.engine.state()["gate"]["id"], "confirm metadata")
+        original_source = self.source.read_bytes()
+        self.run_id = self.service.restart_workflow(self.run_id, reason="Re-read the same manuscript")
+        self.reopen()
+        self.engine.advance(ScriptedRuntime(self.preparation))
+        view = self.service.get_metadata(self.run_id)
+        self.assertIsNone(view["metadata"]["title"])
+        self.assertEqual(view["metadata"]["contributors"], [])
+        self.assertEqual(view["metadata"]["subtitle"], "Reviewed subtitle")
+        self.assertEqual(view["provenance"]["/title"]["origin"], "user_edit")
+        self.assertEqual(self.source.read_bytes(), original_source)
+        self.assertEqual(self.engine.state()["gate"]["kind"], "metadata_review")
 
     def test_engine_update_allows_reading_stopping_and_restarting_not_execution(self):
         self.prepare()

@@ -14,13 +14,18 @@ when given with `--allow-origin` (for a local preview proxy).
 - **Works** is the place for intake and outcomes: add a manuscript (each upload
   creates a new work), browse every work's library, metadata, and publication
   log without opening a run, and download accepted editable DOCX editions.
-  Language is optional at intake and has no default. Leave the hint blank for
-  preparation to infer it from the manuscript; the work displays a pending
-  language until then. Translation's default passage limit and counting unit
+  Only the manuscript is required at intake; there is no language-hint or
+  pre-workflow metadata form. Preparation detects language and drafts
+  source-supported metadata. The work displays a pending language until then.
+  Translation's default passage limit and counting unit
   are selected after that language is known.
   Preparation proposes a title/subtitle when explicitly present in the source.
-  Users can also enter either in the intake form; their saved values are
-  authoritative and need not appear in the source.
+  Users review/correct titles, contributor credits and optional metadata in one
+  place: the post-preparation Overview audit. Later corrections use the same
+  editor; the Work page links there instead of offering another form. User
+  corrections are authoritative and need not appear in the source.
+  Re-preparation drafts source metadata independently; the host retains reviewed
+  values (including deliberate clearing) and shows discrepancies at audit.
   Published metadata supplies the work's display title; the upload filename is
   only a fallback. A title proposal does not overwrite a supplied title or an
   intentional clearing, and a generated filename heading is not a source title.

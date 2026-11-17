@@ -367,11 +367,6 @@ class PreparationTests(unittest.TestCase):
         self.assertIsNone(self.read_work()["metadata"]["title"])
 
     def test_inference_is_grounded_proposed_and_does_not_replace_existing_values(self):
-        for field, value in (("/audience", "adult"),
-                             ("/contributors", [{"id": "a", "name": "A", "roles": ["author"]}])):
-            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "provided by the user"):
-                metadata.update(self.root / "work.json", "enrich", actor="prepare-manuscript",
-                                proposals=[self.proposal(field, value, origin="extracted")])
         proposals = [self.proposal()]
         result = metadata.update(self.root / "work.json", "enrich", proposals=proposals, actor="prepare-manuscript")
         work = self.read_work()
@@ -383,6 +378,37 @@ class PreparationTests(unittest.TestCase):
         self.assertGreater(work["metadata"]["extent"]["non_whitespace_character_count"], 0)
         self.assertEqual(work["metadata"]["extent"]["scope"], self.manifest["scope"])
         self.assertFalse(metadata.update(self.root / "work.json", "enrich", proposals=proposals)["written"])
+
+    def test_extracts_source_credits_as_draft_metadata_before_user_audit(self):
+        front = self.manifest["chapters"][0]
+        front_path = self.revision / front["file"]
+        credit = "by A. Writer\n\nTranslated by B. Reader"
+        front_path.write_bytes(front_path.read_bytes() + ("\n\n" + credit + "\n").encode())
+        front["sha256"] = validator.digest(front_path)
+        self.save()
+        path = self.root / "work.json"
+        people = [{"id": "a-writer", "name": "A. Writer", "roles": ["author"]},
+                  {"id": "b-reader", "name": "B. Reader", "roles": ["translator"]}]
+        proposal = self.proposal("/contributors", people, origin="extracted",
+                                 evidence=[{"chapter_id": front["chapter_id"], "locator": "Credits", "quote": credit}])
+        result = metadata.update(path, "enrich", proposals=[proposal])
+        self.assertIn("/contributors", result["applied"])
+        self.assertEqual(self.read_work()["metadata"]["contributors"], people)
+        self.assertEqual(self.read_work()["metadata_provenance"]["/contributors"]["review_status"], "proposed")
+        for corrected in ([{"id": "chosen", "name": "Chosen Pen Name", "roles": ["author"]}], []):
+            metadata.update(path, "set", field="/contributors", value=corrected)
+            self.assertIn("/contributors", metadata.update(path, "enrich", proposals=[proposal])["skipped"])
+            self.assertEqual(self.read_work()["metadata"]["contributors"], corrected)
+
+    def test_contributor_extraction_rejects_unquoted_names_and_inferred_authorship(self):
+        path = self.root / "work.json"
+        before = path.read_bytes()
+        for origin in ("inferred", "extracted"):
+            proposal = self.proposal("/contributors", [{"id": "person", "name": "Narrator", "roles": ["author"]}],
+                                     origin=origin)
+            with self.subTest(origin=origin), self.assertRaises(ValueError):
+                metadata.update(path, "enrich", proposals=[proposal])
+            self.assertEqual(path.read_bytes(), before)
 
     def test_unfounded_metadata_proposals_leave_the_record_untouched(self):
         self.work["metadata"]["title"] = None

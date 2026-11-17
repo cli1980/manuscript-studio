@@ -111,9 +111,10 @@ export interface MetadataView {
   locked: string[];
   unknown: string[];
   stale: string[];
+  source_differences?: { field: string; source_value: unknown; reviewed_value: unknown }[];
 }
 
-export interface MetadataField { field: string; group: "author" | "suggested" | "computed"; kind: string; options: string[]; pattern: string | null; minimum: number | null }
+export interface MetadataField { field: string; group: "suggested" | "computed"; kind: string; options: string[]; pattern: string | null; minimum: number | null }
 
 export type ViewerTarget = { kind: "overview" } | { kind: "chapter"; chapter_id: string };
 
@@ -248,6 +249,7 @@ export interface WorkDetail extends Omit<WorkSummary, "runs" | "artifacts"> {
   heads: Record<string, { id: string; version: number; status: string; review_status: string; created_at: string; contract?: string }>;
   metadata: { record_revision: number; metadata: Record<string, unknown>; provenance: MetadataView["provenance"] } | null;
   metadata_fields: MetadataField[];
+  metadata_editor_run: string | null;
   metadata_history: { publication_id: string; record_revision: number; created_at: string; stage: string; status: string }[];
   publications: Publication[];
   // The work and run this work was created from (a formatted document), and works created from this one.
@@ -292,6 +294,7 @@ export interface Overview {
   source: ChapterDetail | null;
   metadata: MetadataView | null;
   metadata_fields: MetadataField[];
+  metadata_edit: { target: "run" | "work" | null; run_id: string | null };
 }
 
 export interface WorkflowEvent { id: number; created_at: string; kind: string; payload: Record<string, unknown> }

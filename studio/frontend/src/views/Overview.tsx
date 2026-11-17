@@ -1,9 +1,9 @@
-import type { ChapterDetail, RunDetail, Overview as OverviewData } from "../api";
+import { api, type ChapterDetail, type RunDetail, type Overview as OverviewData } from "../api";
 import { workflowUI } from "../workflows";
 import { Documents, reviewName, when } from "./common";
-import { MetadataTable } from "./Metadata";
+import { MetadataDifferences, MetadataTable } from "./Metadata";
 
-export function Overview({ data, run }: { data: OverviewData; run: RunDetail }) {
+export function Overview({ data, run, onSaved }: { data: OverviewData; run: RunDetail; onSaved: () => Promise<void> }) {
   const reviews = data.source?.reviews ?? [];
   const metadataReview = reviews.find((review) => review.kind === "metadata_review");
   const groups = workflowUI(run.workflow).overviewReviewGroups;
@@ -13,14 +13,25 @@ export function Overview({ data, run }: { data: OverviewData; run: RunDetail }) 
     <div className="overview-section">
       <section className="panel" aria-label="Work metadata">
         <h2>Metadata</h2>
-        <p className="muted">Shared work metadata, separate from the manuscript text.</p>
+        <p className="muted">Review preparation's draft metadata here, correct it, and fill in anything else you know.
+          Optional fields may stay unknown. Changes are versioned, separate from manuscript text.</p>
         {metadataReview && <p className="tag ready">metadata confirmed (revision {metadataReview.record_revision})</p>}
+        {data.metadata && run.gate?.kind !== "metadata_review"
+          && <MetadataDifferences view={data.metadata} fields={data.metadata_fields} />}
         {run.gate?.kind === "metadata_review"
           ? <p>Review and confirm the metadata in the decision panel below.</p>
           : data.metadata
             ? <MetadataTable metadata={data.metadata.metadata} fields={data.metadata_fields}
-                provenance={data.metadata.provenance} />
+                provenance={data.metadata.provenance} locked={data.metadata.locked}
+                onSave={data.metadata_edit?.target ? async (field, value, rationale) => {
+                  if (data.metadata_edit.target === "run") await api.editMetadata(run.id, { field, value, rationale });
+                  else await api.editWorkMetadata(data.work_id, { field, value, rationale });
+                  await onSaved();
+                } : undefined} />
             : <p className="muted">Metadata becomes available after preparation.</p>}
+        {data.metadata_edit?.run_id && data.metadata_edit.run_id !== run.id && <p>
+          <a href={`#/runs/${data.metadata_edit.run_id}/overview`}>Open the current metadata editor</a>
+        </p>}
         <a href={`#/works/${encodeURIComponent(data.work_id)}`}>Open shared work record</a>
       </section>
       <section className="panel" aria-label="Manuscript analysis">

@@ -33,7 +33,9 @@ PROMPT = (
     "Unavailable adapters or incomplete extraction return blocked; a missing title does not: supply it "
     "as the contract's supplied_title from the best available evidence. After preparation the "
     "orchestrator presents the shared metadata at its own metadata_review gate for user "
-    "inspection and edits; do not request metadata confirmation yourself.\n\n"
+    "inspection and edits. Produce source-supported draft metadata, including explicit bylines/contributor "
+    "credits. Leave unsupported optional fields unknown; do not request a metadata questionnaire. The host "
+    "preserves previously reviewed metadata and users edit it at the audit.\n\n"
     "TRANSLATION BRIEF (stage brief, before any chapter): follow the skill's translation brief review. Read the "
     "complete prepared manuscript in manifest order. Starting from any existing translation/glossary.md, "
     "translation/voice.md, and translation/brief-samples.md (carried from an earlier run; preserve their "
@@ -169,7 +171,6 @@ class TranslationEngine(PreparedManuscriptEngine):
             "stage": stage["id"], "source": str(self.root / "input" / state["source_name"]),
             "manuscript_language": state["manuscript_language"], "target_language": state["target_language"],
             "required_work_id": state["work_id"],
-            "prior_work_record": (state.get("prior_work_record") or {}).get("path"),
             "work_record": state["prepared"]["work_record"] if state["prepared"] else None,
             "chapter": chapter, "chapter_attempt": item["attempt"] if item else None,
             "chapter_workdir": self.chapter_workdir(state, item)[0] if item else None,

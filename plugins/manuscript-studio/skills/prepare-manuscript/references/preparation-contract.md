@@ -24,6 +24,11 @@ Paths in revision manifests are relative to that revision directory, use `/`,
 and cannot contain traversal components, absolute paths, or links outside it.
 
 The received original remains authoritative and read-only during preparation.
+In Studio the only required user intake is that manuscript. The host assigns
+work/revision IDs, output location and whole-work scope. Preparation produces
+draft metadata with the verified text; optional entry and corrections happen
+at the existing Overview audit, not before extraction. Reviewed shared metadata
+is host-owned on reruns and remains separate from the original source text.
 The prepared package is a verified source representation, never an editorial
 working copy. Keep it outside the original source location and all downstream
 working/output directories. It can be shared by several workflows without letting

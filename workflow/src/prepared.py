@@ -171,37 +171,37 @@ class PreparedManuscriptEngine(ManuscriptAnalysisPhase, Engine):
             state["continuity_seed"] = self.carry_snapshot(state, stage)
         head = self.library.head("work.json") if self.library is not None else None
         if head is not None:
-            # The work's latest shared record is the preparation agent's metadata input (consolidate only).
-            path = plain(self.root / "input" / "prior-work.json")
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(self.library.read(head))
-            state["prior_work_record"] = {"path": str(path), "publication_id": head["id"], "sha256": head["sha256"]}
+            # Keep the shared record outside the agent's draft; the host preserves it at audit.
             state["library_heads"]["work.json"] = head["id"]
 
-    def _verify_consolidation(self, state):
-        """Preparation may only fill empty fields or mark existing ones stale; existing values must survive."""
-        prior = state.get("prior_work_record")
-        if not prior:
+    def _adopt_reviewed_metadata(self, state):
+        """Re-preparation cannot overwrite reviewed values, including deliberately cleared fields."""
+        seed = self.library.head("work.json") if self.library is not None else None
+        if not seed:
             return
         helper = self.metadata_helper()
-        before = json.loads(read_bytes(Path(prior["path"])))
-        after = json.loads(read_bytes(self._work_path(state)))
-        changed = []
+        prior = json.loads(self.library.read(seed))
+        path = self._work_path(state)
+        before = read_bytes(path)
+        work = json.loads(before)
+        differences = []
         for field in helper.FIELDS:
-            old = helper.field_value(before["metadata"], field)
-            if field in ("/extent", "/manuscript_language") or helper.missing(old):
+            value = helper.field_value(prior["metadata"], field)
+            provenance = prior["metadata_provenance"].get(field)
+            if field in helper.COMPUTED or (helper.missing(value) and provenance is None):
                 continue
-            was, now = before["metadata_provenance"].get(field), after["metadata_provenance"].get(field)
-            stale_only = bool(was and now and now.get("review_status") == "stale"
-                              and {k: v for k, v in now.items() if k not in ("review_status", "updated_at", "rationale")}
-                              == {k: v for k, v in was.items() if k not in ("review_status", "updated_at", "rationale")})
-            if helper.field_value(after["metadata"], field) != old or (now != was and not stale_only):
-                changed.append(field)
-        if changed:
-            raise ValueError("Preparation changed metadata the work already had (" + ", ".join(changed) + "). Start "
-                             "from prior_work_record and only fill empty fields, per the prepare-manuscript "
-                             "prior work record contract.")
-        self.store.event("metadata.consolidated", {"prior_publication_id": prior["publication_id"]})
+            proposed = helper.field_value(work["metadata"], field)
+            if proposed != value and not helper.missing(proposed):
+                differences.append({"field": field, "source_value": proposed, "reviewed_value": value})
+            helper.put(work["metadata"], field, value)
+            work["metadata_provenance"].pop(field, None)
+            if provenance is not None:
+                work["metadata_provenance"][field] = copy.deepcopy(provenance)
+        work["record_revision"] = max(work["record_revision"], prior["record_revision"])
+        helper.save(path, before, work)
+        state["library_heads"]["work.json"] = seed["id"]
+        state["metadata_differences"] = differences
+        self.store.event("metadata.adopted", {"prior_publication_id": seed["id"], "differences": len(differences)})
 
     def before_turn(self, state):
         stage = self.stage_def(state)
@@ -229,7 +229,7 @@ class PreparedManuscriptEngine(ManuscriptAnalysisPhase, Engine):
             self.complete_analysis(state, result)
         elif stage.get("preparation"):
             self._prepared(state, result["work_record"])
-            self._verify_consolidation(state)
+            self._adopt_reviewed_metadata(state)
             self._advance_stage(state)
         elif stage.get("front_matter"):
             raise ValueError("A front-matter review completes when the user approves it; request its gate instead.")
@@ -581,7 +581,8 @@ class PreparedManuscriptEngine(ManuscriptAnalysisPhase, Engine):
         view = {"record_revision": work["record_revision"], "schema_version": work["schema_version"],
                 "metadata": work["metadata"], "provenance": work.get("metadata_provenance", {}),
                 "locked": self.locked_metadata(state), "unknown": [], "stale": [],
-                "confirmed": state.get("metadata_approval")}
+                "confirmed": state.get("metadata_approval"),
+                "source_differences": state.get("metadata_differences", [])}
         helper = self.metadata_helper()
         for field in helper.FIELDS:
             entry = view["provenance"].get(field)

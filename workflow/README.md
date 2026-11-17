@@ -184,6 +184,15 @@ passage continuation use their own saved gate IDs and free-text responses.
 
 ### Metadata review
 
+Studio intake requires only the manuscript. Preparation produces source-supported
+draft metadata, including explicit contributor credits, and detects language and
+computes extent. There is no preliminary metadata form or language-hint field.
+The post-preparation Overview audit is the single metadata editor, including for
+later corrections; the Work page links there rather than offering another form.
+Optional unknown fields can remain empty. On reruns, the host retains reviewed
+shared metadata and shows source discrepancies at audit; the agent no longer
+receives or merges a mutable prior-work-record file.
+
 When preparation completes, the run waits at a `metadata_review` gate before any
 translation turn. `review` lists every shared `work.json` metadata field with its
 value, origin, review status, and confidence, plus unknown and stale fields. No

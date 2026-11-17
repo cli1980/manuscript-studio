@@ -33,6 +33,11 @@ and preserve their stable local ID when changing a name.
 
 ## Fill missing values from the text
 
+Studio intake requires only the manuscript. Do not ask users to complete a
+metadata form before extraction. Produce draft metadata alongside the verified
+text; users correct or complete it at the existing Overview audit. Optional
+unknowns do not block preparation. Later corrections use the same editor.
+
 Preparation includes descriptive metadata analysis, not literary-quality review.
 After source verification, read the available prepared text and automatically
 deduce missing descriptive fields. Do not send a questionnaire for facts already
@@ -43,8 +48,8 @@ provided or inferable from that text.
 2. Extract explicit title/subtitle, bylines, contributor roles, edition statements,
    original-language statements, or series declarations when actually present.
    Use their real textual evidence, not filenames or document-creator properties.
-3. Infer manuscript language, broad type, form, genres, audience, keywords, a short
-   description, and standalone/series potential where the manuscript supports
+3. Infer manuscript language, broad type, form, genres, keywords and a short
+   description where the manuscript supports
    them. Use the full verified scope, not keyword matching or one isolated scene.
    A selected-chapter sample cannot establish whole-work form or resolution.
    Keep uncertain classifications provisional and explain alternatives.
@@ -75,42 +80,52 @@ null. Infer it from the prepared text through the evidence-bound enrichment step
 if the language is uncertain or multilingual without a clear primary language,
 keep preparation blocked and request clarification rather than choosing a default.
 
-## Field groups
+## Audit fields and evidence
 
 Every metadata field belongs to exactly one group; `scripts/prepare_metadata.py`
-exposes them as `AUTHOR`, `SUGGESTED`, and `COMPUTED`.
+exposes them as `SUGGESTED` and `COMPUTED`. These are presentation/evidence
+categories, not different owners or pre-preparation forms.
 
 | Group | Fields | Who sets them |
 |---|---|---|
-| Provided by the user | `/contributors`, `/audience`, `/edition/label`, `/edition/status`, `/series/name`, `/series/position`, `/series/relationship` | Initialized empty (null or `[]`) when the work is added; the user fills them in afterwards. Agents never propose them (`enrich` refuses), even when the manuscript appears to state them. |
-| Suggested from the manuscript | `/title`, `/subtitle`, `/work_type`, `/form`, `/genres`, `/keywords`, `/description`, `/original_language` | Agents propose them through `enrich` with evidence and confidence; they stay `proposed` until the user confirms or corrects them. Agent title/subtitle proposals require extraction from actual quoted source text, not invention or a supplied heading generated from the filename. |
+| Review and complete | All fields other than manuscript language and extent | Preparation may extract explicit source statements, with evidence; supported descriptive inference is limited to work type, form, genres, keywords and description. Users correct or fill values in the post-preparation audit. Unsupported values remain unknown. |
 | Computed | `/manuscript_language`, `/extent` | Language may be unknown at intake; preparation infers it from the supplied text with evidence before becoming ready. Extent is measured from the prepared revision. Neither is edited by hand in downstream workflows. |
 
-These groups govern agent behavior, not permission to enter metadata. Users can
-supply or correct any user-provided or suggested field with `set`, including a
+Title/subtitle proposals require actual quoted source text, not a generated
+filename heading. Contributor names must occur in quoted source credits and
+roles must reflect explicit bylines/credits; never infer authorship from a
+narrator, character, filename or document-creator property. Audience, edition,
+series and original-language claims need explicit source statements, not
+speculation about the manuscript. Users can supply or correct any audit field
+with `set`, including a
 title absent from the manuscript. User confirmation is sufficient grounding;
 it needs no manuscript quote. Preserve supplied or confirmed values, including
 deliberate clearing, before evaluating competing agent proposals.
 
-## Prior work record (input/output contract)
+## Draft output and reviewed shared metadata
 
-When the caller supplies the latest shared record for the work (for example a
-workflow engine's `prior_work_record`), that record is the metadata input:
+In Studio, the preparation agent creates a fresh source-based draft. The host
+does not give it a mutable prior-work-record file or require it to merge user
+metadata. The shared library remains the single versioned authority.
 
-- **Input:** start `work.json` from the prior record's `metadata`,
-  `metadata_provenance`, `metadata_history`, and `record_revision` verbatim, with
-  the new discovery and preparation sections. Do not re-infer fields that already
-  have a value, whatever their review status.
-- **Consolidation:** only fill fields that are null, empty, or absent, through
-  `enrich` with evidence from the new prepared revision. Recompute extent for
-  the new revision. If the new source contradicts an existing value, leave the
-  value unchanged, mark it stale through the helper, and report the conflict for
-  the user to resolve; never overwrite it.
-- **Output:** every field that had a value in the prior record keeps the same
-  value and provenance (extent excepted). Newly filled fields stay `proposed`
-  until the user confirms them.
+- **New work:** present extracted/detected values, qualified suggestions and
+  unknown fields together at the existing metadata audit. The user may correct
+  values, add missing information, or leave optional fields unknown.
+- **Re-preparation:** the host reads the immutable shared-library head and
+  retains its existing reviewed values/provenance, including deliberately cleared
+  values. Missing defaults without provenance can use new draft suggestions.
+  Fresh language/extent describe the current prepared revision. Source
+  discrepancies are shown at the same audit rather than delegated to an agent
+  to resolve or overwrite.
+- **Confirmation and later edits:** publish the effective record to the shared
+  library. Downstream workflows consume it without another metadata questionnaire.
+  Later corrections use the same Overview editor and create new versions;
+  already-approved outputs retain their original snapshots.
 
-Without a prior record, infer missing values as described above.
+For standalone use with an existing record explicitly supplied by the caller,
+preserve existing values and provenance through the helper, including deliberate
+clearing. Only enrich missing defaults. Do not treat source text as permission
+to overwrite a user correction.
 
 ## Helper and proposal format
 

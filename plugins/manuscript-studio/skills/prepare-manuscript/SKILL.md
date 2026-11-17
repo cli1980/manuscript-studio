@@ -15,6 +15,12 @@ the shared work record and [revision.schema.json](schemas/revision.schema.json)
 for each prepared source revision.
 Read [the shared metadata contract](references/manuscript-metadata.md) before
 recording or inferring metadata. Use schema-version-2 work records for new packages.
+For a new Studio work the user supplies only the manuscript. Produce draft
+metadata from source evidence, including explicit bylines/contributor credits;
+do not request a preliminary metadata questionnaire. The host presents the
+existing post-preparation Overview audit for corrections and optional details.
+On reruns the host preserves reviewed shared metadata; the preparation agent
+does not merge or overwrite the shared record.
 
 ## 1. Resolve the input location and output destination
 
@@ -107,7 +113,7 @@ evidence, and unresolved issues in the revision manifest. Use `verified` only
 after the source comparison and coverage checks pass.
 
 While preparation remains `in_progress`, analyze the verified text for missing
-language, type, form, genre, audience, keywords, and description; extract other
+language, type, form, genre, keywords, and description; extract other
 fields only where explicitly supported. Write the evidence-bound proposal JSON
 specified in the metadata contract and run `scripts/prepare_metadata.py enrich`
 with that file. The helper computes missing extent and preserves supplied values

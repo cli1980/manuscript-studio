@@ -3,7 +3,6 @@ import { api, readBase64 } from "../api";
 import { ErrorBox, Status, TextBlock, useLoad, when } from "./common";
 import { Markdown } from "./Markdown";
 import { workflowUI } from "../workflows";
-import { AuthorForm, MetadataTable } from "./Metadata";
 import { allRuns, allWorks, useLive } from "../live";
 import { ExecutionProfileNotice, ModelPicker, useModelSelection } from "./ModelSelection";
 
@@ -45,7 +44,6 @@ export function Works() {
 
 function AddManuscript({ onAdded }: { onAdded: (workId: string) => void }) {
   const [file, setFile] = useState<File | null>(null);
-  const [language, setLanguage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +52,7 @@ function AddManuscript({ onAdded }: { onAdded: (workId: string) => void }) {
     setBusy(true);
     setError(null);
     try {
-      const work = await api.createWork({ upload: { name: file!.name, data: await readBase64(file!) }, manuscript_language: language });
+      const work = await api.createWork({ upload: { name: file!.name, data: await readBase64(file!) } });
       setFile(null);
       (event.target as HTMLFormElement).reset();
       onAdded(work.id);
@@ -70,12 +68,11 @@ function AddManuscript({ onAdded }: { onAdded: (workId: string) => void }) {
       <h2>Add a manuscript</h2>
       <div className="row">
         <input type="file" accept=".md,.txt,.docx" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        <label>Language hint (optional) <input value={language} placeholder="Auto-detect" onChange={(e) => setLanguage(e.target.value)} size={12} /></label>
         <button type="submit" disabled={busy || !file}>{busy ? "Adding…" : "Add as a new work"}</button>
       </div>
       <ErrorBox error={error} />
-      <p className="muted">Each upload creates a new work, even for an identical file. Language can remain blank:
-        preparation detects it from the manuscript before downstream work starts.</p>
+      <p className="muted">Only the manuscript is needed. Preparation detects its language and extracts draft metadata;
+        review and complete it in Overview afterward. Each upload creates a new work.</p>
     </form>
   );
 }
@@ -114,11 +111,6 @@ export function WorkView({ workId }: { workId: string }) {
           ))}</p>
       )}
       <ErrorBox error={error} />
-      {data.metadata && data.runs.length === 0 && !data.unfinished_run && (
-        <AuthorForm metadata={data.metadata.metadata} fields={data.metadata_fields}
-          onSave={async (field, value, rationale) => { await api.editWorkMetadata(workId, { field, value, rationale }); }}
-          onDone={() => void reload()} />
-      )}
       <StartWorkflow workId={workId} language={data.manuscript_language} unfinishedRun={data.unfinished_run} workflows={data.workflows} onStarted={() => void reload()} />
       <h2>Workflows</h2>
       {Object.keys(data.workflows).length === 0 && <p className="muted">No workflow has been finalized on this work.</p>}
@@ -148,12 +140,10 @@ export function WorkView({ workId }: { workId: string }) {
       {data.metadata ? (
         <>
           <p className="muted">Record revision {data.metadata.record_revision}; {data.metadata_history.length} published versions.
-            {data.unfinished_run ? " Edit through the run in progress while it is unfinished." : " Edits are versioned and published to this work."}</p>
-          <MetadataTable metadata={data.metadata.metadata} provenance={data.metadata.provenance} fields={data.metadata_fields}
-            onSave={data.unfinished_run ? undefined : async (field, value, rationale) => {
-              await api.editWorkMetadata(workId, { field, value, rationale });
-              await reload();
-            }} />
+            {" "}Metadata is entered and corrected in Overview after preparation.</p>
+          {data.metadata_editor_run
+            ? <a href={`#/runs/${data.metadata_editor_run}/overview`}>Review and edit metadata in Overview</a>
+            : <p className="muted">Start a workflow to prepare this manuscript and review its metadata.</p>}
         </>
       ) : <p className="muted">No metadata record (imported before metadata existed).</p>}
       <h2>Library</h2>

@@ -410,6 +410,53 @@ class WebApiTests(unittest.TestCase):
         self.assertEqual(corrupted.status_code, 400)
         self.assertIn("checksum", corrupted.json()["detail"])
 
+    def test_metadata_has_one_post_preparation_location_and_preserves_approved_snapshots(self):
+        work = self.post("/api/works", {
+            "upload": {"name": "original.md", "data": base64.b64encode(self.source.read_bytes()).decode()},
+        }).json()
+        self.assertIsNone(work["metadata_editor_run"])
+        early = self.post(f"/api/works/{work['id']}/metadata", {"field": "/title", "value": "Too early"})
+        self.assertEqual(early.status_code, 400, early.text)
+        self.assertIn("Prepare the manuscript first", early.text)
+        self.assertEqual({f["group"] for f in work["metadata_fields"]}, {"suggested", "computed"})
+        run = self.post("/api/runs", {"template_id": "literary-translation-v1",
+                                      "work_id": work["id"], "start": False}).json()
+        path = f"/api/runs/{run['id']}"
+        with WorkflowService(Path(self.temp.name) / "server") as svc, svc.open_run(run["id"]) as engine:
+            engine.advance(Scripted(prepare))
+            engine.edit_metadata("/contributors", [{"id": "chosen", "name": "Chosen Pen Name", "roles": ["author"]}],
+                                 gate_id=engine.state()["gate"]["id"])
+            view = self.client.get(path + "/overview").json()
+            self.assertEqual(view["metadata_edit"], {"target": "run", "run_id": run["id"]})
+            self.assertEqual(view["metadata"]["metadata"]["contributors"][0]["name"], "Chosen Pen Name")
+            engine.reply(engine.state()["gate"]["id"], "confirm metadata")
+        with WorkflowService(Path(self.temp.name) / "server") as svc:
+            svc.stop(run["id"])
+        before = self.client.get(path + "/overview").json()
+        self.assertEqual(before["metadata_edit"], {"target": "work", "run_id": run["id"]})
+        approved = before["source"]["reviews"]
+        edited = self.post(f"/api/works/{work['id']}/metadata", {
+            "field": "/title", "value": "Later correction", "rationale": "Corrected in Overview"})
+        self.assertEqual(edited.status_code, 200, edited.text)
+        after = self.client.get(path + "/overview").json()
+        self.assertEqual(after["metadata"]["metadata"]["title"], "Later correction")
+        self.assertEqual(self.client.get(path + "/chapters").json()["overview"]["title"], "Later correction")
+        self.assertEqual(after["source"]["reviews"], approved)
+        self.assertEqual(after["source"]["prepared_text"], before["source"]["prepared_text"])
+        # Typed optional values still validate, but only after preparation.
+        endpoint = f"/api/works/{work['id']}/metadata"
+        for field, value in (("/genres", ["Literary fiction", "Science fiction"]),
+                             ("/series/position", 2), ("/audience", "adult"),
+                             ("/contributors", [{"id": "writer", "name": "A Writer", "roles": ["author", "editor"]}])):
+            response = self.post(endpoint, {"field": field, "value": value})
+            self.assertEqual(response.status_code, 200, response.text)
+        current_revision = self.client.get(path + "/overview").json()["metadata"]["record_revision"]
+        for field, value in (("/series/position", -1), ("/original_language", "Chinese"),
+                             ("/contributors", [{"id": "x", "name": "X", "roles": []}])):
+            response = self.post(endpoint, {"field": field, "value": value})
+            self.assertEqual(response.status_code, 400, response.text)
+        self.assertEqual(self.client.get(path + "/overview").json()["metadata"]["record_revision"], current_revision)
+
     def test_overview_is_a_read_only_projection_with_stable_source_identity(self):
         front_text = "# 故事\n\n献给读者。\n"
         body_text = "他回来了。\n"

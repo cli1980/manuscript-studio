@@ -18,7 +18,9 @@ PREPARATION = (
     "metadata contract, and successful existing validation. Return completed with work_record only when ready; "
     "unavailable adapters or incomplete extraction return blocked; a missing title does not: supply it as the "
     "contract's supplied_title from the best available evidence. The orchestrator presents the shared "
-    "metadata at its own metadata_review gate; do not request metadata confirmation yourself."
+    "metadata at its own metadata_review gate. Produce source-supported draft metadata, including explicit "
+    "bylines/contributor credits. Leave unsupported optional fields unknown; do not request a metadata "
+    "questionnaire. The host preserves previously reviewed metadata and users edit it at the audit."
 )
 EDITING = (
     "EDITORIAL JOB: act as the literary editor for exactly the job described in the context. Read the pinned "
@@ -299,7 +301,6 @@ class EditingEngine(InteriorDesignPhase, PreparedManuscriptEngine):
         context = {
             "stage": stage["id"], "source": str(self.root / "input" / state["source_name"]),
             "manuscript_language": state["manuscript_language"], "required_work_id": state["work_id"],
-            "prior_work_record": (state.get("prior_work_record") or {}).get("path"),
             "work_record": state["prepared"]["work_record"] if state["prepared"] else None,
             "domain_state": state["domain_state"], "user_receipt": state["next_input"],
             "metadata_approval": state.get("metadata_approval"),
