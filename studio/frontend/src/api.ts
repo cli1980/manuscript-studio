@@ -78,6 +78,7 @@ export interface JsonSchema {
   const?: JsonValue;
   minimum?: number;
   maximum?: number;
+  pattern?: string;
 }
 export interface InteriorProposal {
   proposal_id: string;
@@ -86,6 +87,8 @@ export interface InteriorProposal {
   vendor_profile: VendorProfile | null;
   edition_brief: JsonValue;
   design_system: JsonValue;
+  opening_structure: { id: string; kind: "chapter" | "part"; chapter_ids: string[]; number: number | null;
+    sources: { components: { kind: string; text: string }[] }[] }[];
   reading: { essence: string; genres: string[]; synopsis: string; mood: string[] };
   text_roles: { id: string; name: string; function: string; style_id: string; occurrences: {
     chapter_id: string; chapter_sha256: string; paragraph_index: number; paragraph_sha256: string;
@@ -124,7 +127,9 @@ export interface RunSummary {
     id: string; status: string; plan_sha256: string; proposal_sha256: string; accepted: boolean;
     notice: string; attempts: number; error?: { code: string; message: string } | null;
     summary: { units: number; paragraphs: number; styles: string[]; policy: Record<string, JsonValue>;
-      vendor_warnings: JsonValue[] };
+      vendor_warnings: JsonValue[]; toc?: { before_chapter_id: string; depth: number; style_id: string;
+        entry_styles: string[]; eligible_headings: number; instruction: string;
+        heading?: string; heading_style_id?: string; start?: string; prompt?: string } | null };
     docx: { sha256: string; bytes: number; name: string } | null;
   } | null;
   id: string;
@@ -185,7 +190,8 @@ export interface VendorProfile {
     name: string;
     source: { title: string; edition: string; url: string; sha256: string; reviewed_at: string };
     docx_guidance: { recommended_safety_mm: number; gutter: string; page_size: string; delivery: string };
-    variant: { name: string; vendor_binding: string; notes: string[] };
+    variant: { name: string; vendor_binding: string; notes: string[];
+      custom_trim_ranges_in?: Record<string, { width: number[]; height: number[] }> };
     rules: { id: string; classification: string; phase: string; pages: number[]; applies_to: string; statement: string }[];
   };
 }
@@ -283,6 +289,22 @@ export interface ChapterDetail {
     documents: { path: string; sha256: string; text: string }[] }[];
 }
 
+export interface SubjectProposal {
+  label: string;
+  confidence: "low" | "medium" | "high";
+  rationale: string;
+  evidence: { chapter_id: string; locator: string; quote: string }[];
+  code?: string | null;
+  scheme_version?: string | null;
+  reference?: string | null;
+  kind?: "real" | "historical" | "fictional" | "unspecified";
+}
+export type SubjectProposalGroups = Record<"bisac_subjects" | "thema_subjects" | "keywords" | "place_subjects", {
+  status: "proposed" | "not_applicable" | "undetermined";
+  reason: string | null;
+  items: SubjectProposal[];
+}>;
+
 export interface Overview {
   work_id: string;
   title: string;
@@ -290,6 +312,7 @@ export interface Overview {
   prepared: boolean;
   analysis?: { analysis_id: string; approval_status: "provisional"; qualifications: string[];
     coverage_verification: string; current_text_matches_source: boolean;
+    subject_proposals?: SubjectProposalGroups | null;
     documents: { path: string; sha256: string; text: string }[] } | null;
   source: ChapterDetail | null;
   metadata: MetadataView | null;
@@ -348,11 +371,11 @@ export const api = {
   createWork: (payload: { upload: { name: string; data: string }; manuscript_language?: string }) => post<WorkDetail>("/api/works", payload),
   reply: (id: string, gate_id: string, text: string) => post<RunDetail>(`/api/runs/${id}/reply`, { gate_id, text }),
   reviewInteriorDesign: (id: string, payload: {
-    gate_id: string; expected_sha256: string; action: "save" | "approve" | "request-revision";
+    gate_id: string; expected_sha256: string; action: "save" | "generate" | "request-revision";
     spec?: InteriorSpec; answers?: Record<string, string>; feedback?: string;
   }) => post<RunDetail>(`/api/runs/${id}/interior-design`, payload),
-  authorizeDocx: (id: string, gate_id: string, expected_plan_sha256: string) =>
-    post<RunDetail>(`/api/runs/${id}/docx/authorize`, { gate_id, expected_plan_sha256 }),
+  reopenInteriorDesign: (id: string, acceptance_id: string, expected_docx_sha256: string) =>
+    post<RunDetail>(`/api/runs/${id}/interior-design/reopen`, { acceptance_id, expected_docx_sha256 }),
   accept: (id: string, acceptance_id: string, confirm_final: boolean, format_target?: FormatTarget) =>
     post<RunDetail>(`/api/runs/${id}/accept`, { acceptance_id, confirm_final, format_target }),
   editMetadata: (id: string, payload: { field: string; value: unknown; rationale: string; gate_id?: string }) => post<RunDetail>(`/api/runs/${id}/metadata`, payload),

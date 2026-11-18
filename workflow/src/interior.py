@@ -9,7 +9,7 @@ import sys
 import uuid
 
 from .engine import module_at
-from .production import DOCX_NOTICE, PRODUCTION_GATE, DocxProductionPhase
+from .production import DOCX_NOTICE, LEGACY_PRODUCTION_GATE, DocxProductionPhase
 from .storage import digest, json_bytes, now, read_bytes, write_new
 
 DESIGN_STAGE = "interior-design"
@@ -58,11 +58,11 @@ class InteriorDesignPhase(DocxProductionPhase):
             return {"title": "Approve manuscript for formatting", "action_label": "Approve manuscript and continue",
                     "finalizes": False, "vendor_profiles": self.interior_validator.vendor_profiles().catalog(),
                     "format_target": state.get("format_target") or dict(DEFAULT_FORMAT_TARGET),
-                    "notice": "Approval freezes the manuscript and metadata for interior design, exact-plan "
-                              "authorization and editable-DOCX generation. " + DOCX_NOTICE}
+                    "notice": "Approval freezes the manuscript and metadata for interior design "
+                              "and editable-DOCX generation. " + DOCX_NOTICE}
         if state.get("production"):
-            return {"title": "Accept editable DOCX", "action_label": "Accept DOCX and finish", "finalizes": True,
-                    "notice": "Accept this exact DOCX candidate and publish the editable-document edition. "
+            return {"title": "Approve design and DOCX", "action_label": "Approve edition and finish", "finalizes": True,
+                    "notice": "Approve the design revision and this exact inspected DOCX together, then publish the edition. "
                               "This finalizes the run. " + DOCX_NOTICE}
         return super().acceptance_details(state)
 
@@ -72,7 +72,7 @@ class InteriorDesignPhase(DocxProductionPhase):
         return super().before_metadata_edit(state)
 
     def parse_free_reply(self, state, gate, text):
-        if gate["kind"] in (DESIGN_GATE, PRODUCTION_GATE):
+        if gate["kind"] in (DESIGN_GATE, LEGACY_PRODUCTION_GATE):
             raise ValueError("Use the design or DOCX generation form for this exact approval.")
         return super().parse_free_reply(state, gate, text)
 
@@ -120,6 +120,14 @@ class InteriorDesignPhase(DocxProductionPhase):
             receipt["docx"] = {"build_id": job["id"], "sha256": job["result"]["docx"]["sha256"],
                                "manifest_sha256": job["result"]["manifest"]["sha256"],
                                "plan_sha256": job["plan_sha256"], "proposal_sha256": job["proposal_sha256"]}
+            approval = {"receipt_id": receipt["id"],
+                                        "proposal": state["design_generation"]["proposal"],
+                                        "docx_sha256": job["result"]["docx"]["sha256"],
+                                        "plan_sha256": job["plan_sha256"],
+                                        "created_at": receipt["created_at"]}
+            result = super().record_acceptance(state, receipt)
+            state["design_approval"] = approval
+            return result
         return super().record_acceptance(state, receipt)
 
     def prepare_design_turn(self, state):
@@ -160,8 +168,10 @@ class InteriorDesignPhase(DocxProductionPhase):
             "vendor_profile": self.selected_vendor_profile(state),
             "preparation_required": not unchanged,
             "output_preparation_root": "interior-design/prepared",
-            "manuscript": [{"chapter_id": c["chapter_id"], "order": c["order"], "role": c["role"],
-                            "title": c["title"], **state["design_sources"][c["chapter_id"]]}
+            # Snapshot roles describe artifacts, not front matter/chapter/back matter structure.
+            "manuscript": [{**state["design_sources"][c["chapter_id"]],
+                            "chapter_id": c["chapter_id"], "order": c["order"], "role": c["role"],
+                            "title": c["title"]}
                            for c in state["chapters"]],
             "proposal_path": state["design_output"],
             "previous_proposal": (json.loads(self.store.content(state["design_draft"]))
@@ -183,6 +193,14 @@ class InteriorDesignPhase(DocxProductionPhase):
             "Request exactly one production target, editable-docx. PDF and other formats are unavailable "
             "in this integration and must not appear as promised outputs, even for print-ready purpose. "
             "After preparation, run the interior-design validator with --work WORK --list-paragraphs. "
+            "Author proposal /5 with chapter_openings, part_openings and opening_structure. "
+            "Inventory every actual chapter's source heading, explicit ordinal and exact number/title/subtitle/literal "
+            "components bound to whole catalogued paragraphs. Inventory actual parts and their ordered chapter members; "
+            "do not invent parts or source text, or number front matter/prologues by unit order. "
+            "Define the standard independent chapter/part heading, number, title, subtitle and ornament styles. "
+            "Use combined, separated, title-only, number-only or preserve-source layout as appropriate. "
+            "Use only text/glyph opening ornaments; no images/drop caps. Chapter start lives in chapter_openings.start, "
+            "not page.chapter_start. Part settings contain placement and heading. The pinned skill describes /5 exactly. "
             "Generate text_roles only for whole catalogued paragraphs; copy their indices and hashes. "
             "Do not generate inline roles or partial-paragraph assignments. Inline formatting must come "
             "from the original Markdown markers, not new role classifications or rewritten manuscript text. "
@@ -256,11 +274,11 @@ class InteriorDesignPhase(DocxProductionPhase):
 
     def present_design(self, state, snapshot):
         state["design_draft"] = snapshot
-        state.update(status="WAITING_FOR_HUMAN", error=None, next_input=None, design_approval=None,
+        state.update(status="WAITING_FOR_HUMAN", error=None, next_input=None, design_approval=None, design_generation=None,
                      gate={"id": str(uuid.uuid4()), "kind": DESIGN_GATE, "stage": DESIGN_STAGE,
                            "chapter_id": None, "attempt": 0, "instance": self.instance(state)["key"],
-                           "message": "Review and edit the proposed interior specification. This is design review, "
-                                      "not document generation or approval of rendered pages.",
+                           "message": "Edit the proposed specification and prepare a draft DOCX. "
+                                      "Design approval happens after downloading and inspecting the candidate.",
                            "binding": snapshot, "sheet": None})
 
     def design_view(self, state):
@@ -333,12 +351,13 @@ class InteriorDesignPhase(DocxProductionPhase):
                     raise ValueError("Describe the requested design revision.")
                 text, parsed = feedback.strip(), {"type": "feedback"}
                 state.update(status="READY", gate=None, thread_id=None, error=None)
-            elif action == "approve":
+            elif action == "generate":
                 blocking = {q["id"] for q in proposal["questions"] if q["blocking"]}
                 if not isinstance(answers, dict) or set(answers) != blocking \
                         or any(not isinstance(v, str) or not v.strip() for v in answers.values()):
-                    raise ValueError("Record a response for every blocking question before design approval.")
-                text, parsed = "Approve interior design.", {"type": "design-approval", "answers": answers}
+                    raise ValueError("Record a response for every blocking question before draft generation.")
+                text, parsed = "Request draft DOCX generation; not design approval.", {
+                    "type": "design-generation-request", "answers": answers}
                 state.update(gate=None, next_input=None, error=None)
                 self._advance_stage(state)
             else:
@@ -346,10 +365,38 @@ class InteriorDesignPhase(DocxProductionPhase):
             receipt = {"id": str(uuid.uuid4()), "created_at": now(), "gate": gate, "text": text,
                        "parsed": parsed, "decision_source": "human"}
             state["receipts"].append(receipt)
-            if action == "approve":
-                state["design_approval"] = {"receipt_id": receipt["id"], "proposal": gate["binding"],
-                                            "created_at": receipt["created_at"]}
+            if action == "generate":
+                state["design_generation"] = {"receipt_id": receipt["id"], "proposal": gate["binding"],
+                                              "created_at": receipt["created_at"]}
             elif action == "request-revision":
                 state["next_input"] = receipt
             self.store.save(revision, state, "interior_design." + action, {"receipt_id": receipt["id"]})
+            return state
+
+    def reopen_design(self, acceptance_id, expected_docx_sha256):
+        """Return an unaccepted candidate to its existing design, without restarting editing."""
+        with self.store.locked():
+            revision, state = self.store.load()
+            self._guard(state, "interior-design")
+            self._require_mutable(state)
+            if state["status"] != "WAITING_FOR_ACCEPTANCE" or state["stage"] != "accept" \
+                    or state.get("acceptance_id") != acceptance_id:
+                raise ValueError("Stale or unavailable DOCX candidate review.")
+            self.verify(state)
+            job = self.verify_docx_candidate(state)
+            if job["result"]["docx"]["sha256"] != expected_docx_sha256:
+                raise ValueError("Stale DOCX candidate; refresh before revising its design.")
+            receipt = {"id": str(uuid.uuid4()), "created_at": now(), "decision_source": "human",
+                       "gate": {"id": acceptance_id, "kind": "docx_candidate_review", "stage": "accept",
+                                "chapter_id": None, "binding": job["result"]["docx"]},
+                       "text": "Revise the design after inspecting the draft DOCX.",
+                       "parsed": {"type": "design-reopen", "build_id": job["id"],
+                                  "docx_sha256": expected_docx_sha256, "proposal_sha256": job["proposal_sha256"]}}
+            state["receipts"].append(receipt)
+            state.setdefault("production_history", []).append(state.pop("production"))
+            state.pop("acceptance_id", None)
+            self._enter_stage(state, DESIGN_STAGE)
+            self.present_design(state, state["design_draft"])
+            self.store.save(revision, state, "interior_design.reopened", {
+                "receipt_id": receipt["id"], "build_id": job["id"]})
             return state

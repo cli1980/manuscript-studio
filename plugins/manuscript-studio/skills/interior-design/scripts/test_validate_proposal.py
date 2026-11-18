@@ -139,7 +139,7 @@ class ProposalTests(unittest.TestCase):
             lambda p: p["design_system"]["navigation"].update(ornament="*"),
             lambda p: p["text_roles"][0]["occurrences"][0].update(paragraph_index=0),
             lambda p: p["basis"]["preparation"]["scope"].update(chapter_ids=["chapter-one"]),
-            lambda p: p["design_system"]["page"].update(chapter_start="recto"),
+            lambda p: p["design_system"]["chapter_openings"].update(start="recto"),
         )
         for change in changes:
             with self.subTest(change=change):

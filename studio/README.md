@@ -11,6 +11,16 @@ Open `http://127.0.0.1:8765`. The server binds to loopback only, refuses other
 Host headers and cross-origin writes, and accepts an extra loopback origin only
 when given with `--allow-origin` (for a local preview proxy).
 
+New interior proposals use `/5`, with dedicated Chapter Openings and Part
+Openings controls. Combined headings share one paragraph style; separated
+number/title headings have independent styles. Title-only, number-only,
+source-preserving presentation, number labels, opening offsets and text/glyph
+ornaments are available. Parts may have dedicated pages or share their first
+chapter's page. Source-bound heading inventories remain read-only; request an
+agent revision to correct classification. These controls do not edit manuscript
+text, invent optional content or certify rendered page fit. Older proposals
+need new authoring/review rather than an automatic approval migration.
+
 - **Works** is the place for intake and outcomes: add a manuscript (each upload
   creates a new work), browse every work's library, metadata, and publication
   log without opening a run, and download accepted editable DOCX editions.
@@ -43,6 +53,12 @@ when given with `--allow-origin` (for a local preview proxy).
   define their own additions and reading layout. Translation includes its brief
   and source/translation panes, while editing shows its current-text view.
   Approved brief snapshots remain distinct from evolving working documents.
+  Manuscript Analysis includes provisional BISAC Subjects, Thema Subjects,
+  Keywords and Place Subjects for new analysis revisions. Expand each group
+  for rationale, confidence and source quotes. Taxonomy codes require a cited
+  edition/reference or show as unresolved; these suggestions never replace
+  confirmed metadata, apply keywords automatically or add an approval gate.
+  Older analysis revisions remain unchanged.
   Review links and notices resolve to Overview or the appropriate
   chapter without changing stored gate IDs or source hashes. Display numbering
   starts with the body; processing progress says "manuscript units" because
@@ -329,7 +345,7 @@ with live inch equivalents. Preferred page count, internal IDs/profile reference
 hashes and raw JSON/debug views are not exposed in this form. Literary reading is
 read-only. **Save specification changes** creates a validated new revision.
 You can request an agent revision or respond to necessary author/design questions and
-approve the exact saved proposal.
+prepare a draft from the exact saved proposal without approving its design.
 
 Purpose, vendor and binding are shown as a read-only summary; target IDs and
 profile references remain internal. Their duplicate selectors are removed, and
@@ -338,28 +354,33 @@ approval and select it there before authoring a new proposal. Layout, typography
 and other design settings remain editable.
 
 Technical questions about fonts, producer capabilities, vendor readiness or final
-PDF checks are not part of design approval. If there are no author questions,
-no answer fields or acknowledgement are required. Approval still does not
-verify production or print compliance.
+PDF checks are not author decisions. If there are no author questions,
+no answer fields are required. Draft generation is not design approval or
+verification of print compliance.
 
 ### Editable-DOCX production POC
 
-After design approval, the `produce-docx` step calls the separately installed
+After **Generate draft DOCX**, the `produce-docx` step calls the separately installed
 `book_formatter` public API. New workflow proposals must request exactly one
 `editable-docx` target. PDF/multi-format bundles are refused, not silently reduced.
 Print-ready purpose and vendor-guided geometry do not certify the DOCX for print.
 
-1. Review the **DOCX generation plan**: source counts, named styles, exact plan
-   hash, prototype policies and vendor advisories. The complete plan, including
-   manuscript text/local paths, stays in private run storage, not the gate payload.
-2. Confirm the exact plan and choose **Generate editable DOCX**. A persisted,
-   retryable job binds the current human design approval, prepared inputs and
-   formatter/runtime identity. Construction and reopen checks use no agent,
-   Word automation or renderer. A changed plan requires new authorization.
-3. **Download DOCX candidate** and inspect it in Word. Generated `BF.*` styles
+1. Choose **Generate draft DOCX** once. Studio records the effective plan and
+   builds/checks the candidate without an intermediate gate. The persisted,
+   retryable job binds that human request, saved design, prepared inputs and
+   formatter/runtime identity. A changed plan stops generation rather than
+   silently replanning. Construction uses no agent, Word automation or renderer.
+   Counts, styles, plan hash, policies and vendor advisories remain read-only
+   technical details. The source-bearing plan stays in private run storage.
+2. **Download DOCX candidate** and inspect it in Word. Generated `BF.*` styles
    are Quick Styles for post-generation editing. Downloaded edits are not
    synchronized back; acceptance always identifies the original checked bytes.
-4. **Accept DOCX and finish** records the candidate/manifest/plan hashes,
+3. Choose **Revise design** to reopen saved settings or request an agent
+   revision, then generate and inspect a new draft. The old build stays in
+   history, but its acceptance identity and generation authorization cannot be
+   reused. Manuscript approval and frozen text/metadata remain unchanged.
+4. **Approve edition and finish** approves the current design and exact DOCX
+   together and records the proposal/candidate/manifest/plan hashes. It
    finalizes the editable-document edition and publishes `document.docx`,
    `docx-build.json` and `design-proposal.json` alongside the accepted Markdown.
    The work's versioned library and run page retain checksum-verified download
@@ -423,7 +444,7 @@ without a page reload, and that failed submissions preserve the current draft.
 
 The embedded interior-design browser check uses the real API/engine with a
 scripted skill, not a live model. It covers form edits, desktop/390 px mobile
-layout, exact-plan authorization, real DOCX candidate download, final editable
+layout, single-action exact-plan generation, real DOCX candidate download, final editable
 acceptance and the accepted work-library download:
 
 ```text

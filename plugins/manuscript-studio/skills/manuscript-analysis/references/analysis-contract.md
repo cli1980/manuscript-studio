@@ -1,8 +1,8 @@
 # Manuscript Analysis Handoff Contract
 
-Contract: `manuscript-analysis/1`.
+Contract: `manuscript-analysis/2`.
 
-This is the initial document-based contract, not an executable JSON story-graph
+This remains a document-based story contract, not an executable JSON story-graph
 schema. The migrated ledger Markdown owns story records; the review Markdown
 owns the domain approval audit; review JSON is only interface state. Do not
 create an independent `understanding.json` authority until that future contract
@@ -85,6 +85,15 @@ unapproved claims and unresolved interpretations. It is neither query prose nor
 a submission-ready synopsis. The profile records manuscript-derived genre,
 voice, themes, structure and readership hypotheses, not external market claims.
 Neither file overrides source evidence, the ledger or shared metadata.
+
+The profile also proposes **BISAC Subjects, Thema Subjects, Keywords and Place
+Subjects** under the [subject-proposals contract](subject-proposals.md).
+All four groups need an explicit assessment, including a reason when no
+supported proposal is possible. Preserve source evidence, confidence and
+rationale, vocabulary edition/reference for codes, and real/historical/
+fictional/unspecified place distinctions. These are discovery suggestions,
+not metadata edits or author approval. The host mirrors them in the frozen
+JSON envelope for display and handoff; this is not a second story model.
 
 ## Readiness and human review
 

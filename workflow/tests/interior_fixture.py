@@ -7,7 +7,7 @@ from workflow.src.engine import module_at
 from workflow.src.storage import digest
 
 
-def proposal_for(work_path, *, vendor_profile=None, format_target=None):
+def proposal_for(work_path, *, vendor_profile=None, format_target=None, include_openings=False):
     work_path = Path(work_path)
     work = json.loads(work_path.read_bytes())
     revision = work["preparation"]["current_revision"]
@@ -36,6 +36,24 @@ def proposal_for(work_path, *, vendor_profile=None, format_target=None):
                          "paragraph_index": paragraph["paragraph_index"],
                          "paragraph_sha256": paragraph["paragraph_sha256"]}],
     }]
+    if include_openings:
+        # Synthetic title-only fixtures, not a production literary classifier.
+        for unit in manifest["chapters"]:
+            entries = validator.paragraphs((manifest_path.parent / unit["file"]).read_bytes())
+            if unit["role"] not in ("chapter", "standalone") or not entries or entries[0]["kind"] != "heading":
+                continue
+            entry = entries[0]
+            proposal["opening_structure"].append({
+                "id": "opening-" + unit["chapter_id"], "kind": "chapter", "chapter_ids": [unit["chapter_id"]],
+                "number": None, "sources": [{
+                    "chapter_id": unit["chapter_id"], "chapter_sha256": unit["sha256"],
+                    "paragraph_index": entry["paragraph_index"], "paragraph_sha256": entry["paragraph_sha256"],
+                    "components": [{"kind": "title", "text": validator.openings_helper().plain_text(entry["markdown"])}],
+                }],
+            })
+        claimed = {(s["chapter_id"], s["paragraph_index"]) for o in proposal["opening_structure"] for s in o["sources"]}
+        proposal["text_roles"] = [role for role in proposal["text_roles"]
+                                  if not any((s["chapter_id"], s["paragraph_index"]) in claimed for s in role["occurrences"])]
     proposal["evidence"][0].update(
         locator=f"revisions/{revision}/{chapter['file']}", sha256=chapter["sha256"])
     target = proposal["edition_brief"]["production_targets"][0]

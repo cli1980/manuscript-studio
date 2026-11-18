@@ -6,10 +6,13 @@ import asyncio
 import base64
 import binascii
 import contextlib
+import io
 import json
 import mimetypes
 import re
 import uuid
+import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 from urllib.parse import quote
 
@@ -38,6 +41,21 @@ HEADERS = {
                                 "form-action 'self'"),
 }
 KEEPALIVE = 15  # Seconds between stream pings, so a client can tell a quiet feed from a dead one.
+
+
+def docx_disposition(data, version, *, build_id=None):
+    # Use the delivered document's frozen title, not subsequently edited work metadata.
+    with zipfile.ZipFile(io.BytesIO(data)) as document:
+        core = ET.fromstring(document.read("docProps/core.xml"))
+    title = core.findtext("{http://purl.org/dc/elements/1.1/}title") or "Manuscript"
+    title = re.sub(r'[<>:"/\\|?*\x00-\x1f\x7f]', "_", title)
+    title = re.sub(r"\s+", " ", title).strip(" .") or "Manuscript"
+    # Bound the UTF-8 filename size while retaining multilingual titles.
+    title = title.encode("utf-8")[:160].decode("utf-8", errors="ignore").rstrip(" .")
+    suffix = f"-candidate-{build_id[:8]}" if build_id else ""
+    name = f"{title}-{version}{suffix}.docx"
+    fallback = re.sub(r'[^\w.\- ]', "_", name.encode("ascii", "replace").decode("ascii"))
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(name, safe='')}"
 
 
 def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", timeout=900, owner=None,
@@ -342,18 +360,22 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         return act(svc, run_id, lambda: svc.review_interior_design(
             run_id, payload["gate_id"], payload["expected_sha256"], action,
             spec=payload.get("spec"), answers=payload.get("answers"), feedback=payload.get("feedback")),
-            resume=action in ("request-revision", "approve"))
+            resume=action in ("request-revision", "generate"))
 
-    @app.post("/api/runs/{run_id}/docx/authorize")
-    def authorize_docx(run_id: str, payload: dict = Body(...), svc: WorkflowService = Depends(service)):
-        return act(svc, run_id, lambda: svc.authorize_docx(
-            run_id, payload["gate_id"], payload["expected_plan_sha256"]))
+    @app.post("/api/runs/{run_id}/interior-design/reopen")
+    def reopen_interior_design(run_id: str, payload: dict = Body(...), svc: WorkflowService = Depends(service)):
+        return act(svc, run_id, lambda: svc.reopen_interior_design(
+            run_id, payload["acceptance_id"], payload["expected_docx_sha256"]), resume=False)
 
     @app.get("/api/runs/{run_id}/docx/{build_id}")
     def download_docx(run_id: str, build_id: str, svc: WorkflowService = Depends(service)):
         data, sha = svc.docx_candidate(run_id, build_id)
+        with svc.open_run(run_id) as engine:
+            state = engine.state()
+            version = engine.accepted_version(state)
+            candidate_id = None if engine.finalized(state) else build_id
         return Response(data, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        headers={"Content-Disposition": 'attachment; filename="manuscript.docx"',
+                        headers={"Content-Disposition": docx_disposition(data, version, build_id=candidate_id),
                                  "X-Content-SHA256": sha})
 
     @app.get("/api/works/{work_id}/docx/{publication_id}")
@@ -362,9 +384,11 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         record = library.publication(publication_id)
         if not record["artifact"].endswith("/document.docx"):
             raise ValueError("This publication is not an editable-DOCX delivery.")
-        return Response(library.read(record),
+        data = library.read(record)
+        version = Path(record["artifact"]).parent.name
+        return Response(data,
                         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        headers={"Content-Disposition": 'attachment; filename="manuscript.docx"',
+                        headers={"Content-Disposition": docx_disposition(data, version),
                                  "X-Content-SHA256": record["sha256"]})
 
     @app.post("/api/runs/{run_id}/metadata")
@@ -464,6 +488,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                     "analysis": ({key: analysis[key] for key in (
                         "analysis_id", "approval_status", "qualifications", "coverage_verification",
                         "current_text_matches_source")} | {
+                            "subject_proposals": analysis.get("subject_proposals"),
                             "documents": documents(engine, analysis["artifacts"].values())} if analysis else None),
                     "metadata_fields": svc.metadata_fields(),
                     "source": chapter_content(engine, state, source_id) if source_id else None}

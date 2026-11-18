@@ -26,6 +26,17 @@ def analyze(request):
         entry["status"] = "read"
         text = (root / unit["path"]).read_text(encoding="utf-8")
         entry["evidence"] = [{"locator": "Synthetic fixture prefix", "quote": text[:200]}]
+    evidence = {"chapter_id": manifest["coverage"][-1]["chapter_id"],
+                **manifest["coverage"][-1]["evidence"][0]}
+    for key, label in (("bisac_subjects", "Fiction / General"), ("thema_subjects", "Fiction: general and literary"),
+                       ("keywords", "returning home")):
+        item = {"label": label, "confidence": "low", "rationale": "Synthetic source-grounded proposal, not metadata.",
+                "evidence": [evidence]}
+        if key != "keywords":
+            item.update(code=None, scheme_version=None, reference=None)
+        manifest["subject_proposals"][key] = {"status": "proposed", "reason": None, "items": [item]}
+    manifest["subject_proposals"]["place_subjects"] = {
+        "status": "undetermined", "reason": "No specific geographic setting established by this fixture.", "items": []}
     path = root / context["manifest_path"]
     path.write_bytes((json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode())
     result = dict(outcome="completed", message="Synthetic analysis package saved.",

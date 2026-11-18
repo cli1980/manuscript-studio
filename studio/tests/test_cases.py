@@ -6,7 +6,10 @@ import os
 import re
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
+
+from lxml import etree
 
 from workflow.src.storage import digest
 from .runner import FIXTURES, CaseRunner, load_cases
@@ -70,7 +73,19 @@ class StudioCaseTests(unittest.TestCase):
         import time
 
         from playwright.sync_api import expect
-        from .test_web import Scripted, interior_design
+        from .test_web import Scripted, context, interior_design
+
+        def design_with_saved_case(request):
+            result = interior_design(request, include_openings=True)
+            if context(request)["stage"] == "interior-design":
+                path = Path(request.cwd) / result["state_path"]
+                proposal = json.loads(path.read_bytes())
+                proposal["design_system"]["chapter_openings"]["number_template"] = "Chapter {number}"
+                proposal["design_system"]["part_openings"]["heading"].update(
+                    layout="separated", number_format="arabic", number_case="upper",
+                    number_template="Part the {number}")
+                path.write_bytes((json.dumps(proposal, ensure_ascii=False) + "\n").encode("utf-8"))
+            return result
 
         def check(page, origin):
             errors = []
@@ -129,10 +144,116 @@ class StudioCaseTests(unittest.TestCase):
             expect(page.get_by_label("Print vendor", exact=True)).to_have_count(0)
             expect(page.get_by_role("button", name="Update target and revise proposal", exact=True)).to_have_count(0)
             expect(page.get_by_text("Print vendor: IngramSpark / Hardcover", exact=True)).to_be_visible()
+            expect(page.get_by_role("button", name="Save specification changes")).to_be_disabled()
+            chapters = page.locator("summary").filter(has_text=re.compile("^Chapter openings$")).locator("..")
+            parts = page.locator("summary").filter(has_text=re.compile("^Part openings$")).locator("..")
+            expect(chapters).to_be_visible()
+            expect(parts).to_be_visible()
+            saved_format = parts.get_by_label("Number format", exact=True)
+            expect(saved_format).to_have_value("arabic:upper")
+            expect(saved_format.locator("option:checked")).to_have_text("Saved setting: PART THE 4 (Arabic / upper label)")
+            expect(page.get_by_role("button", name="Save specification changes")).to_be_disabled()
+            chapter_styles = chapters.locator("summary").filter(has_text=re.compile("^Chapter styles$")).locator("..")
+            chapter_styles.locator("summary").first.click()
+            heading = chapter_styles.locator("summary").filter(has_text=re.compile("^chapter heading$")).locator("..")
+            expect(heading).to_have_count(1)
+            expect(page.locator("summary").filter(has_text=re.compile("^chapter heading$"))).to_have_count(1)
+            heading.locator("summary").first.click()
+            heading.locator("summary").filter(has_text=re.compile("^font$")).click()
+            heading.get_by_label("size pt preset", exact=True).select_option("14")
+            expect(parts.locator("summary").filter(has_text=re.compile("^Part styles$"))).to_have_count(1)
+            expect(page.get_by_label("chapter start", exact=True)).to_have_count(0)
+            expect(chapters.get_by_label("layout", exact=True)).to_have_value('"preserve-source"')
+            expect(page.get_by_label("number case", exact=True)).to_have_count(0)
+            navigation = page.locator("summary").filter(has_text=re.compile("^navigation$")).locator("..")
+            navigation.locator("summary").first.click()
+            navigation.get_by_label("Include table of contents", exact=True).check()
+            expect(navigation.get_by_label("TOC depth", exact=True)).to_have_value("1")
+            expect(navigation.get_by_label("TOC heading", exact=True)).to_have_value("Contents")
+            expect(navigation.get_by_label("TOC heading style", exact=True)).to_have_value("toc-heading")
+            navigation.get_by_label("TOC heading", exact=True).fill("Table of Contents")
+            toc_styles = navigation.locator("summary").filter(has_text=re.compile("^TOC styles$")).locator("..")
+            toc_styles.locator("summary").first.click()
+            toc_heading = toc_styles.locator("summary").filter(has_text=re.compile("^toc heading$")).locator("..")
+            expect(toc_heading).to_have_count(1)
+            toc_heading.locator("summary").first.click()
+            toc_heading.locator("summary").filter(has_text=re.compile("^font$")).click()
+            toc_heading.get_by_label("size pt preset", exact=True).select_option("24")
+            navigation.get_by_label("TOC depth", exact=True).select_option("2")
+            navigation.get_by_label("TOC entry style", exact=True).select_option("chapter-heading")
+            toc_target = current["gate"]["design_review"]["proposal"]["basis"]["preparation"]["units"][1]["chapter_id"]
+            navigation.get_by_label("TOC location", exact=True).select_option(toc_target)
+            navigation.get_by_label("Include table of contents", exact=True).uncheck()
+            expect(navigation.get_by_label("TOC depth", exact=True)).to_have_count(0)
+            navigation.get_by_label("Include table of contents", exact=True).check()
+            navigation.get_by_label("TOC depth", exact=True).select_option("2")
+            expect(chapters.get_by_label("Number format", exact=True)).to_have_count(0)
+            chapters.get_by_label("layout", exact=True).select_option('"separated"')
+            number_format = chapters.get_by_label("Number format", exact=True)
+            expect(number_format).to_have_value("source")
+            expect(chapters.get_by_label("Number label preset", exact=True)).to_have_count(0)
+            self.assertEqual(number_format.locator("option").count(), 10)
+            for option in ("arabic:title", "roman-upper:title", "roman-lower:title",
+                           "words:lower", "words:title", "words:upper",
+                           "ordinal-words:lower", "ordinal-words:title", "ordinal-words:upper"):
+                number_format.select_option(option)
+                expect(chapters.get_by_label("Number label preset", exact=True)).to_have_count(0)
+            number_format.select_option("source")
+            expect(chapters.get_by_label("Number label preset", exact=True)).to_have_count(0)
+            number_format.select_option("roman-lower:title")
+            expect(number_format.locator('option[value="arabic:title"]')).to_have_text("Chapter 4 (Arabic)")
+            expect(number_format.locator('option[value="roman-upper:title"]')).to_have_text("Chapter IV (Roman uppercase)")
+            expect(number_format.locator('option[value="words:upper"]')).to_have_text("CHAPTER FOUR (Words uppercase)")
+            chapters.get_by_role("checkbox", name="Number only", exact=True).check()
+            expect(chapters.get_by_role("checkbox", name="Number only", exact=True)).to_have_count(1)
+            expect(chapters.get_by_label("layout", exact=True)).to_have_value('"separated"')
+            expect(number_format).to_have_value("roman-lower:title")
+            expect(number_format.locator('option[value="roman-upper:title"]')).to_have_text("IV (Roman uppercase)")
+            expect(chapters.get_by_label("Number label preset", exact=True)).to_have_count(0)
+            chapters.get_by_role("checkbox", name="Number only", exact=True).uncheck()
+            expect(number_format.locator('option[value="roman-upper:title"]')).to_have_text("Chapter IV (Roman uppercase)")
+            expect(chapters.get_by_label("number template", exact=True)).to_have_count(0)
+            chapters.get_by_label("Opening ornament preset", exact=True).select_option('"* * *"')
+            chapters.get_by_label("ornament position", exact=True).select_option('"between"')
+            chapters.get_by_label("layout", exact=True).select_option('"combined"')
+            expect(chapters.get_by_label("ornament position", exact=True)).to_have_value('"below"')
+            chapters.get_by_label("Opening offset (mm) preset", exact=True).select_option("20")
+            expect(chapters.get_by_label("combined style", exact=True)).to_have_value("chapter-heading")
+            parts.get_by_label("placement", exact=True).select_option('"with-first-chapter"')
+            parts.get_by_label("layout", exact=True).select_option('"separated"')
+            parts.get_by_label("Number format", exact=True).select_option("ordinal-words:upper")
+            expect(parts.get_by_label("Number format", exact=True).locator('option:checked')).to_have_text("PART THE FOURTH (Ordinal uppercase)")
+            expect(parts.get_by_label("Number format", exact=True).locator('option[value="roman-upper:title"]')).to_have_text("Part the IV (Roman uppercase)")
+            expect(parts.get_by_label("Number label preset", exact=True)).to_have_count(0)
+            parts.get_by_role("checkbox", name="Number only", exact=True).check()
+            parts.get_by_role("checkbox", name="Number only", exact=True).uncheck()
+            expect(parts.get_by_label("Number format", exact=True).locator('option:checked')).to_have_text("PART THE FOURTH (Ordinal uppercase)")
+            parts.get_by_role("checkbox", name="Number only", exact=True).check()
+            expect(parts.get_by_label("Number format", exact=True).locator('option:checked')).to_have_text("FOURTH (Ordinal uppercase)")
+            expect(page.get_by_label("number case", exact=True)).to_have_count(0)
+            expect(page.get_by_text("Approval stops before production.", exact=False)).to_have_count(0)
             targets = page.locator("summary").filter(has_text=re.compile(r"^production targets \(1\)$")).locator("..")
             targets.locator("summary").first.click()
             edition = targets.locator("summary").filter(has_text=re.compile("^Output 1$")).locator("..")
             edition.locator("summary").first.click()
+            paper = edition.get_by_label("Paper stock preset", exact=True)
+            self.assertCountEqual(paper.locator("option").all_text_contents(),
+                                  ["Not selected", "White", "Groundwood", "Cream", "Custom value..."])
+            paper.select_option("custom")
+            edition.get_by_label("Custom Paper stock", exact=True).fill("Author-specified stock")
+            paper.select_option("null")
+            expect(paper).to_have_value("null")
+            paper.select_option('"creme"')
+            trim = page.get_by_label("Trim size preset", exact=True)
+            expect(trim).to_have_count(1)
+            expect(edition.get_by_label("Trim size preset", exact=True)).to_have_count(0)
+            trim.first.select_option("5.5x8.5")
+            expect(page.get_by_text("Current trim: 5.5 x 8.5 in", exact=False).first).to_be_visible()
+            trim.first.select_option("custom")
+            page.get_by_label("Custom trim width mm", exact=True).first.fill("137")
+            page.get_by_label("Custom trim height mm", exact=True).first.fill("216")
+            expect(page.get_by_text("Current trim: 5.394 x 8.504 in", exact=False).first).to_be_visible()
+            trim.first.select_option("5.5x8.5")
             for name in ("id", "vendor id", "binding", "vendor profile ref"):
                 expect(edition.get_by_label(name, exact=True)).to_have_count(0)
                 expect(edition.get_by_label(name + " (read-only)", exact=True)).to_have_count(0)
@@ -147,7 +268,8 @@ class StudioCaseTests(unittest.TestCase):
             furniture.locator("summary").first.click()
             defaults = furniture.locator("summary").filter(has_text=re.compile("^default section$")).locator("..")
             defaults.locator("summary").first.click()
-            defaults.get_by_label("header distance mm", exact=True).fill("11")
+            defaults.get_by_label("header distance mm preset", exact=True).select_option("custom")
+            defaults.get_by_label("Custom header distance mm", exact=True).fill("11")
             expect(defaults.get_by_label("header distance mm in inches", exact=True)).to_have_text("(0.433 in)")
 
             def part(group, variant):
@@ -185,18 +307,24 @@ class StudioCaseTests(unittest.TestCase):
             overrides.get_by_role("button", name="Add section override", exact=True).click()
             expect(overrides.get_by_role("button", name="Remove section override", exact=True)).to_have_count(2)
             overrides.get_by_role("button", name="Remove section override", exact=True).last.click()
-            page.locator("summary").filter(has_text=re.compile(r"^styles \(4\)$")).click()
+            page.locator("summary").filter(has_text=re.compile(r"^Text styles \(3\)$")).click()
             body = page.locator("summary").filter(has_text=re.compile("^body$")).locator("..")
             body.locator("summary").first.click()
             body.locator("summary").filter(has_text=re.compile("^font$")).click()
-            body.get_by_label("family", exact=True).fill("Garamond")
-            body.get_by_label("size pt", exact=True).fill("12")
-            gutter = page.get_by_label("gutter mm", exact=True)
+            body.get_by_label("family preset", exact=True).select_option('"Garamond"')
+            body.get_by_label("size pt preset", exact=True).select_option("12")
+            body.get_by_label("Line spacing preset", exact=True).select_option(label="1.3 x lines")
+            gutter = page.get_by_label("gutter mm preset", exact=True)
             expect(gutter).to_have_value("3")
             expect(page.get_by_label("gutter mm in inches", exact=True)).to_have_text("(0.118 in)")
-            gutter.fill("5")
+            gutter.select_option("custom")
+            page.get_by_label("Custom gutter mm", exact=True).fill("4.5")
+            expect(page.get_by_label("gutter mm in inches", exact=True)).to_have_text("(0.177 in)")
+            gutter.select_option("5")
             expect(page.get_by_label("gutter mm in inches", exact=True)).to_have_text("(0.197 in)")
-            expect(page.get_by_role("button", name="Approve this design specification")).to_be_disabled()
+            page.get_by_label("Section starts", exact=True).select_option("recto")
+            expect(navigation.get_by_label("TOC start", exact=True)).to_have_value("recto")
+            expect(page.get_by_role("button", name="Generate draft DOCX")).to_be_disabled()
             with page.expect_response(lambda r: r.url == run_url + "/interior-design") as saved:
                 page.get_by_role("button", name="Save specification changes").click()
             self.assertTrue(saved.value.ok, saved.value.text())
@@ -207,7 +335,45 @@ class StudioCaseTests(unittest.TestCase):
             self.assertEqual(current["gate"]["design_review"]["proposal"]["design_system"]["page"]["gutter_mm"], 5)
             self.assertEqual(current["gate"]["design_review"]["proposal"]["design_system"]["styles"][0]["font"]["family"], "Garamond")
             self.assertEqual(current["gate"]["design_review"]["proposal"]["design_system"]["styles"][0]["font"]["size_pt"], 12)
+            self.assertEqual(next(style for style in current["gate"]["design_review"]["proposal"]["design_system"]["styles"]
+                                  if style["id"] == "chapter-heading")["font"]["size_pt"], 14)
             self.assertEqual(current["gate"]["design_review"]["proposal"]["revision"], 2)
+            self.assertEqual(current["gate"]["design_review"]["proposal"]["opening_structure"][0]["number"], None)
+            opening_design = current["gate"]["design_review"]["proposal"]["design_system"]
+            self.assertEqual(opening_design["page"]["section_start"], "recto")
+            self.assertEqual(opening_design["page"]["blank_policy"], "allow-declared-recto-blanks")
+            self.assertEqual(opening_design["chapter_openings"]["start"], "recto")
+            self.assertEqual(opening_design["part_openings"]["heading"]["start"], "recto")
+            self.assertEqual(opening_design["navigation"]["toc_start"], "recto")
+            self.assertEqual(opening_design["navigation"]["include_toc"], True)
+            self.assertEqual(opening_design["navigation"]["toc_depth"], 2)
+            self.assertEqual(opening_design["navigation"]["toc_style_id"], "chapter-heading")
+            self.assertEqual(opening_design["navigation"]["toc_before_chapter_id"], toc_target)
+            self.assertEqual(opening_design["navigation"]["toc_heading"], "Table of Contents")
+            self.assertEqual(opening_design["navigation"]["toc_heading_style_id"], "toc-heading")
+            self.assertEqual(next(s for s in opening_design["styles"] if s["id"] == "toc-heading")["font"]["size_pt"], 24)
+            self.assertEqual(opening_design["chapter_openings"]["layout"], "combined")
+            self.assertEqual(opening_design["chapter_openings"]["number_format"], "roman-lower")
+            self.assertEqual(opening_design["chapter_openings"]["number_case"], "title")
+            self.assertEqual(opening_design["chapter_openings"]["number_template"], "Chapter {number}")
+            self.assertEqual(opening_design["chapter_openings"]["offset_mm"], 20)
+            self.assertEqual(opening_design["chapter_openings"]["ornament_text"], "* * *")
+            self.assertEqual(opening_design["part_openings"]["placement"], "with-first-chapter")
+            self.assertEqual(opening_design["part_openings"]["heading"]["number_format"], "ordinal-words")
+            self.assertEqual(opening_design["part_openings"]["heading"]["number_case"], "upper")
+            self.assertEqual(opening_design["part_openings"]["heading"]["number_template"], "{number}")
+            expect(parts.get_by_role("checkbox", name="Number only", exact=True)).to_be_checked()
+            expect(chapters.get_by_role("checkbox", name="Number only", exact=True)).not_to_be_checked()
+            expect(number_format).to_have_value("roman-lower:title")
+            expect(parts.get_by_label("Number format", exact=True)).to_have_value("ordinal-words:upper")
+            brief = current["gate"]["design_review"]["proposal"]["edition_brief"]
+            design = current["gate"]["design_review"]["proposal"]["design_system"]
+            self.assertEqual(brief["production_targets"][0]["paper"], "creme")
+            self.assertEqual(brief["production_targets"][0]["trim_mm"], {"width": 139.7, "height": 215.9})
+            self.assertEqual(design["page"]["trim_mm"], brief["production_targets"][0]["trim_mm"])
+            self.assertEqual(design["styles"][0]["font"]["line_spacing"], {"mode": "multiple", "value": 1.3})
+            expect(paper).to_have_value('"creme"')
+            expect(trim.first).to_have_value("5.5x8.5")
             saved_furniture = current["gate"]["design_review"]["proposal"]["design_system"]["furniture"]
             self.assertEqual(saved_furniture["default_section"]["header_distance_mm"], 11)
             self.assertEqual(saved_furniture["default_section"]["headers"]["default"]["paragraphs"][0]["content"],
@@ -231,36 +397,70 @@ class StudioCaseTests(unittest.TestCase):
                 if question["blocking"]:
                     page.get_by_label(question["question"], exact=False).fill("Keep the proposed new-page openings.")
             with page.expect_response(lambda r: r.url == run_url + "/interior-design") as approved:
-                page.get_by_role("button", name="Approve this design specification").click()
+                page.get_by_role("button", name="Generate draft DOCX").click()
             self.assertTrue(approved.value.ok, approved.value.text())
-            expect(page.get_by_role("heading", name="DOCX generation plan", exact=True)).to_be_visible()
+            expect(page.get_by_role("heading", name="Approve design and DOCX", exact=True)).to_be_visible()
             current = page.request.get(run_url).json()
             # Preparation, shared analysis and design; native production adds no agent turn.
-            self.assertEqual((current["status"], current["finalized"], current["attempts"]), ("WAITING_FOR_HUMAN", False, 3))
-            self.assertEqual(current["gate"]["kind"], "docx_generation_review")
+            self.assertEqual((current["status"], current["finalized"], current["attempts"]), ("WAITING_FOR_ACCEPTANCE", False, 3))
+            self.assertIsNone(current.get("gate"))
+            self.assertEqual(current["production"]["summary"]["toc"]["depth"], 2)
+            expect(page.get_by_text("TOC field: update in Word", exact=True)).to_be_visible()
             self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 391)
-            generate = page.get_by_role("button", name="Generate editable DOCX", exact=True)
-            expect(generate).to_be_disabled()
-            page.get_by_label("I authorize this exact editable-DOCX generation plan.").check()
-            with page.expect_response(lambda r: r.url == run_url + "/docx/authorize") as authorized:
-                generate.click()
-            self.assertTrue(authorized.value.ok, authorized.value.text())
-            expect(page.get_by_role("heading", name="Accept editable DOCX", exact=True)).to_be_visible()
+            expect(page.get_by_label("I authorize this exact editable-DOCX generation plan.")).to_have_count(0)
+            expect(page.get_by_role("button", name="Generate draft DOCX", exact=True)).to_have_count(0)
+            expect(page.get_by_role("heading", name="Approve design and DOCX", exact=True)).to_be_visible()
             self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 391)
             with page.expect_download() as downloaded:
                 page.get_by_role("link", name="Download DOCX candidate", exact=True).click()
-            self.assertEqual(downloaded.value.suggested_filename, "manuscript.docx")
+            self.assertRegex(downloaded.value.suggested_filename, r"^Story-v001-candidate-[0-9a-f]{8}\.docx$")
             current = page.request.get(run_url).json()
             self.assertEqual(digest(Path(downloaded.value.path()).read_bytes()), current["production"]["docx"]["sha256"])
+            with zipfile.ZipFile(downloaded.value.path()) as package:
+                self.assertIn(b'TOC \\o "1-2"', package.read("word/document.xml"))
+                self.assertIn(b"bf_toc_scope", package.read("word/document.xml"))
+                self.assertIn(b"Table of Contents", package.read("word/document.xml"))
+                self.assertIn(b"BF.toc-heading", package.read("word/document.xml"))
+                self.assertIn(b"Update this field in Word", package.read("word/document.xml"))
+                xml = etree.fromstring(package.read("word/document.xml"))
+                ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+                sections = xml.xpath("//w:sectPr", namespaces=ns)
+                self.assertGreaterEqual(len(sections), 3)
+                self.assertTrue(all(section.find("w:type", ns).get("{%s}val" % ns["w"]) == "oddPage" for section in sections))
             expect(page.get_by_text("No PDF, rendered-page review", exact=False).first).to_be_visible()
+            old_candidate = current
+            with page.expect_response(lambda r: r.url == run_url + "/interior-design/reopen") as reopened:
+                page.get_by_role("button", name="Revise design", exact=True).click()
+            self.assertTrue(reopened.value.ok, reopened.value.text())
+            expect(page.get_by_role("heading", name="Review formatting specification")).to_be_visible()
+            navigation.locator("summary").first.click()
+            expect(navigation.get_by_label("TOC heading", exact=True)).to_have_value("Table of Contents")
+            expect(navigation.get_by_label("TOC heading style", exact=True)).to_have_value("toc-heading")
+            expect(gutter).to_have_value("5")
+            gutter.select_option("6.35")
+            with page.expect_response(lambda r: r.url == run_url + "/interior-design") as resaved:
+                page.get_by_role("button", name="Save specification changes").click()
+            self.assertTrue(resaved.value.ok, resaved.value.text())
+            expect(page.get_by_text(re.compile("Specification revision 3"))).to_be_visible()
+            revised = page.request.get(run_url).json()
+            for question in revised["gate"]["design_review"]["proposal"]["questions"]:
+                if question["blocking"]:
+                    page.get_by_label(question["question"], exact=False).fill("Keep the proposed new-page openings.")
+            page.get_by_role("button", name="Generate draft DOCX", exact=True).click()
+            expect(page.get_by_role("heading", name="Approve design and DOCX", exact=True)).to_be_visible()
+            current = page.request.get(run_url).json()
+            self.assertNotEqual(current["acceptance"]["acceptance_id"], old_candidate["acceptance"]["acceptance_id"])
+            self.assertNotEqual(current["production"]["id"], old_candidate["production"]["id"])
+            self.assertNotEqual(current["production"]["docx"]["sha256"], old_candidate["production"]["docx"]["sha256"])
+            self.assertEqual(current["attempts"], old_candidate["attempts"])  # Settings-only regeneration uses no agent.
             if evidence:
                 page.screenshot(path=str(Path(evidence) / "docx-candidate-mobile.png"), full_page=True)
             page.set_viewport_size({"width": 1280, "height": 900})
             if evidence:
                 page.screenshot(path=str(Path(evidence) / "docx-candidate-desktop.png"), full_page=True)
-            page.get_by_label("I understand that accepting finalizes this run.").check()
+            page.get_by_label("I inspected this DOCX and approve its design; this finalizes the run.").check()
             with page.expect_response(lambda r: r.url == run_url + "/accept") as accepted:
-                page.get_by_role("button", name="Accept DOCX and finish", exact=True).click()
+                page.get_by_role("button", name="Approve edition and finish", exact=True).click()
             self.assertTrue(accepted.value.ok, accepted.value.text())
             expect(page.get_by_role("link", name="Download accepted DOCX", exact=True)).to_be_visible()
             page.goto(origin + "/#/works/" + work["id"])
@@ -274,12 +474,14 @@ class StudioCaseTests(unittest.TestCase):
             page.goto(origin + "/#/works/" + work["id"])
             with page.expect_download() as published:
                 page.get_by_role("link", name="literary-editing/v001/document.docx", exact=True).click()
+            self.assertEqual(published.value.suggested_filename, "Story-v001.docx")
             self.assertEqual(digest(Path(published.value.path()).read_bytes()), current["production"]["docx"]["sha256"])
             self.assertEqual(errors, [])
             self.assertEqual(server_errors, [])
 
         with tempfile.TemporaryDirectory() as temporary:
-            self.run_in_browser({}, Path(temporary) / "server", lambda: Scripted(interior_design), check=check)
+            self.run_in_browser({}, Path(temporary) / "server",
+                                lambda: Scripted(design_with_saved_case), check=check)
 
     @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build the frontend and set STUDIO_BROWSER=1.")
     def test_works_creation_requires_a_compatible_model_and_supports_legacy_execution(self):
@@ -771,6 +973,20 @@ class StudioCaseTests(unittest.TestCase):
                     self.assertEqual(len(ready["analysis"]["documents"]), 5)
                     analysis = page.get_by_role("region", name="Manuscript analysis")
                     expect(analysis.get_by_text("Shared source reading", exact=False)).to_be_visible()
+                    subjects = analysis.get_by_role("region", name="Subject proposals")
+                    expect(subjects).to_be_visible()
+                    for title in ("BISAC Subjects", "Thema Subjects", "Keywords", "Place Subjects"):
+                        subjects.locator("summary").filter(has_text=re.compile("^" + title)).click()
+                    expect(subjects.get_by_text("Fiction / General", exact=True)).to_be_visible()
+                    expect(subjects.get_by_text("Fiction: general and literary", exact=True)).to_be_visible()
+                    expect(subjects.get_by_text("Code unresolved", exact=True)).to_have_count(2)
+                    expect(subjects.get_by_text("returning home", exact=True)).to_be_visible()
+                    expect(subjects.get_by_text("No specific geographic setting established", exact=False)).to_be_visible()
+                    subjects.locator("summary").filter(has_text="Source evidence").first.click()
+                    expect(subjects.locator("blockquote").first).to_be_visible()
+                    expect(subjects.locator("button, input, textarea")).to_have_count(0)
+                    self.assertEqual(page.request.get(run_url + "/overview").json()["metadata"]["metadata"]["keywords"],
+                                     original["metadata"]["metadata"]["keywords"])
                     expect(analysis.get_by_role("tab")).to_have_count(5)
                     expect(analysis.locator("input, textarea")).to_have_count(0)
                     analysis.get_by_role("tab", name="Synopsis", exact=True).click()

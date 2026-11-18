@@ -21,7 +21,7 @@ Also write `analysis-manifest.json` at the supplied `manifest_path`. This is a
 thin machine-checkable binding/coverage envelope, not a competing story model.
 The Markdown ledger remains the narrative authority. Its required fields are:
 
-- `contract`: `manuscript-analysis/1`; `analysis_id`: the host-provided identity.
+- `contract`: `manuscript-analysis/2`; `analysis_id`: the host-provided identity.
 - `basis`: copy the exact work/source identity, preparation revision/manifest
   path/hash, language, and ordered unit IDs, roles, paths and hashes.
 - `metadata_record_revision`: the consumed shared metadata revision.
@@ -33,13 +33,23 @@ The Markdown ledger remains the narrative authority. Its required fields are:
 - `evidence_audit`: `passed` only after the skill's full evidence audit.
 - `qualifications`: a list of unresolved interpretations and limitations, empty
   only when there are none. Qualified ambiguity need not become an invented fact.
+- `subject_proposals`: all four groups from the
+  [subject-proposals contract](subject-proposals.md) and supplied JSON schema:
+  `bisac_subjects`, `thema_subjects`, `keywords`, `place_subjects`. Replace every
+  pending template status with `proposed`, `not_applicable` or `undetermined`.
+  Include exact prepared-unit evidence, confidence and rationale per item;
+  non-proposed groups require a reason. Codes need their vocabulary
+  edition/reference, or stay null when not checked. Mirror the suggestions in
+  the reading profile, keeping official code labels intact.
 - `artifacts`: the five host-provided keys/paths, each with the SHA-256 of the
   actual saved Markdown bytes. Do not substitute source or consumer files.
 
 Return `completed` with `state_path=manifest_path` and other output/gate paths
 null. The host checks coverage identities/order, source quotes, artifact
 presence/hashes and source freshness, then freezes snapshots. These deterministic
-checks do not prove full reading, semantic correctness or literary quality.
+checks do not prove full reading, semantic correctness, vocabulary membership
+or literary quality. Subject suggestions do not edit confirmed metadata,
+overwrite existing keywords or introduce another approval gate.
 
 ## Direct downstream context
 

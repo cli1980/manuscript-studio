@@ -1,6 +1,6 @@
 {
-  "contract": "interior-design-proposal/4",
-  "schema_version": 4,
+  "contract": "interior-design-proposal/5",
+  "schema_version": 5,
   "proposal_id": "example-interior",
   "revision": 1,
   "status": "proposed",
@@ -72,8 +72,26 @@
       "margins_mm": {"inside": 19, "outside": 17, "top": 19, "bottom": 22},
       "gutter_mm": 3,
       "bleed_mm": 0,
-      "chapter_start": "new-page",
       "blank_policy": "no-added-blanks"
+    },
+    "chapter_openings": {
+      "layout": "preserve-source", "start": "new-page", "number_format": "source",
+      "number_template": "Chapter {number}", "number_case": "title", "separator": ". ", "offset_mm": 0,
+      "combined_style_id": "chapter-heading", "number_style_id": "chapter-heading",
+      "title_style_id": "chapter-heading", "subtitle_style_id": "chapter-heading",
+      "ornament_style_id": "chapter-heading", "opening_body_style_id": null,
+      "ornament_text": null, "ornament_position": "below", "suppress_opening_furniture": false
+    },
+    "part_openings": {
+      "placement": "dedicated-page",
+      "heading": {
+        "layout": "preserve-source", "start": "new-page", "number_format": "source",
+        "number_template": "Part {number}", "number_case": "title", "separator": ". ", "offset_mm": 0,
+        "combined_style_id": "chapter-heading", "number_style_id": "chapter-heading",
+        "title_style_id": "chapter-heading", "subtitle_style_id": "chapter-heading",
+        "ornament_style_id": "chapter-heading", "opening_body_style_id": null,
+        "ornament_text": null, "ornament_position": "below", "suppress_opening_furniture": true
+      }
     },
     "styles": [
       {
@@ -211,6 +229,7 @@
       "body_numbering_start": 1
     }
   },
+  "opening_structure": [],
   "text_roles": [
     {
       "id": "main-narrative",
@@ -271,7 +290,7 @@
   "questions": [
     {
       "id": "chapter-openings",
-      "path": "/design_system/page/chapter_start",
+      "path": "/design_system/chapter_openings/start",
       "kind": "design-choice",
       "question": "Keep the proposed new-page chapter openings, or request right-hand chapter openings?",
       "options": ["Keep new-page openings", "Request right-hand openings"],

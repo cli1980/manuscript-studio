@@ -45,9 +45,6 @@ export function GatePanel({ run, perform, inViewer = false, comments, commentLab
   if (run.status === "WAITING_FOR_ACCEPTANCE" && run.acceptance) return <Acceptance run={run} perform={perform} />;
   if (run.status !== "WAITING_FOR_HUMAN" || !run.gate) return null;
   const gate = run.gate;
-  if (gate.kind === "docx_generation_review") {
-    return <DocxDelivery key={gate.id} run={run} perform={perform} />;
-  }
   const copy = ui.decisionCopy(gate, run.viewer_target);
   const reply: Reply = (text, sent) => perform(async () => {
     const next = await api.reply(run.id, gate.id, text);
@@ -176,7 +173,7 @@ function Acceptance({ run, perform }: { run: RunDetail; perform: Perform }) {
       <h2>{acceptance.title}</h2>
       {run.production?.docx && <DocxDelivery run={run} perform={perform} />}
       <p>{run.production?.docx
-        ? "Download and inspect the DOCX candidate before accepting. Acceptance records its exact hash."
+        ? "Download and inspect the draft DOCX. Approve its design and exact document together, or revise and regenerate."
         : "Read every chapter before accepting:"}</p>
       <ul>{acceptance.outputs.map((o) => <li key={o.chapter_id}>{workflowUI(run.workflow).hasChapterViewer
         ? <a href={`#/runs/${run.id}/chapters/${encodeURIComponent(o.chapter_id)}`}>{o.chapter_id}</a> : o.chapter_id}{" "}
@@ -184,7 +181,9 @@ function Acceptance({ run, perform }: { run: RunDetail; perform: Perform }) {
       <div className="banner warn">{acceptance.finalizes && <strong>This is irreversible. </strong>}{acceptance.notice}</div>
       {acceptance.vendor_profiles && <VendorTargetFields profiles={acceptance.vendor_profiles} target={target} onChange={setTarget} />}
       <label><input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} />{" "}
-        {acceptance.finalizes ? "I understand that accepting finalizes this run." : "I approve this manuscript for formatting."}</label>
+        {acceptance.finalizes ? run.production?.docx
+          ? "I inspected this DOCX and approve its design; this finalizes the run."
+          : "I understand that accepting finalizes this run." : "I approve this manuscript for formatting."}</label>
       <p><button className={acceptance.finalizes ? "danger" : "primary"} disabled={!understood}
         onClick={() => perform(() => api.accept(run.id, acceptance.acceptance_id, true,
           acceptance.vendor_profiles ? target : undefined))}>{acceptance.action_label}</button></p>

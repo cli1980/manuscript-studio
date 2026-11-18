@@ -22,6 +22,355 @@ their remaining work is not removed by this priority change.
 
 ## Cross-cutting decisions
 
+- **Analysis subject proposals (owner direction, 2026-11-18):**
+  Manuscript analysis proposes BISAC Subjects, Thema Subjects, Keywords and
+  Place Subjects after the whole-source reading. Contract `/2` binds all four
+  assessments, rationale, confidence and exact prepared-unit evidence in the
+  frozen manifest, with a human-readable reading-profile counterpart. Codes
+  require vocabulary edition/reference or stay unresolved; geographic subjects
+  distinguish real, historical, fictional and unspecified places. Studio
+  Overview exposes the suggestions without writing shared metadata, replacing
+  confirmed keywords, publishing subjects or adding an approval gate. Existing
+  analysis revisions/runs and DOCX work remain unchanged. Implementation is on
+  `feature/analysis-subject-proposals`. Verification passes: 123 workflow/
+  execution/subject checks, 29 API/case checks (10 expected browser skips),
+  frontend build and the real desktop/mobile Overview case for both editing
+  and translation. Tests cover missing/unassessed groups, forged source quotes,
+  code syntax/edition/reference requirements, duplicate terms, place kinds,
+  frozen handoff/export, and preservation of confirmed keywords and metadata.
+  Vocabulary membership and literary judgment are not machine certified.
+  Backed up all three live run databases, reloaded Studio with workers idle
+  and the existing 1800-second timeout, then verified legacy analysis views
+  and accepted downloads. All run states/revisions/event histories, approvals,
+  document bytes and 2,008 protected file hashes remain unchanged. No analysis
+  rerun, run migration, generation or approval occurred; proposals apply to new
+  analyses. These checks and deployment evidence apply to the local source
+  change set; nothing pushed.
+
+- **Formatter review follow-ups (2026-11-18):**
+  Two reproduced P2 edge cases remain open in the current formatter pin.
+  Separated opening elements that reuse heading styles can inherit outline
+  levels and duplicate TOC entries; non-entry elements need explicit exclusion.
+  An explicit chapter-opening record on a prepared `standalone` unit still uses
+  the generic section start instead of the chapter start, so a requested recto
+  start can become new-page. Both need fixes and regression coverage. Existing
+  passing tests do not cover these cases; no fix or accepted-document change
+  is claimed by the current source commit.
+
+- **Accepted-run download names (owner direction, 2026-11-18):**
+  The run-page accepted DOCX download uses the same frozen-title/version
+  filename as the published Works download, without candidate/build suffix.
+  Unaccepted draft downloads keep the candidate marker and short build ID.
+  This changes only Content-Disposition, not artifact bytes or acceptance.
+  Both focused lifecycle/Unicode/safety filename checks pass, including
+  identical formal run/Works headers, unchanged bytes/checksum and frozen
+  filenames after metadata edits. Reloaded the backend with workers idle;
+  both live accepted-run downloads now return
+  `MEMORY AGAINST OBLIVION-v001.docx`. All run states, event histories,
+  approvals and 2,008 protected file hashes remain unchanged. No generation,
+  approval, engine migration or frontend change was needed.
+
+- **Single-action draft generation (owner direction, 2026-11-18):**
+  C50 removes the intermediate plan-authorization gate. Generate draft DOCX
+  authorizes private exact-plan preparation and checked generation together;
+  final design/exact-document approval remains after candidate inspection.
+  Plan summaries remain read-only audit evidence. Changed inputs/plan bindings
+  stop the build, and retries retain the sealed plan. Existing two-step
+  candidates keep their original receipts rather than acquire inferred
+  approvals. Verification passes: 120 workflow/execution checks, API/case
+  coverage (28 checks, 10 expected browser skips, corrected focused API
+  lifecycle rerun passes), frontend build and the real API/engine
+  desktop/mobile single-click generate, download, revise and regenerate flow.
+  Tests cover changed-plan and substituted-request refusal, interrupted
+  retry/reopen, no inferred design approval and old receipt verification.
+  Design-document commit `953e231` is local; nothing pushed. Backed up all
+  live run databases and frontend, then reloaded with workers idle and the
+  existing 1800-second timeout. Audited the current candidate's host-engine
+  update without changing any other domain state. The same candidate bytes,
+  acceptance identity, original generation receipts, saved design, manuscript
+  approval and other runs remain unchanged; all 1,903 protected file hashes
+  match. Live read-only desktop/mobile and checksum-verified download checks
+  pass, with no authorization checkbox, browser errors or writes.
+  No live generation, approval, publication or stage restart occurred.
+
+- **Visible TOC field and recto sections (owner direction, 2026-11-18):**
+  C49 adds native 0.4 visible TOC update prompts and a dedicated TOC section
+  with numbering/furniture continuation. Optional TOC and front/back matter
+  starts join existing chapter/part start controls; Studio offers an all-recto
+  preset that explicitly permits required blanks. The latest two archived
+  candidates contain TOC XML but empty displayed results; the saved design
+  had new-page starts and disallowed added blanks. Verification passes:
+  40 isolated clean-wheel native tests, 29 proposal tests, 28 API/case checks
+  with 10 expected skips, frontend build and real API/engine desktop/mobile
+  save/generate/regenerate checks. Generated synthetic DOCX checks assert
+  actual oddPage section XML, visible field prompt and numbering continuation.
+  Native commit `66854bb` is local; nothing pushed. Backed up live databases,
+  pins and frontend; loaded native 0.4 and the tested UI with workers idle.
+  Audited the optional schema pin update and used normal design review Save
+  for the owner's requested revision 4: chapters, parts, TOC and other sections
+  recto, with declared blank permission. Read-only planning of the exact saved
+  inputs resolves 23 recto sections; no DOCX was generated or authorized.
+  All 1,883 protected file hashes, manuscript, prior receipts/approvals,
+  archived candidates and other runs remain unchanged. Live desktop/mobile
+  checks show saved recto controls without browser errors or writes. Word
+  still updates the TOC and calculates physical pagination.
+
+- **Configurable TOC heading and style (owner direction, 2026-11-18):**
+  C48/R30 adds an optional single-line heading defaulting to Contents and a
+  dedicated named style, independent of TOC entries. Navigation exposes text,
+  style choice and full typography/paragraph controls. Default Body-family
+  18 pt bold centered heading starts the TOC page, stays with the field and is
+  excluded from entries. Missing defaults are local edits requiring explicit
+  save, not a rewrite of saved proposals or candidates. Verification passes:
+  38 native tests from an isolated clean wheel, 29 proposal tests, 28 API/case
+  checks with 10 expected skips, frontend build and the dedicated real API/engine
+  desktop/mobile heading/style edit, save, reload and regenerate flow. Schema
+  and validator-rule parity pass. Native commit `bd99de8` is local; the parent
+  gitlink and host changes remain uncommitted, with nothing pushed.
+  The owner reopened design review while checks ran. Backed up that current
+  state, skill pin and frontend; loaded native 0.3.1 and the tested UI with
+  workers idle and the existing 1800-second server timeout. An audited optional
+  interior-design schema pin update exposes the controls without rewriting
+  the saved draft or gate. All 1,875 protected file hashes and every domain
+  state value except skill pins remain unchanged, including manuscript,
+  approvals, receipts and archived candidates; other runs are unchanged.
+  Read-only live desktop/mobile checks confirm Contents, one independent
+  18 pt heading style editor, required explicit Save and no browser errors,
+  writes or run-state changes. No live DOCX generation, approval or stage
+  restart occurred.
+
+- **Native Word TOC field (owner direction, 2026-11-18):**
+  C47/R29 adds native 0.3 unpopulated Word TOC fields, body-only heading scope,
+  declared placement and TOC 1..6 style definitions. Optional `/5` navigation
+  insertion/style references default before the first part/chapter and Body.
+  Studio pairs inclusion/depth and exposes placement/style options, then
+  describes the effective field and manual Word update in plan/candidate view.
+  No source edits, cached entries/pages or automatic pagination are introduced.
+  Verification passes: 37 native tests from a clean wheel outside the checkout,
+  118 workflow/execution tests, 29 proposal tests, 28 API/case checks with 10
+  expected skips, frontend build and the dedicated real API/engine desktop/mobile
+  TOC save/generate/regenerate flow. Schema and validator-rule parity pass
+  (native loader paths intentionally differ). Tool commit `50d0389` is local;
+  parent gitlink changes remain uncommitted, with nothing pushed.
+  Backed up live databases, interior-design pin and frontend, confirmed idle
+  workers, installed native 0.3 and restarted Studio on the same workspace/port
+  with the 1800-second timeout. Recorded an audited engine/interior-design pin
+  update for the blocked run, then used normal production retry/advance only.
+  That deployment left it at exact-plan authorization with TOC enabled at depth 1, before
+  chapter-01, based on Body. No stage restart, design reauthoring, DOCX build or
+  approval occurred. All 1,869 protected file hashes, manuscript/design data,
+  human receipts, editing history and other run states/events are unchanged.
+  Read-only live desktop/mobile checks confirm the TOC plan/update notice,
+  required human authorization and no browser errors, writes or state changes.
+
+- **Remove redundant Number label editor (owner direction, 2026-11-18):**
+  C46 removes the editor from chapter/part opening controls, leaving Number
+  format and one Number only checkbox. Existing template data is retained
+  internally without rewriting saved wording or changing the `/5` contract,
+  producer, source text or approvals. Checkbox behavior remains as in C45.
+  The frontend build and real API/engine desktop/mobile formatting case pass,
+  including no preset/raw template editor, checkbox toggling, preservation
+  and restoration of supplied custom wording, save/reload and regeneration.
+  The tested UI is live without a server restart. Read-only desktop/mobile
+  checks confirm both editor removals and working format/checkbox controls,
+  no browser errors or writes, and unchanged run revisions, state and event
+  hashes for all three runs. Saved proposals and approvals remain unchanged.
+
+- **Number only checkbox (owner direction, 2026-11-18):**
+  C45 adds one checkbox to each chapter/part number-format control, mapped to
+  the existing `{number}` label template. Checked shows bare 4/IV/Four samples;
+  unchecked shows the chosen wording. This supersedes C44's contextual prefix
+  for number-only illustrations. The checkbox does not hide the opening title
+  or change layout. The redundant label-preset option is removed; source format
+  disables the checkbox to preserve source labels. No schema, producer or
+  saved-setting changes occur on load. The frontend build and real API/engine
+  desktop/mobile case pass, including custom-wording restoration, unchanged
+  layout/format, one checked and one unchecked saved state, reload and
+  generation/regeneration. The tested UI is live without a server restart.
+  Read-only live desktop/mobile checks confirm one checkbox in each opening
+  group, Source-disabled behavior, exact bare/labeled samples and custom
+  restoration, with no browser errors or writes. All three run revisions,
+  state and event hashes remain unchanged; saved designs, manuscripts and
+  approvals are not modified.
+
+- **Recognizable number-format examples (owner direction, 2026-11-18):**
+  C44 puts examples such as Chapter IV, Chapter 4 and Part IV first in the
+  dropdown, followed by the format description. Examples follow the selected
+  label wording and case. Number only uses a contextual Chapter/Part example
+  with a note that the document still prints just the number. Source handling,
+  selection values, schema, production and saved settings are unchanged.
+  The frontend build and real API/engine desktop/mobile formatting case pass,
+  including custom label examples, Number only, saved non-preset pairs and
+  save/reload/regeneration. The tested UI is live without a server restart.
+  Read-only desktop/mobile verification confirms contextual Chapter/Part and
+  custom-label examples, no browser errors or writes, and unchanged run
+  revisions, state and event hashes for all three runs. Saved choices,
+  manuscripts and approvals remain unchanged.
+
+- **Unified number format selector (owner direction, 2026-11-18):**
+  C43 folds capitalization into the chapter/part Number format choices and
+  removes the separate Number case control. Number label remains independent;
+  source-mode visibility is unchanged. Selection writes the existing `/5`
+  format/case fields without changing saved settings on load; non-preset saved
+  combinations have an explicit preserved option. Native 0.2.1 fixes title
+  casing of Roman numbers (IV/iv, not Iv) while leaving template capitalization
+  intact. The frontend build, 29 proposal checks and 31 native checks pass,
+  including the clean-wheel API/CLI suite outside the checkout. The real
+  API/engine desktop/mobile case verifies a saved non-preset pair without
+  normalizing it, every standard choice, separate labels, saved chapter/part
+  fields, reload and native generation/regeneration.
+  Tool changes are committed locally as `3db5afa`; the parent working-tree
+  gitlink is updated. Formatter 0.2.1 and the tested UI are live on the same
+  workspace/port after an idle restart with the 1800-second timeout. No stage
+  was restarted. A read-only live desktop/mobile check confirms both combined
+  selectors and separate labels, no browser errors or writes, unchanged
+  revisions/state/events for all three runs and all 1,879 protected file
+  hashes unchanged. No saved proposal, manuscript, approval or candidate was
+  rewritten; no real DOCX generation or approval was performed.
+
+- **Opening-style umbrella controls (owner direction, 2026-11-18):**
+  [C42](tools/formattor/docs/interior-design-and-production.md#ornaments-and-form-organization)
+  groups style mappings and complete chapter typography/paragraph editors under
+  Chapter Openings / Chapter styles, with analogous Part styles under Part
+  Openings. General styles remain under Text styles; shared styles have one
+  editor and canonical array ordering is preserved. No schema, producer,
+  manuscript, proposal or approval changes are required.
+  The frontend build and real API/engine desktop/mobile formatting case pass,
+  including a nested chapter-font edit saved alongside body-font/layout edits,
+  reloading, native generation and regeneration. The tested static UI is live
+  without a server restart. Read-only desktop/mobile verification confirms all
+  22 live style editors occur once, with chapter and part definitions nested
+  under their opening groups, no browser errors or writes, and unchanged run
+  revisions, state and event hashes for all three existing runs. The saved
+  proposal, manuscript and approvals remain unchanged.
+
+- **Chapter/part opening implementation (owner direction, 2026-11-18):**
+  implement C40/R27/R28, then rerun only interior design on the latest run
+  `f51a0cff-c582-4166-8ea5-eafd5de1817d`. It is idle at unapproved design review,
+  with no generated DOCX. Preserve manuscript approval, text, metadata and
+  editing history; archive prior design evidence and do not approve the result.
+  Implemented: proposal `/5`, source-bound whole-paragraph heading
+  components, named fiction styles, chapter/part opening settings, native
+  composition and verification, preset-first controls and regression checks.
+  Part groups reference explicit chapter members; prepared structural roles
+  remain unchanged. Combined headings use one paragraph style; separate
+  headings use independent styles. Numbering/ornaments are edition presentation,
+  not source edits. No image, drop-cap, PDF or rendered-fit support is implied.
+  Native 0.2 implementation and C41 design documentation are committed locally
+  as tool commit `7480be7` (parent gitlink updated in the working tree).
+  Verification: 30 standalone checks pass from a clean wheel outside the
+  checkout, 118 workflow/execution checks pass, 18 API/case checks pass with
+  10 expected browser/live skips, and the dedicated real API/engine browser
+  formatting flow passes on desktop/mobile. Opening modes, labels, ornaments,
+  offsets, style references and part placement survive save/reload and
+  regeneration. Source/emphasis, both same-unit and preceding-unit parts,
+  furniture scope, prologue hierarchy and invalid bindings are covered.
+  The isolated frontend build, 29 authoring-contract checks,
+  contract/helper/example parity and LF/whitespace checks pass.
+  Deployed on the existing Studio workspace/port with the 1800-second timeout.
+  Backed up the run/database/pins/frontend, recorded an audited engine/pin
+  update, and used the normal interior-design stage restart. The old proposal
+  is archived. The rerun reached unapproved design review with `/5`, 22 styles,
+  20 source-bound chapter openings, no invented parts and no blocking questions.
+  It preserves source heading presentation by default, with a 20 mm opening
+  offset and independent chapter/part styles and controls. Unapproved native
+  planning of the actual proposal passes; no generation request, DOCX build or
+  final approval was made. All 1,672 protected file hashes, manuscript approval,
+  prior receipts and editing history are unchanged; completed/cancelled run
+  states and event histories remain unchanged. Parent changes remain uncommitted;
+  nothing pushed.
+
+- **Chapter/part opening research proposal (owner direction, 2026-11-18):**
+  [IDP-C40/R27/R28](tools/formattor/docs/interior-design-and-production.md#fiction-chapter-and-part-openings-research-proposal-idp-c40)
+  records required combined/shared-style, separated number/title and title-only
+  chapter layouts, plus dedicated part styles and shared-page versus dedicated
+  part openings. Visually inspected seven opening pages across six linked
+  public publisher/author/educational sample PDFs; the design records sources,
+  exact viewer pages, edition caveats and observed versus proposed behavior.
+  Additional recommendations cover number-only/preserve-source modes, explicit
+  source-bound heading components and part membership, separate opening and
+  scene-break ornaments, source datelines/epigraphs, opening paragraphs and
+  one authoritative break/furniture policy. Layout controls, style catalog,
+  schema and renderer extensions were research-only at that checkpoint;
+  the authorized implementation is tracked above under C41.
+  Tool-owned documentation is committed locally as `390b590`, updating the
+  parent's working-tree gitlink; documentation whitespace/LF checks pass.
+  No manuscript, saved proposal, run, server or production capability changed.
+
+- **Post-DOCX design approval (owner direction, 2026-11-18):** implemented
+  [IDP-C39/R26](tools/formattor/docs/interior-design-and-production.md#post-docx-design-approval-idp-c39).
+  The editable design form requests a draft, not design approval; exact-plan
+  generation authorization remains separate. After downloading the candidate,
+  users can reopen saved settings or request agent changes, then regenerate
+  without restarting editing. Old candidates remain in history, but their
+  download/acceptance eligibility and generation authorization cannot transfer
+  to the new build. Final edition acceptance is the sole design approval and
+  binds the current proposal, plan, manifest and DOCX identities. Publication
+  failure cannot leave a design approval behind. Frozen manuscript approval,
+  metadata and completed editions are unchanged.
+  Implementation: [workflow](workflow/src/interior.py),
+  [native generation](workflow/src/production.py),
+  [candidate UI](studio/frontend/src/views/DocxDelivery.tsx).
+  Verification: 146 workflow/execution/API/browser checks pass with one
+  expected live-model skip, including desktop/mobile revision/regeneration,
+  stale-candidate rejection, publication-failure recovery and final combined
+  approval. The frontend was tested separately while live analysis ran, then
+  deployed only after all workers were idle. The existing unapproved design
+  review received a backed-up, audited engine-only update; its proposal and
+  approvals were retained without generating or approving anything. All 1,625
+  protected workspace/library object hashes and completed/cancelled run states
+  remain unchanged. Live browser verification confirms the new draft action
+  and no unsaved edits. The tool-owned design decision is pinned by local
+  submodule documentation commit `3662b31`; no producer API change or push.
+
+- **Title/version DOCX download names (2026-11-18):** download names now use
+  the frozen title inside the verified DOCX and the workflow edition version.
+  Accepted downloads use `Title-v001.docx`; candidates add `-candidate-<build-id>`
+  so provisional builds are distinguishable. Unicode titles use UTF-8 response
+  headers with an ASCII fallback; unsafe characters and excessive length are
+  sanitized. Later shared-title edits do not rename historical editions.
+  Verified the focused API, Unicode/safety and desktop/mobile browser checks;
+  idle Studio reload preserved both run states/event histories and downloaded
+  DOCX bytes. Internal library artifact names remain unchanged.
+
+- **Preset-first design form (owner direction, 2026-11-18):** prefer selectable
+  options where meaningful; request exact values only for custom choices.
+  Trim is edited only under Design System / Page, not duplicated under Edition
+  Brief; the output-target trim remains synchronized in the saved contract.
+  Verified frontend build and desktop/mobile browser save/regeneration flow,
+  including a single trim selector and no selector in the output target.
+  Implemented common trim sizes with explicit width/height units and synchronized
+  page/output geometry; paper choices come from the pinned vendor profile and
+  retain unselected/custom states without implying manufacturing availability.
+  Fonts/fallbacks, type sizes, line spacing, paragraph spacing, indentation,
+  margins/gutter, colors and heading levels have suggested choices plus custom
+  entry. Existing enum/boolean/style/section selectors remain authoritative;
+  existing custom values are preserved, and opening the form changes nothing.
+  Corrected the obsolete production warning: editable DOCX has separate plan
+  authorization; PDF/rendering/font verification/print certification remain
+  unavailable. This is a GUI projection, not a new interchange schema or the
+  proposed fiction style catalog. Verified build and 27 API/browser/case checks
+  with one expected live-model skip, including desktop/mobile, preset/custom
+  entry, optional paper and saved page/output trim consistency.
+
+- **Formatting structural-role handoff fix (2026-11-17):** corrected the
+  interior-design context merge so snapshot provenance such as `edited_chapter`
+  cannot overwrite prepared `front_matter`, `chapter`, `back_matter` or
+  `standalone` roles. Frozen edited-file paths/hashes remain the formatting
+  inputs; original preparation and approved text are not rewritten. Two
+  regressions reproduced the collision before the fix; all 19 focused
+  formatting/design/DOCX lifecycle checks pass afterward, including preparing
+  exact accepted edited text from the supplied unit roles. The blocked live
+  run was backed up and received an audited engine-identity correction limited
+  to this projection fix, retaining its manuscript approval, prior receipts
+  and frozen sources, then resumed through normal Retry. Its separate design
+  preparation now validates as ready, with all 22 unit identities, structural
+  roles and content hashes matching the approved frozen text; all 53 original
+  source/preparation/manuscript files remain unchanged. Proposal authoring
+  completed and reached design review; no design or generated document was
+  approved as part of recovery. This does
+  not implement the discussed fiction style catalog or numbering options.
+
 - **Analysis execution-budget trial (owner direction, 2026-11-17):** try a
   30-minute active-turn budget before implementing recoverable analysis jobs.
   Studio was restarted on the same workspace with `--timeout 1800`, then the

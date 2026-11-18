@@ -70,7 +70,7 @@ export function RunView({ runId }: { runId: string }) {
       </div>
       {run.error && <div className="error"><strong>Last error:</strong> {run.error}</div>}
       {run.worker.error && <div className="error"><strong>Worker:</strong> {run.worker.error}</div>}
-      {run.production && run.status !== "WAITING_FOR_ACCEPTANCE" && run.gate?.kind !== "docx_generation_review"
+      {run.production && run.status !== "WAITING_FOR_ACCEPTANCE"
         && <DocxDelivery key={run.production.id} run={run} perform={perform} />}
       {run.document_path && <p>Formatted document: <span className="mono">{run.document_path}</span></p>}
       {run.handed_off_work && <div className="banner final">The formatted document is now a work of its own, ready for further

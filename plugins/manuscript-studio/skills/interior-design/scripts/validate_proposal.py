@@ -46,17 +46,17 @@ def load_json(path):
                       parse_float=number, parse_constant=invalid)
 
 
-def check_values(value):
+def check_values(value, *, allow_blank=False):
     if isinstance(value, float):
         require(math.isfinite(value), "JSON numbers must be finite.")
     elif isinstance(value, str):
-        require(value.strip(), "Text values must not be blank.")
+        require(allow_blank or value.strip(), "Text values must not be blank.")
     elif isinstance(value, list):
         for child in value:
             check_values(child)
     elif isinstance(value, dict):
-        for child in value.values():
-            check_values(child)
+        for key, child in value.items():
+            check_values(child, allow_blank=key == "separator" or key == "text" and value.get("kind") == "literal")
 
 
 def index(items, label):
@@ -86,6 +86,15 @@ def pointer(document, path):
 def vendor_profiles():
     path = SKILL / "scripts/vendor_profiles.py"
     spec = importlib.util.spec_from_file_location("_interior_vendor_profiles", path)
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    return helper
+
+
+@functools.lru_cache(maxsize=1)
+def openings_helper():
+    path = SKILL / "scripts/openings.py"
+    spec = importlib.util.spec_from_file_location("_interior_openings", path)
     helper = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(helper)
     return helper
@@ -249,6 +258,7 @@ def check_preparation(proposal, work_path):
             data_by_unit[chapter_id] = prepared_unit(helper, manifest_path, units[chapter_id])
         return data_by_unit[chapter_id]
 
+    openings_helper().validate(proposal, catalogs={key: paragraphs(unit_data(key)) for key in units}, units=units)
     catalogs = {}
     for role in proposal["text_roles"]:
         for occurrence in role["occurrences"]:
@@ -320,6 +330,7 @@ def validate(proposal, *, work_path=None):
     require(unit_ids == basis["scope"]["chapter_ids"], "Unit order must match prepared scope.")
     require(len(set(unit_ids)) == len(unit_ids), "Duplicate prepared unit ID.")
     units = {unit["chapter_id"]: unit["sha256"] for unit in basis["units"]}
+    openings_helper().validate(proposal)
     require(sum(style["role"] == "body" for style in styles.values()) == 1,
             "Exactly one body style is required.")
     levels = []
@@ -349,9 +360,18 @@ def validate(proposal, *, work_path=None):
     margins, trim = page["margins_mm"], page["trim_mm"]
     require(margins["inside"] + margins["outside"] + page["gutter_mm"] < trim["width"]
             and margins["top"] + margins["bottom"] < trim["height"], "Margins leave no text area.")
-    require(page["chapter_start"] != "recto" or page["blank_policy"] != "no-added-blanks",
-            "Recto openings require an explicit permitted-blank policy.")
     navigation = proposal["design_system"]["navigation"]
+    require(not (page.get("section_start") == "recto"
+                 or navigation["include_toc"] and navigation.get("toc_start") == "recto")
+            or page["blank_policy"] == "allow-declared-recto-blanks",
+            "Recto section/TOC starts require the declared-recto blank policy.")
+    require(navigation.get("toc_style_id") is None or navigation["toc_style_id"] in styles, "Unknown TOC style.")
+    require(navigation.get("toc_heading_style_id") is None or navigation["toc_heading_style_id"] in styles,
+            "Unknown TOC heading style.")
+    require(not any(c in navigation.get("toc_heading", "Contents") for c in "\t\r\n"),
+            "TOC heading must be single-line plain text.")
+    require(navigation.get("toc_before_chapter_id") is None or navigation["toc_before_chapter_id"] in units,
+            "Unknown TOC insertion unit.")
     require(navigation["include_toc"] == (navigation["toc_depth"] > 0), "TOC inclusion/depth mismatch.")
     require((navigation["scene_break"] == "ornament") == (navigation["ornament"] is not None),
             "Ornament must be specified only for ornamental scene breaks.")

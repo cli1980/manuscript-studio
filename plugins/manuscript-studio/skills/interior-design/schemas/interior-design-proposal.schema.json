@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://manuscript-studio.example/schemas/interior-design-proposal/4",
+  "$id": "https://manuscript-studio.example/schemas/interior-design-proposal/5",
   "title": "Interior design proposal",
   "description": "An evidence-bound standalone or reusable design proposal, never approval or production QA.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["contract", "schema_version", "proposal_id", "revision", "status", "basis", "vendor_profile", "reading", "author_preferences", "edition_brief", "design_system", "text_roles", "evidence", "recommendations", "questions"],
+  "required": ["contract", "schema_version", "proposal_id", "revision", "status", "basis", "vendor_profile", "reading", "author_preferences", "edition_brief", "design_system", "opening_structure", "text_roles", "evidence", "recommendations", "questions"],
   "properties": {
-    "contract": {"const": "interior-design-proposal/4"},
-    "schema_version": {"const": 4},
+    "contract": {"const": "interior-design-proposal/5"},
+    "schema_version": {"const": 5},
     "proposal_id": {"$ref": "#/$defs/id"},
     "revision": {"type": "integer", "minimum": 1},
     "status": {"const": "proposed"},
@@ -128,11 +128,11 @@
     },
     "design_system": {
       "type": "object", "additionalProperties": false,
-      "required": ["page", "styles", "navigation", "furniture"],
+      "required": ["page", "styles", "chapter_openings", "part_openings", "navigation", "furniture"],
       "properties": {
         "page": {
           "type": "object", "additionalProperties": false,
-          "required": ["trim_mm", "margins_mm", "gutter_mm", "bleed_mm", "chapter_start", "blank_policy"],
+          "required": ["trim_mm", "margins_mm", "gutter_mm", "bleed_mm", "blank_policy"],
           "properties": {
             "trim_mm": {"$ref": "#/$defs/size"},
             "margins_mm": {
@@ -147,17 +147,30 @@
             },
             "gutter_mm": {"type": "number", "minimum": 0},
             "bleed_mm": {"type": "number", "minimum": 0},
-            "chapter_start": {"enum": ["new-page", "recto", "continuous"]},
-            "blank_policy": {"enum": ["no-added-blanks", "allow-declared-recto-blanks", "preserve-source"]}
+            "blank_policy": {"enum": ["no-added-blanks", "allow-declared-recto-blanks", "preserve-source"]},
+            "section_start": {"enum": ["new-page", "recto"], "default": "new-page"}
           }
         },
         "styles": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/style"}},
+        "chapter_openings": {"$ref": "#/$defs/opening_settings"},
+        "part_openings": {
+          "type": "object", "additionalProperties": false, "required": ["placement", "heading"],
+          "properties": {
+            "placement": {"enum": ["dedicated-page", "with-first-chapter"]},
+            "heading": {"$ref": "#/$defs/opening_settings"}
+          }
+        },
         "navigation": {
           "type": "object", "additionalProperties": false,
           "required": ["include_toc", "toc_depth", "scene_break", "ornament"],
           "properties": {
             "include_toc": {"type": "boolean"},
             "toc_depth": {"type": "integer", "minimum": 0, "maximum": 6},
+            "toc_start": {"enum": ["new-page", "recto"], "default": "new-page"},
+            "toc_before_chapter_id": {"$ref": "#/$defs/nullable_text"},
+            "toc_style_id": {"$ref": "#/$defs/nullable_text"},
+            "toc_heading": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S", "default": "Contents"},
+            "toc_heading_style_id": {"$ref": "#/$defs/nullable_text"},
             "scene_break": {"enum": ["preserve-source", "blank-space", "ornament"]},
             "ornament": {"$ref": "#/$defs/nullable_text"}
           }
@@ -181,6 +194,43 @@
             },
             "front_matter_numbering": {"enum": ["none", "roman", "arabic"]},
             "body_numbering_start": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    },
+    "opening_structure": {
+      "description": "Source-bound chapter and part headings. Whole source paragraphs are decomposed into exact semantic components, never inline style roles.",
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "kind", "chapter_ids", "number", "sources"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "kind": {"enum": ["chapter", "part"]},
+          "chapter_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+          "number": {"type": ["integer", "null"], "minimum": 1, "maximum": 3999},
+          "sources": {
+            "type": "array", "minItems": 1,
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["chapter_id", "chapter_sha256", "paragraph_index", "paragraph_sha256", "components"],
+              "properties": {
+                "chapter_id": {"$ref": "#/$defs/id"},
+                "chapter_sha256": {"$ref": "#/$defs/hash"},
+                "paragraph_index": {"type": "integer", "minimum": 1},
+                "paragraph_sha256": {"$ref": "#/$defs/hash"},
+                "components": {
+                  "type": "array", "minItems": 1,
+                  "items": {
+                    "type": "object", "additionalProperties": false, "required": ["kind", "text"],
+                    "properties": {
+                      "kind": {"enum": ["number", "title", "subtitle", "literal"]},
+                      "text": {"type": "string", "minLength": 1}
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -247,6 +297,30 @@
     }
   },
   "$defs": {
+    "opening_settings": {
+      "type": "object", "additionalProperties": false,
+      "required": ["layout", "start", "number_format", "number_template", "number_case", "separator", "offset_mm",
+                   "combined_style_id", "number_style_id", "title_style_id", "subtitle_style_id", "ornament_style_id",
+                   "opening_body_style_id", "ornament_text", "ornament_position", "suppress_opening_furniture"],
+      "properties": {
+        "layout": {"enum": ["preserve-source", "combined", "separated", "title-only", "number-only"]},
+        "start": {"enum": ["new-page", "recto", "continuous"]},
+        "number_format": {"enum": ["source", "arabic", "roman-upper", "roman-lower", "words", "ordinal-words"]},
+        "number_template": {"type": "string", "minLength": 1},
+        "number_case": {"enum": ["lower", "title", "upper"]},
+        "separator": {"type": "string", "minLength": 1},
+        "offset_mm": {"type": "number", "minimum": 0, "maximum": 150},
+        "combined_style_id": {"$ref": "#/$defs/id"},
+        "number_style_id": {"$ref": "#/$defs/id"},
+        "title_style_id": {"$ref": "#/$defs/id"},
+        "subtitle_style_id": {"$ref": "#/$defs/id"},
+        "ornament_style_id": {"$ref": "#/$defs/id"},
+        "opening_body_style_id": {"anyOf": [{"$ref": "#/$defs/id"}, {"type": "null"}]},
+        "ornament_text": {"$ref": "#/$defs/nullable_text"},
+        "ornament_position": {"enum": ["above", "between", "below"]},
+        "suppress_opening_furniture": {"type": "boolean"}
+      }
+    },
     "id": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
     "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "text": {"type": "string", "minLength": 1},
@@ -276,7 +350,10 @@
       "required": ["id", "role", "heading_level", "font", "paragraph"],
       "properties": {
         "id": {"$ref": "#/$defs/id"},
-        "role": {"enum": ["body", "title", "heading", "quote", "special", "header", "footer", "folio", "toc"]},
+        "role": {"enum": ["body", "title", "heading", "quote", "special", "header", "footer", "folio", "toc",
+                          "book-title", "book-subtitle", "author-credit", "part-heading", "part-number", "part-title",
+                          "part-subtitle", "part-ornament", "chapter-heading", "chapter-number", "chapter-title",
+                          "chapter-subtitle", "chapter-ornament", "opening-body", "dateline", "epigraph", "epigraph-attribution"]},
         "heading_level": {"type": ["integer", "null"], "minimum": 1, "maximum": 6},
         "font": {
           "type": "object", "additionalProperties": false,

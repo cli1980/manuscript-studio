@@ -9,8 +9,11 @@ import json
 import tempfile
 import time
 import unittest
+import xml.etree.ElementTree as ET
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import unquote
 
 from workflow.src.execution import ExecutionProfile
 from workflow.src.service import WorkflowService
@@ -262,13 +265,13 @@ def translate(request):
                   output_path=write(cwd, "translation/translated_english/story.md", "He came back.\n"))
 
 
-def interior_design(request):
+def interior_design(request, *, include_openings=False):
     ctx = context(request)
     if ctx["stage"] == "prepare":
         return prepare(request)
     if ctx["stage"] != "interior-design":
         raise AssertionError("The zero-pass design route must not call an editorial agent.")
-    proposal = ctx["previous_proposal"] or proposal_for(Path(request.cwd) / ctx["work_record"])
+    proposal = ctx["previous_proposal"] or proposal_for(Path(request.cwd) / ctx["work_record"], include_openings=include_openings)
     if ctx["previous_proposal"]:
         proposal["revision"] += 1
     apply_target(proposal, ctx["vendor_profile"], ctx["format_target"])
@@ -515,6 +518,35 @@ class WebApiTests(unittest.TestCase):
                 self.assertEqual(renamed_overview["source"]["prepared_text"], front_text)
                 self.assertEqual(renamed.json()["viewer_target"], {"kind": "overview"})
 
+    def test_overview_exposes_frozen_subject_proposals_without_changing_metadata(self):
+        for template in ("literary-editing-v1", "literary-translation-v1"):
+            with self.subTest(template=template):
+                work = self.post("/api/works", {"upload": {"name": "story.md",
+                    "data": base64.b64encode(self.source.read_bytes()).decode()}, "manuscript_language": "zh"})
+                self.assertEqual(work.status_code, 200, work.text)
+                created = self.post("/api/runs", {
+                    "template_id": template, "work_id": work.json()["id"], "start": False})
+                self.assertEqual(created.status_code, 200, created.text)
+                run_id = created.json()["id"]
+                with WorkflowService(Path(self.temp.name) / "server") as svc, svc.open_run(run_id) as engine:
+                    state = engine.advance(Scripted(prepare))
+                    state = engine.edit_metadata("/keywords", ["author keyword"], gate_id=state["gate"]["id"],
+                                                 reason="Author's existing keyword")
+                    engine.reply(state["gate"]["id"], "confirm metadata")
+                    metadata = engine._work_path(engine.state()).read_bytes()
+                    before = engine.advance(Scripted(analyze))
+                    revision = engine.store.load()[0]
+                response = self.client.get(f"/api/runs/{run_id}/overview")
+                self.assertEqual(response.status_code, 200, response.text)
+                overview = response.json()
+                self.assertEqual(overview["analysis"]["subject_proposals"], before["analysis"]["subject_proposals"])
+                self.assertEqual(overview["metadata"]["metadata"]["keywords"], ["author keyword"])
+                self.assertEqual(overview["analysis"]["subject_proposals"]["place_subjects"]["status"], "undetermined")
+                with WorkflowService(Path(self.temp.name) / "server") as svc, svc.open_run(run_id) as engine:
+                    self.assertEqual(engine.state(), before)
+                    self.assertEqual(engine.store.load()[0], revision)
+                    self.assertEqual(engine._work_path(engine.state()).read_bytes(), metadata)
+
     def test_literary_editing_interior_design_form_save_revision_and_approval(self):
         calls = []
 
@@ -567,23 +599,20 @@ class WebApiTests(unittest.TestCase):
         current = {"gate_id": run["gate"]["id"], "expected_sha256": run["gate"]["design_review"]["sha256"]}
         answers = {q["id"]: "Keep the proposed new-page openings." for q in run["gate"]["design_review"]["proposal"]["questions"]
                    if q["blocking"]}
-        approved = self.post(f"/api/runs/{run_id}/interior-design", {**current, "action": "approve", "answers": answers})
+        approved = self.post(f"/api/runs/{run_id}/interior-design", {**current, "action": "generate", "answers": answers})
         self.assertEqual(approved.status_code, 200, approved.text)
         run = self.settle(run_id)
-        self.assertEqual((run["status"], run["gate"]["kind"]), ("WAITING_FOR_HUMAN", "docx_generation_review"))
-        self.assertIsNone(run["gate"]["binding_text"])
-        self.assertEqual(self.post(f"/api/runs/{run_id}/docx/authorize", {
-            "gate_id": run["gate"]["id"], "expected_plan_sha256": "0" * 64}).status_code, 400)
-        authorized = self.post(f"/api/runs/{run_id}/docx/authorize", {
-            "gate_id": run["gate"]["id"], "expected_plan_sha256": run["production"]["plan_sha256"]})
-        self.assertEqual(authorized.status_code, 200, authorized.text)
-        run = self.settle(run_id)
         self.assertEqual(run["status"], "WAITING_FOR_ACCEPTANCE")
+        self.assertIsNone(run.get("gate"))
+        self.assertEqual(self.post(f"/api/runs/{run_id}/docx/authorize", {
+            "gate_id": "removed", "expected_plan_sha256": "0" * 64}).status_code, 405)
         docx_url = f"/api/runs/{run_id}/docx/{run['production']['id']}"
         document = self.client.get(docx_url)
         self.assertEqual(document.status_code, 200, document.text if document.status_code != 200 else "")
         self.assertEqual(digest(document.content), run["production"]["docx"]["sha256"])
         self.assertEqual(document.headers["x-content-sha256"], digest(document.content))
+        self.assertIn(f'Story-v001-candidate-{run["production"]["id"][:8]}.docx',
+                      document.headers["content-disposition"])
         self.assertEqual(self.client.get(f"/api/runs/{run_id}/docx/wrong-build").status_code, 400)
         accepted = self.post(f"/api/runs/{run_id}/accept", {
             "acceptance_id": run["acceptance"]["acceptance_id"], "confirm_final": True})
@@ -594,7 +623,34 @@ class WebApiTests(unittest.TestCase):
         published = work["heads"]["literary-editing/v001/document.docx"]
         delivery = self.client.get(f"/api/works/{work['id']}/docx/{published['id']}")
         self.assertEqual(delivery.content, document.content)
+        self.assertIn('filename="Story-v001.docx"', delivery.headers["content-disposition"])
+        accepted_download = self.client.get(docx_url)
+        self.assertEqual(accepted_download.content, document.content)
+        self.assertEqual(accepted_download.headers["x-content-sha256"], document.headers["x-content-sha256"])
+        self.assertEqual(accepted_download.headers["content-disposition"], delivery.headers["content-disposition"])
+        renamed = self.post(f"/api/works/{work['id']}/metadata", {
+            "field": "/title", "value": "Later title", "rationale": "New edition title"})
+        self.assertEqual(renamed.status_code, 200, renamed.text)
+        historical = self.client.get(f"/api/works/{work['id']}/docx/{published['id']}")
+        self.assertEqual(historical.headers["content-disposition"], delivery.headers["content-disposition"])
+        self.assertEqual(self.client.get(docx_url).headers["content-disposition"], delivery.headers["content-disposition"])
         self.assertEqual(calls, ["prepare", "interior-design", "interior-design"])
+
+    def test_docx_download_filename_preserves_unicode_and_sanitizes_unsafe_titles(self):
+        from studio.server.app import docx_disposition
+
+        for title, expected in (('洞: A/B "draft"\r\n', "洞_ A_B _draft__"),
+                                (" .. ", "Manuscript"), ("", "Manuscript")):
+            core = ET.Element("properties")
+            ET.SubElement(core, "{http://purl.org/dc/elements/1.1/}title").text = title
+            stream = io.BytesIO()
+            with zipfile.ZipFile(stream, "w") as document:
+                document.writestr("docProps/core.xml", ET.tostring(core))
+            header = docx_disposition(stream.getvalue(), "v002")
+            self.assertNotIn("\r", header)
+            self.assertNotIn("\n", header)
+            self.assertIn("filename*=UTF-8''", header)
+            self.assertEqual(unquote(header.split("filename*=UTF-8''")[1]), f"{expected}-v002.docx")
 
     def test_removed_formatting_route_and_read_only_history(self):
         work_id = self.post("/api/works", {"upload": {"name": "story.md",

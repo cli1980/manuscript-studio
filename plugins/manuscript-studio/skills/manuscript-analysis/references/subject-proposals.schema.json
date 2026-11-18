@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:manuscript-studio:analysis-subject-proposals:1",
+  "title": "Provisional manuscript subject and keyword proposals",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["bisac_subjects", "thema_subjects", "keywords", "place_subjects"],
+  "properties": {
+    "bisac_subjects": {
+      "allOf": [{"$ref": "#/$defs/group"}],
+      "properties": {"items": {"items": {
+        "allOf": [{"$ref": "#/$defs/coded_term"}],
+        "properties": {"code": {"type": ["string", "null"], "pattern": "^[A-Z]{3}[0-9]{6}$"}}
+      }}}
+    },
+    "thema_subjects": {
+      "allOf": [{"$ref": "#/$defs/group"}],
+      "properties": {"items": {"items": {
+        "allOf": [{"$ref": "#/$defs/coded_term"}],
+        "properties": {"code": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9]*$"}}
+      }}}
+    },
+    "keywords": {
+      "allOf": [{"$ref": "#/$defs/group"}],
+      "properties": {"items": {"items": {
+        "allOf": [{"$ref": "#/$defs/term"}], "unevaluatedProperties": false
+      }}}
+    },
+    "place_subjects": {
+      "allOf": [{"$ref": "#/$defs/group"}],
+      "properties": {"items": {"items": {
+        "allOf": [{"$ref": "#/$defs/term"}],
+        "required": ["kind"],
+        "properties": {"kind": {"enum": ["real", "historical", "fictional", "unspecified"]}},
+        "unevaluatedProperties": false
+      }}}
+    }
+  },
+  "$defs": {
+    "text": {"type": "string", "pattern": "\\S"},
+    "group": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "reason", "items"],
+      "properties": {
+        "status": {"enum": ["proposed", "not_applicable", "undetermined"]},
+        "reason": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/text"}]},
+        "items": {"type": "array", "uniqueItems": true}
+      },
+      "if": {"properties": {"status": {"const": "proposed"}}},
+      "then": {"properties": {"items": {"minItems": 1}}},
+      "else": {"properties": {"items": {"maxItems": 0}, "reason": {"$ref": "#/$defs/text"}}}
+    },
+    "term": {
+      "type": "object",
+      "required": ["label", "confidence", "rationale", "evidence"],
+      "properties": {
+        "label": {"$ref": "#/$defs/text"},
+        "confidence": {"enum": ["low", "medium", "high"]},
+        "rationale": {"$ref": "#/$defs/text"},
+        "evidence": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["chapter_id", "locator", "quote"],
+            "properties": {
+              "chapter_id": {"$ref": "#/$defs/text"},
+              "locator": {"$ref": "#/$defs/text"},
+              "quote": {"$ref": "#/$defs/text"}
+            }
+          }
+        }
+      }
+    },
+    "coded_term": {
+      "type": "object",
+      "required": ["code", "scheme_version", "reference"],
+      "properties": {
+        "code": {"type": ["string", "null"]},
+        "scheme_version": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/text"}]},
+        "reference": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/text"}]}
+      },
+      "allOf": [
+        {"$ref": "#/$defs/term"},
+        {
+          "if": {"properties": {"code": {"type": "string"}}},
+          "then": {"properties": {
+            "scheme_version": {"$ref": "#/$defs/text"},
+            "reference": {"$ref": "#/$defs/text"}
+          }}
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}

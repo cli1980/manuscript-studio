@@ -459,11 +459,11 @@ class WorkflowService:
                 raise ValueError("This workflow has no interior-design review phase.")
             return engine.summary(engine.review_design(gate_id, expected_sha256, action, **fields))
 
-    def authorize_docx(self, run_id, gate_id, expected_plan_sha256):
+    def reopen_interior_design(self, run_id, acceptance_id, expected_docx_sha256):
         with self.open_run(run_id) as engine:
-            if not hasattr(engine, "authorize_docx"):
-                raise ValueError("This workflow has no DOCX production phase.")
-            return engine.summary(engine.authorize_docx(gate_id, expected_plan_sha256))
+            if not hasattr(engine, "reopen_design"):
+                raise ValueError("This workflow has no interior-design review phase.")
+            return engine.summary(engine.reopen_design(acceptance_id, expected_docx_sha256))
 
     def docx_candidate(self, run_id, build_id):
         with self.open_run(run_id) as engine:

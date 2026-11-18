@@ -22,7 +22,7 @@ Implementation modules live in `workflow/src/`:
 | `translation.py` | `literary-translation-v1` prompts, translation gate rules, chapter completion, accepted-output publication |
 | `editing.py` | `literary-editing-v1`: developmental, line, and copy editing passes chosen by the user, each chapter by chapter with a whole-book pass |
 | `interior.py` | Embedded interior-design proposal hand-off, native human review and manuscript/design approval lifecycle |
-| `production.py` | Thin standalone-formatter API adapter: persisted exact-plan authorization, checked DOCX candidates and editable delivery |
+| `production.py` | Thin standalone-formatter API adapter: single-request exact-plan generation, checked DOCX candidates and editable delivery |
 | `document_audit.py` | Workflow-independent DOCX inspection primitives |
 | `library.py` | Per-work artifact library with an append-only publication log |
 | `service.py` | The service API shared by the CLI and the future web application; run/work index |
@@ -216,6 +216,16 @@ profile and manifest. The engine checks the thin JSON binding envelope and
 freezes the Markdown documents, then hands them directly to the next agents
 through `manuscript_analysis`. No extra analysis approval is required.
 
+Analysis contract `/2` also proposes **BISAC Subjects, Thema Subjects, Keywords
+and Place Subjects** in the reading profile and frozen manifest. Every group
+needs an assessment; suggested terms carry rationale, confidence and exact
+prepared-unit evidence. Codes need a cited vocabulary edition/reference or
+remain unresolved. Studio exposes these under Overview -> Manuscript Analysis.
+These suggestions do not change confirmed metadata or existing keywords,
+publish classifications, or introduce another approval gate. Deterministic
+validation checks shape, code syntax and quotes, not catalogue membership.
+Existing analysis revisions are not backfilled or silently migrated.
+
 The common Studio Overview exposes these documents as provisional source
 context. Coverage is an agent assertion with checked unit identities and quotes,
 not proof of semantic accuracy or author approval. Editing later marks the
@@ -321,7 +331,7 @@ service API and lives in [`studio/`](../studio/README.md).
 
 ```text
 prepare → metadata review → [choose a pass → run it → accept its output]*
-  → approve manuscript → design/review → authorize DOCX plan → build/check
+  → approve manuscript → design/review → generate draft DOCX (plan/build/check)
   → accept editable DOCX → publish/export
 ```
 
@@ -359,9 +369,10 @@ cannot change outside their own jobs. The developmental pass collects
 chapter evidence and ends with one whole-book verdict and `DEV-###`
 recommendations; it never changes text. Approval freezes the manuscript and
 metadata before the interior-design proposal and editable specification review.
-Design approval starts the bounded DOCX production phase; generation requires a
-separate exact-plan authorization and publication requires final editable-DOCX
-acceptance. No PDF/page review or print-ready claim is included.
+Requesting a draft authorizes exact-plan preparation and DOCX generation in one
+action, without approving the design. After inspecting the downloaded DOCX,
+the user approves its design and exact document together. No PDF/page review or
+print-ready claim is included.
 Reopening manuscript approval invalidates design decisions, while restarting
 only design preserves the approved content. Restarting a completed editorial
 chapter, and other details, are deferred to the rest of M4.
@@ -379,7 +390,8 @@ vendor advisories, gate ID and exact proposal SHA-256:
 python -m workflow review RUN
 python -m workflow review-design RUN --gate GATE-ID --proposal-sha256 PROPOSAL-SHA256 --action save --spec-file spec.json
 python -m workflow review-design RUN --gate GATE-ID --proposal-sha256 PROPOSAL-SHA256 --action request-revision --feedback-file feedback.txt
-python -m workflow review-design RUN --gate GATE-ID --proposal-sha256 PROPOSAL-SHA256 --action approve --answers-file answers.json
+python -m workflow review-design RUN --gate GATE-ID --proposal-sha256 PROPOSAL-SHA256 --action generate --answers-file answers.json
+python -m workflow reopen-design RUN --acceptance-id ACCEPTANCE-ID --docx-sha256 DOCX-SHA256
 ```
 
 Use the same `--server-root`, `--execution-profile` and
@@ -390,29 +402,34 @@ proposal is not a save payload. Source bindings, purpose/vendor/binding and
 role scopes remain protected by the same service validation as Studio.
 `feedback.txt` contains nonempty revision instructions. `answers.json` maps
 every blocking question ID to a nonempty answer; omit `--answers-file` only
-when no questions block approval. Each action accepts only its corresponding
+when no questions block draft generation. Each action accepts only its corresponding
 file option. Saving changes produces a new gate ID and proposal hash; review
 those before the next action, because stale bindings are rejected.
 
-These commands neither invoke an agent nor authorize DOCX generation. A revision
-request returns to `READY` for an explicit agent `step`; design approval returns
-to `READY` for native planning. The `produce-docx` production stage consumes the
+These commands do not invoke an agent. A revision request returns to `READY`
+for an explicit agent `step`; a draft request authorizes planning/building and
+returns to `READY` for one native `step` without another human gate.
+After inspection, `reopen-design` returns an
+unaccepted candidate to its saved design without restarting editing. Old builds
+remain in history but cannot be accepted; final acceptance approves only the
+current design and exact DOCX together. The `produce-docx` stage consumes the
 standalone formatter's public `prepare`/`build` API, not the old document adapters or an agent.
 Translation composition and rendered-page/print production remain pending.
 
-The native generation gate presents a safe summary and plan hash; the complete
-source-bearing plan remains private. Studio can authorize it; the CLI also offers:
+The job records a safe read-only summary and plan hash; the complete
+source-bearing plan remains private. Studio starts the worker automatically.
+After the CLI's `review-design --action generate`, execute the request with:
 
 ```text
 .venv-workflow/Scripts/python.exe -m workflow review RUN
-.venv-workflow/Scripts/python.exe -m workflow authorize-docx RUN --gate GATE-ID --plan-sha256 PLAN-SHA256
 .venv-workflow/Scripts/python.exe -m workflow step RUN
 ```
 
 Only a single editable-DOCX target is accepted. Missing dependencies, unsupported
 source/design features and PDF bundles fail explicitly. Source/design receipts,
 exact plan/runtime, candidate bytes and the build manifest are bound by hashes.
-A changed plan returns to authorization; retries never overwrite existing files.
+A changed plan blocks rather than silently replanning; a fresh design generation
+request is required. Retries never overwrite existing files.
 Design restarts invalidate stale candidate download IDs and authorizations.
 Design-only restarts archive the previous proposals but restore the exact
 content-addressed vendor-profile snapshot selected at manuscript approval.

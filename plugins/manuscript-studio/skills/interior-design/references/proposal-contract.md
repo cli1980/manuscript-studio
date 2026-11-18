@@ -1,7 +1,7 @@
 # Interior-design proposal contract
 
 [Schema](../schemas/interior-design-proposal.schema.json): JSON Schema draft
-2020-12, contract interior-design-proposal/4. See the [example](proposal.example.json).
+2020-12, contract interior-design-proposal/5. See the [example](proposal.example.json).
 The example is synthetic: its illustrative hashes are not real preparation proof.
 
 ## Authority and form groups
@@ -22,11 +22,57 @@ or stored in the proposal; callers keep their own execution lineage separately.
 | edition_brief | Purpose and requested deliverables/vendor/product/trim |
 | design_system | Geometry, named font/paragraph styles, hierarchy, navigation and page furniture |
 | text_roles | Whole-paragraph semantic roles, narrative function, catalogued occurrences and paragraph-style mapping; may be empty |
+| opening_structure | Source-bound chapter/part membership, verified ordinals and exact heading components; no source edits |
 | evidence | Stable-ID sources for facts, analysis and recommendations |
 | recommendations | Stable-ID rationale/evidence addressing design groups through JSON Pointer |
 | questions | Necessary author-input or design-choice questions only; may be empty |
 
 ## Units and identities
+
+TOC generation is an editable Word field, not a populated/paginated table.
+Navigation pairs `include_toc` with `toc_depth` (zero when disabled, 1..6 when
+enabled). Optional nullable `toc_before_chapter_id` selects a prepared insertion
+unit with preceding material; absent/null defaults to the first body part or
+chapter. Optional nullable `toc_style_id` selects an existing named style;
+absent/null uses Body. These are optional `/5` fields, not a schema migration.
+The field has a dedicated section. Optional `toc_start` selects new-page or
+recto (default new-page); `page.section_start` does the same for front/back
+matter while chapters/parts retain their opening starts. Recto requires
+`allow-declared-recto-blanks`. TOC furniture and numbering continue from the
+preceding section without restarting; the following unit retains its own
+new-page/recto start and body-number restart. Entry styles TOC 1..6 inherit
+the selected typography, with zero first-line indent, 12 pt level indents,
+left alignment and dotted right page-number tabs. Front matter is excluded by
+a body-range bookmark; part/chapter outline levels determine entry hierarchy.
+Optional `toc_heading` defaults to `Contents`; it is nonblank single-line plain
+text, at most 200 characters. Optional nullable `toc_heading_style_id` references
+a named style independent of entry styles. The default is a dedicated `toc-heading`
+style using Body font family/color, 18 pt bold nonitalic, 1.2 leading, centered
+block with 0 before/12 pt after. A non-TOC ID collision gets a new suffixed ID,
+never an overwritten style. The heading starts the TOC page, stays with the
+field and has direct body outline level 9 so it cannot include itself.
+Studio exposes its text, style selection and full style editor under Navigation.
+Defaults in an older draft are local unsaved edits until explicitly saved;
+no existing candidate or proposal is rewritten on load.
+The field result initially contains the visible prompt "Update this field in
+Word to generate the table of contents." Word replaces that prompt when updating
+the entire table. No calculated entries, page numbers, rendering or print approval
+is invented. The document requests field updates; the human must update the
+entire table in Word before inspection. Source text and structural roles remain
+unchanged.
+
+Version `/5` adds `chapter_openings` and `part_openings` settings to the design
+system and removes `page.chapter_start`: opening start policy has one authority.
+`opening_structure` inventories actual chapter/part headings using complete
+paragraph hashes plus ordered number/title/subtitle/literal components. Their
+text must account for the complete visible paragraph, and source ordinals must
+match their labels. Overlapping opening/text-role assignments are rejected.
+Non-preserve chapter layouts require explicit chapter coverage; absent titles
+cannot be fabricated. Part groups bind explicit ordered members, independently
+of prepared-unit structural roles. See the skill's `/5` opening instructions
+for field shapes, style roles, source preservation and supported number forms.
+The next generated proposal must use `/5`; no implicit conversion of approved
+older proposals or approval transfer is permitted.
 
 `edition_brief.purpose` records the supplied intended use: `print-ready`,
 `submission`, or `editorial-review`. Use it to guide the design and its rationale;

@@ -114,7 +114,7 @@ export class ChapterViewerWorkflowUI extends WorkflowUI {
   override get hasChapterViewer() { return true; }
 
   override decisionPage(run: RunDetail) {
-    if (run.production && (run.gate?.kind === "docx_generation_review" || run.status === "WAITING_FOR_ACCEPTANCE")) return null;
+    if (run.production && run.status === "WAITING_FOR_ACCEPTANCE") return null;
     if (run.status === "WAITING_FOR_HUMAN" && run.gate) return this.gateLink(run);
     if (run.status === "WAITING_FOR_ACCEPTANCE" && run.acceptance) return viewer(run.id);
     return null;

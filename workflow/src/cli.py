@@ -67,12 +67,8 @@ def display(engine, state, *, review=False):
                        f"--proposal-sha256 {view['sha256']}")
             print("\nSave specification edits: " + command + " --action save --spec-file SPEC.json")
             print("Request an agent revision: " + command + " --action request-revision --feedback-file FEEDBACK.txt")
-            print("Approve the displayed proposal: " + command + " --action approve [--answers-file ANSWERS.json]")
+            print("Generate a draft, without approving the design: " + command + " --action generate [--answers-file ANSWERS.json]")
             print("Answers map every blocking question ID to a nonempty response; omit the file only if none block.")
-        elif gate["kind"] == "docx_generation_review":
-            print("\n" + state["gate"]["message"])
-            print("Authorize the displayed exact plan with: python -m workflow authorize-docx RUN "
-                  "--gate GATE-ID --plan-sha256 " + state["production"]["plan_sha256"])
     if state["status"] == "WAITING_FOR_ACCEPTANCE":
         print("\nReview these immutable outputs against the source before accepting.")
         for artifact in state["outputs"]:
@@ -84,6 +80,9 @@ def display(engine, state, *, review=False):
             print("Accepted candidate:\n" + engine.store.content(artifact).decode("utf-8"))
         print("\nIMPORTANT: " + engine.acceptance_details(state)["notice"])
         print("Accept with: python -m workflow accept RUN --acceptance-id ACCEPTANCE-ID --confirm-final")
+        if state.get("production"):
+            print("Revise instead: python -m workflow reopen-design RUN --acceptance-id ACCEPTANCE-ID "
+                  "--docx-sha256 " + state["production"]["result"]["docx"]["sha256"])
     if engine.finalized(state):
         print(f"\nFINAL: this run is finalized; its {state['workflow']} version on work {state['work_id']} can never "
               "change. A new run on the work publishes the next version.")
@@ -152,7 +151,7 @@ def parser():
     history = sub.add_parser("metadata-history", help="List a run's metadata versions or show one.")
     history.add_argument("run")
     history.add_argument("--version", type=int)
-    for command in ("step", "status", "review", "reply", "accept", "review-design", "authorize-docx", "retry",
+    for command in ("step", "status", "review", "reply", "accept", "review-design", "reopen-design", "retry",
                     "stop", "events", "restart-stage", "restart-chapter", "restart"):
         child = sub.add_parser(command)
         child.add_argument("run")
@@ -162,16 +161,16 @@ def parser():
         elif command == "reply":
             child.add_argument("--gate", required=True)
             child.add_argument("--response-file", required=True, type=Path)
-        elif command == "authorize-docx":
-            child.add_argument("--gate", required=True)
-            child.add_argument("--plan-sha256", required=True)
+        elif command == "reopen-design":
+            child.add_argument("--acceptance-id", required=True)
+            child.add_argument("--docx-sha256", required=True)
         elif command == "review-design":
             child.add_argument("--gate", required=True)
             child.add_argument("--proposal-sha256", required=True, help="SHA-256 shown by review for this proposal.")
-            child.add_argument("--action", required=True, choices=("save", "request-revision", "approve"))
+            child.add_argument("--action", required=True, choices=("save", "request-revision", "generate"))
             child.add_argument("--spec-file", type=Path, help="Save: JSON edition_brief, design_system and role_styles.")
             child.add_argument("--feedback-file", type=Path, help="Request revision: UTF-8 feedback text.")
-            child.add_argument("--answers-file", type=Path, help="Approve: JSON mapping of blocking question IDs to answers.")
+            child.add_argument("--answers-file", type=Path, help="Generate draft: JSON mapping of blocking question IDs to answers.")
         elif command == "accept":
             child.add_argument("--acceptance-id", required=True)
             child.add_argument("--confirm-final", action="store_true",
@@ -278,11 +277,12 @@ def run(service, args):
             review = True
         elif command == "reply":
             service.reply(args.run, args.gate, args.response_file.read_text(encoding="utf-8"))
-        elif command == "authorize-docx":
-            service.authorize_docx(args.run, args.gate, args.plan_sha256)
+        elif command == "reopen-design":
+            service.reopen_interior_design(args.run, args.acceptance_id, args.docx_sha256)
+            review = True
         elif command == "review-design":
             files = {"spec": args.spec_file, "feedback": args.feedback_file, "answers": args.answers_file}
-            field = {"save": "spec", "request-revision": "feedback", "approve": "answers"}[args.action]
+            field = {"save": "spec", "request-revision": "feedback", "generate": "answers"}[args.action]
             if any(path is not None for name, path in files.items() if name != field):
                 raise ValueError(f"--action {args.action} accepts only --{field}-file.")
             path = files[field]

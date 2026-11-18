@@ -1,6 +1,6 @@
 ---
 name: manuscript-analysis
-description: Analyze a manuscript from a verified prepare-manuscript package, automatically delegating raw-manuscript intake to prepare-manuscript first. Produce reusable chapter summaries, a full synopsis, a reading profile and an evidence-bound story ledger covering causality, characters, relationships, knowledge, chronology and resolutions. Use when understanding a novel, building or repairing a story ledger, reviewing story claims, or supplying revision-bound analysis to translation, developmental editing, interior design or querying. Do not research agents, write pitches, edit source text or assemble submission packages.
+description: Analyze a manuscript from a verified prepare-manuscript package, automatically delegating raw-manuscript intake to prepare-manuscript first. Produce reusable chapter summaries, a full synopsis, a reading profile, provisional BISAC/Thema subjects, keywords and place subjects, and an evidence-bound story ledger covering causality, characters, relationships, knowledge, chronology and resolutions. Use when understanding a novel, proposing manuscript subjects, building or repairing a story ledger, reviewing story claims, or supplying revision-bound analysis to translation, developmental editing, interior design or querying. Do not research agents, write pitches, edit source text or assemble submission packages.
 ---
 
 # Manuscript Analysis
@@ -92,6 +92,13 @@ fictional events.
   narrative engine, tone, themes and reader promise, with evidence and
   confidence. Inferred readership is a hypothesis, not a user-provided audience.
   Positioning, comparable-title research and marketing choices stay downstream.
+- Propose **BISAC Subjects, Thema Subjects, Keywords and Place Subjects** under
+  [the subject-proposals contract](references/subject-proposals.md). Put all four
+  groups in the reading profile and the host envelope when supplied. Rank
+  subjects by relevance and give exact manuscript evidence, confidence and
+  rationale. Use cited vocabulary editions for codes, or leave codes unresolved;
+  never invent a code/label pair. These suggestions do not overwrite shared
+  metadata or introduce another approval gate.
 - Label unapproved interpretation and synopsis output provisional. An evidence
   audit does not establish author approval or literary quality. Do not edit the
   manuscript, issue developmental recommendations, or mark another skill done.

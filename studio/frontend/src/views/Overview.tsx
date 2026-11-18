@@ -2,6 +2,7 @@ import { api, type ChapterDetail, type RunDetail, type Overview as OverviewData 
 import { workflowUI } from "../workflows";
 import { Documents, reviewName, when } from "./common";
 import { MetadataDifferences, MetadataTable } from "./Metadata";
+import { SubjectProposals } from "./SubjectProposals";
 
 export function Overview({ data, run, onSaved }: { data: OverviewData; run: RunDetail; onSaved: () => Promise<void> }) {
   const reviews = data.source?.reviews ?? [];
@@ -45,6 +46,9 @@ export function Overview({ data, run, onSaved }: { data: OverviewData; run: RunD
           {data.analysis.qualifications.length > 0 && <ul>
             {data.analysis.qualifications.map((note, i) => <li key={i}>{note}</li>)}
           </ul>}
+          {data.analysis.subject_proposals
+            ? <SubjectProposals proposals={data.analysis.subject_proposals} />
+            : <p className="muted">Subject proposals were not generated for this analysis revision.</p>}
           <Documents documents={data.analysis.documents} />
         </> : <p className="muted">{run.stage === "analysis"
           ? "Analysis is not complete. Results pass directly to the workflow; no extra approval is required."
