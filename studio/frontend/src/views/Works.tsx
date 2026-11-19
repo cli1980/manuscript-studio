@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, readBase64 } from "../api";
+import { api, readBase64, type WorkDetail, type WorkVersion } from "../api";
 import { ErrorBox, Status, TextBlock, useLoad, when } from "./common";
 import { Markdown } from "./Markdown";
 import { workflowUI } from "../workflows";
@@ -71,8 +71,8 @@ function AddManuscript({ onAdded }: { onAdded: (workId: string) => void }) {
         <button type="submit" disabled={busy || !file}>{busy ? "Adding…" : "Add as a new work"}</button>
       </div>
       <ErrorBox error={error} />
-      <p className="muted">Only the manuscript is needed. Preparation detects its language and extracts draft metadata;
-        review and complete it in Overview afterward. Each upload creates a new work.</p>
+      <p className="muted">Each upload creates a new work. Then prepare it on the Work page: review metadata,
+        run manuscript analysis once, and reuse that ready version in future workflows.</p>
     </form>
   );
 }
@@ -84,9 +84,9 @@ export function WorkView({ workId }: { workId: string }) {
   const [viewing, setViewing] = useState<{ path: string; text: string } | null>(null);
   const [viewError, setViewError] = useState<string | null>(null);
 
-  async function open(path: string) {
+  async function open(path: string, version?: string) {
     try {
-      setViewing({ path, text: await api.artifact(workId, path) });
+      setViewing({ path, text: version ? await api.versionArtifact(workId, version, path) : await api.artifact(workId, path) });
       setViewError(null);
     } catch (exc) {
       setViewError(exc instanceof Error ? exc.message : String(exc));
@@ -95,7 +95,7 @@ export function WorkView({ workId }: { workId: string }) {
 
   if (!data) return <ErrorBox error={error ?? null} />;
   return (
-    <section>
+    <section className="work-detail">
       <p><a href="#/works">← Works</a></p>
       <h1>{data.title}</h1>
       <p className="muted mono">{data.id} · {data.manuscript_language ?? "language pending preparation"} · source <a href={api.sourceUrl(data.id)} download
@@ -111,7 +111,10 @@ export function WorkView({ workId }: { workId: string }) {
           ))}</p>
       )}
       <ErrorBox error={error} />
-      <StartWorkflow workId={workId} language={data.manuscript_language} unfinishedRun={data.unfinished_run} workflows={data.workflows} onStarted={() => void reload()} />
+      <WorkPreparation work={data} onOpen={(path, version) => void open(path, version)} />
+      <StartWorkflow workId={workId} versions={data.versions ?? []} unfinishedRun={data.unfinished_run}
+        preparing={(data.preparation_jobs ?? []).some((job) => job.id === data.unfinished_run)}
+        workflows={data.workflows} onStarted={() => void reload()} />
       <h2>Workflows</h2>
       {Object.keys(data.workflows).length === 0 && <p className="muted">No workflow has been finalized on this work.</p>}
       {Object.entries(data.workflows).map(([name, flow]) => (
@@ -122,7 +125,7 @@ export function WorkView({ workId }: { workId: string }) {
         </div>
       ))}
       <h2>Runs</h2>
-      <table>
+      <div className="table-scroll" role="region" aria-label="Work runs" tabIndex={0}><table>
         <thead><tr><th>Run</th><th>Template</th><th>Status</th><th>Stage</th><th>Created</th></tr></thead>
         <tbody>
           {data.runs.map((run) => (
@@ -135,21 +138,24 @@ export function WorkView({ workId }: { workId: string }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
       <h2>Metadata</h2>
       {data.metadata ? (
         <>
           <p className="muted">Record revision {data.metadata.record_revision}; {data.metadata_history.length} published versions.
-            {" "}Metadata is entered and corrected in Overview after preparation.</p>
+            {" "}Work preparation reviews metadata before freezing each prepared version.</p>
           {data.metadata_editor_run
-            ? <a href={`#/runs/${data.metadata_editor_run}/overview`}>Review and edit metadata in Overview</a>
-            : <p className="muted">Start a workflow to prepare this manuscript and review its metadata.</p>}
+            ? <a href={(data.preparation_jobs ?? []).some((job) => job.id === data.metadata_editor_run)
+              ? `#/works/${encodeURIComponent(workId)}/preparations/${data.metadata_editor_run}`
+              : `#/runs/${data.metadata_editor_run}/overview`}>Review metadata</a>
+            : <p className="muted">Prepare this Work to review its metadata.</p>}
         </>
       ) : <p className="muted">No metadata record (imported before metadata existed).</p>}
       <h2>Library</h2>
       <div className="split">
         <ul className="list">
-          {Object.entries(data.heads).sort(([a], [b]) => a.localeCompare(b)).map(([path, head]) => (
+          {Object.entries(data.heads).filter(([path]) => !/^work-versions\/[^/]+\/objects\//.test(path))
+            .sort(([a], [b]) => a.localeCompare(b)).map(([path, head]) => (
             <li key={path}>
               {/* The original upload is downloaded, not viewed; its verified text is in each run's chapter viewer. */}
               {path.startsWith("sources/")
@@ -167,34 +173,109 @@ export function WorkView({ workId }: { workId: string }) {
         </div>
       </div>
       <h2>Publication log</h2>
-      <table>
+      <div className="table-scroll" role="region" aria-label="Work publication history" tabIndex={0}><table>
         <thead><tr><th>When</th><th>Artifact</th><th>Version</th><th>Stage</th><th>Status</th></tr></thead>
         <tbody>
           {data.publications.slice().reverse().map((p) => (
             <tr key={p.id}><td>{when(p.created_at)}</td><td className="mono">{p.artifact}</td><td>{p.version ?? ""}</td><td>{p.stage}</td><td>{p.status}</td></tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </section>
   );
 }
 
-// Start a workflow on this work without leaving the page; the new run appears in the Runs table below.
-function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }: {
+function WorkPreparation({ work, onOpen }: { work: WorkDetail; onOpen: (path: string, version: string) => void }) {
+  const selection = useModelSelection("work-preparation");
+  const [sourceVersion, setSourceVersion] = useState("");
+  const [refreshAnalysis, setRefreshAnalysis] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const versions = work.versions ?? [];
+  const sourceReady = versions.some((version) => version.version_id === sourceVersion && version.status === "ready");
+
+  async function prepare() {
+    setBusy(true);
+    setError(null);
+    try {
+      const job = await api.prepareWork(work.id, {
+        ...(sourceVersion ? { source_version_id: sourceVersion } : {}),
+        ...(sourceReady && refreshAnalysis ? { refresh_analysis: true } : {}),
+        ...(selection.model ? { model: selection.model } : {}),
+      });
+      window.location.hash = `#/works/${encodeURIComponent(work.id)}/preparations/${job.id}`;
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : String(exc));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <section className="panel">
+    <h2>Work preparation</h2>
+    <p>Prepare the source, review metadata, and analyze the complete manuscript once. Future workflows select
+      the ready version without repeating extraction or analysis.</p>
+    <div className="row">
+      <label>Preparation source{" "}
+        <select value={sourceVersion} onChange={(e) => { setSourceVersion(e.target.value); setRefreshAnalysis(false); }}>
+          <option value="">Original upload</option>
+          {versions.map((version) => <option key={version.version_id} value={version.version_id}>
+            {version.version_id} · {version.kind} · {version.language ?? "detect language"}
+          </option>)}
+        </select>
+      </label>
+      <ModelPicker selection={selection} />
+      {sourceReady && <label><input type="checkbox" checked={refreshAnalysis}
+        onChange={(e) => setRefreshAnalysis(e.target.checked)} /> Re-run analysis after metadata review</label>}
+      <button disabled={busy || !!work.unfinished_run || !selection.ready} onClick={() => void prepare()}>
+        {busy ? "Starting preparation..." : sourceReady && !refreshAnalysis ? "Review metadata (reuse analysis)" : "Prepare and analyze"}
+      </button>
+    </div>
+    <p className="muted">{sourceReady && !refreshAnalysis
+      ? "Metadata-only revisions reuse the exact prepared text and original reading without a model call."
+      : "This starts agent work and uses time and tokens. Reuse a ready version below instead unless you intend to create a fresh preparation/analysis revision."}</p>
+    <ExecutionProfileNotice selection={selection} />
+    <ErrorBox error={error ?? selection.error} />
+    {(work.preparation_jobs ?? []).map((job) => <p key={job.id}>
+      <a href={`#/works/${encodeURIComponent(work.id)}/preparations/${job.id}`}>Preparation {job.id.slice(0, 8)}</a>
+      {" "}· <Status value={job.status} /> · {job.stage}
+    </p>)}
+    <h3>Manuscript versions</h3>
+    {!versions.length && <p className="muted">No prepared versions yet.</p>}
+    {versions.map((version) => <details key={version.version_id}>
+      <summary>{version.version_id} · {version.kind} · {version.language ?? "language pending"} ·{" "}
+        {version.status === "ready" ? `ready (analysis ${version.analysis_status})` : "preparation/analysis pending"}</summary>
+      {version.parent_version_id && <p>Derived from {version.parent_version_id}.</p>}
+      {version.analysis_id && <p className="mono">Analysis: {version.analysis_id}</p>}
+      <p className="muted">Technical readiness is not approval of story claims or catalogue metadata.</p>
+      <ul>{version.documents.map((document) => <li key={document.artifact}>
+        <button className="link" onClick={() => onOpen(document.path, version.version_id)}>{document.path}</button>
+      </li>)}</ul>
+    </details>)}
+  </section>;
+}
+
+// The selected input is immutable; workflow outputs are separate derived versions.
+function StartWorkflow({ workId, versions, unfinishedRun, preparing, workflows, onStarted }: {
   workId: string;
-  language: string | null;
+  versions: WorkVersion[];
   unfinishedRun: string | null;
+  preparing: boolean;
   workflows: Record<string, { status: string }>;
   onStarted: () => void;
 }) {
   const templates = useLoad(api.templates, []);
   const [templateId, setTemplateId] = useState("");
+  const [versionId, setVersionId] = useState("");
   const [passageSize, setPassageSize] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const available = (templates.data ?? []).filter((t) => !t.consumes);
   const template = available.find((t) => t.id === templateId);
   const selection = useModelSelection(template?.workflow);
+  const ready = versions.filter((version) => version.status === "ready");
+  const selected = ready.find((version) => version.version_id === versionId);
+  const language = selected?.language;
   // Passage size is counted in characters for Chinese, Japanese, and Korean, otherwise in words.
   const unit = language ? (["zh", "ja", "ko"].includes(language.split("-")[0].toLowerCase()) ? "cjk_chars" : "words") : null;
   const defaultSize = unit ? template?.passage_size?.[unit] : undefined;
@@ -204,7 +285,7 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
     setError(null);
     try {
       const settings = template?.passage_size && passageSize.trim() ? { passage_size: Number(passageSize) } : undefined;
-      const run = await api.create({ template_id: templateId, work_id: workId, settings,
+      const run = await api.create({ template_id: templateId, work_id: workId, work_version_id: versionId, settings,
         ...(selection.model ? { model: selection.model } : {}) });
       setTemplateId("");
       setPassageSize("");
@@ -218,23 +299,34 @@ function StartWorkflow({ workId, language, unfinishedRun, workflows, onStarted }
   }
 
   if (unfinishedRun) return <div className="banner warn">
-    A workflow is still unfinished on this work. <a href={`#/runs/${unfinishedRun}`}>Open the unfinished workflow</a>
+    {preparing ? "Preparation" : "A workflow"} is still unfinished on this work. <a href={preparing
+      ? `#/works/${encodeURIComponent(workId)}/preparations/${unfinishedRun}` : `#/runs/${unfinishedRun}`}>Open it</a>
     {" "}and finish or stop it before starting another.
   </div>;
   return (
     <div className="panel">
       <h2>Start a workflow</h2>
+      {!ready.length && <p className="muted">Prepare a Work version first. Workflows reuse its verified Markdown,
+        front matter and analysis without repeating intake.</p>}
       <div className="row">
-        <select value={templateId} onChange={(e) => { setTemplateId(e.target.value); setPassageSize(""); }}>
+        <label>Prepared version{" "}
+          <select aria-label="Prepared version" value={versionId} onChange={(e) => setVersionId(e.target.value)}>
+            <option value="">Choose a ready version...</option>
+            {ready.map((version) => <option key={version.version_id} value={version.version_id}>
+              {version.version_id} · {version.kind} · {version.language}
+            </option>)}
+          </select>
+        </label>
+        <label>Workflow{" "}<select aria-label="Workflow" value={templateId} onChange={(e) => { setTemplateId(e.target.value); setPassageSize(""); }}>
           <option value="">Choose a workflow…</option>
           {available.map((t) => (
             <option key={t.id} value={t.id}>
               {t.title}{workflows[t.workflow]?.status === "completed" ? " (next version)" : ""}
             </option>
           ))}
-        </select>
+        </select></label>
         <ModelPicker selection={selection} />
-        <button className="primary" disabled={!templateId || busy || !selection.ready} onClick={() => void start()}>{busy ? "Starting…" : "Start"}</button>
+        <button className="primary" disabled={!templateId || !selected || busy || !selection.ready} onClick={() => void start()}>{busy ? "Starting…" : "Start"}</button>
       </div>
       <ExecutionProfileNotice selection={selection} />
       {template?.passage_size && (

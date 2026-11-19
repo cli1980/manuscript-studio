@@ -49,20 +49,22 @@ export function Runs({ initialWork }: { initialWork?: string }) {
 
 function NewRun({ initialWork }: { initialWork?: string }) {
   const templates = useLoad(api.templates, []);
-  const works = useLoad(api.works, []);
+  const works = useLoad(api.works, [], useLive(allRuns));
   const [templateId, setTemplateId] = useState("literary-translation-v1");
   const [workId, setWorkId] = useState(initialWork ?? "");
+  const [versionId, setVersionId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const template = templates.data?.find((t) => t.id === templateId);
   const selection = useModelSelection(template?.workflow);
+  const versions = works.data?.find((work) => work.id === workId)?.versions?.filter((v) => v.status === "ready") ?? [];
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const run = await api.create({ template_id: templateId, work_id: workId,
+      const run = await api.create({ template_id: templateId, work_id: workId, work_version_id: versionId,
         ...(selection.model ? { model: selection.model } : {}) });
       window.location.hash = workflowUI(run.workflow).landingPage(run.id);
     } catch (exc) {
@@ -83,7 +85,7 @@ function NewRun({ initialWork }: { initialWork?: string }) {
         </label>
         <ModelPicker selection={selection} />
         <label>Work{" "}
-          <select value={workId} onChange={(e) => setWorkId(e.target.value)}>
+          <select value={workId} onChange={(e) => { setWorkId(e.target.value); setVersionId(""); }}>
             <option value="">Select a work…</option>
             {works.data?.map((w) => (
               <option key={w.id} value={w.id} disabled={!!w.unfinished_run}>
@@ -92,14 +94,22 @@ function NewRun({ initialWork }: { initialWork?: string }) {
             ))}
           </select>
         </label>
+        <label>Prepared version{" "}
+          <select aria-label="Prepared version" value={versionId} onChange={(e) => setVersionId(e.target.value)}>
+            <option value="">Select a ready version...</option>
+            {versions.map((v) => <option key={v.version_id} value={v.version_id}>
+              {v.version_id} · {v.kind} · {v.language}
+            </option>)}
+          </select>
+        </label>
       </div>
       <ExecutionProfileNotice selection={selection} />
       {template && <p className="muted">{workflowUI(template.workflow).stageSummary(template)}</p>}
       <ErrorBox error={error ?? templates.error ?? selection.error} />
-      <button type="submit" disabled={busy || !workId || !selection.ready}>
+      <button type="submit" disabled={busy || !workId || !versions.some((v) => v.version_id === versionId) || !selection.ready}>
         {busy ? "Starting…" : "Create and start"}</button>
-      <p className="muted">Add new manuscripts on the <a href="#/works">Works</a> page. Preparation is the workflow's first
-        stage; the agent then runs automatically until it needs you.</p>
+      <p className="muted">Upload and prepare manuscripts on the <a href="#/works">Works</a> page.
+        Workflows reuse the selected version's front matter, Markdown and analysis.</p>
     </form>
   );
 }

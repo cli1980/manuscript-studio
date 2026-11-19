@@ -62,10 +62,11 @@ The full-length 《刺秦》 case at `tests/cases/translation-ciqing-001/` and i
 under `tests/fixtures/short-story-ciqing/` are optional, Git-ignored local manual
 tests. They are preserved locally but are not included in a fresh checkout.
 
-To set up Python dependencies and launch that test in one command:
+Prepare its source through Work preparation first, using the same server root.
+Then launch against that exact ready version (or resume the existing run):
 
 ```text
-python workflow/tests/run_e2e.py --case workflow/tests/cases/translation-ciqing-001/case.json --setup
+python workflow/tests/run_e2e.py --case workflow/tests/cases/translation-ciqing-001/case.json --work WORK_ID --work-version VERSION_ID --setup
 ```
 
 This example requires the local case and fixture. `--case` is required; the launcher
@@ -107,22 +108,47 @@ preparation. Start with a short UTF-8 Markdown manuscript.
 
 ## Run a manuscript
 
-Choose a workflow, then upload one explicitly designated source file (a new work)
-or select an existing work. This iteration prepares the whole file, including its
-real chapters. Commands after `create` take the printed run ID.
+Upload a manuscript as a Work, explicitly prepare/review/analyze its source,
+then select the resulting ready version for a workflow. Preparation jobs and
+workflow runs share the execution/recovery machinery, but have separate
+ownership and storage. Jobs live under `preparations/`, not `runs/`.
 
 ```text
 .venv-workflow/Scripts/python.exe -m workflow templates
-.venv-workflow/Scripts/python.exe -m workflow create --template literary-translation-v1 --source "C:/Manuscripts/book.md" --manuscript-language zh-CN
+.venv-workflow/Scripts/python.exe -m workflow works add "C:/Manuscripts/book.md" --manuscript-language zh-CN
+.venv-workflow/Scripts/python.exe -m workflow works prepare WORK_ID
+.venv-workflow/Scripts/python.exe -m workflow step PREPARATION_JOB
+.venv-workflow/Scripts/python.exe -m workflow review PREPARATION_JOB
+# Confirm the displayed metadata gate, then continue the job through analysis and saving.
+.venv-workflow/Scripts/python.exe -m workflow works versions WORK_ID
+.venv-workflow/Scripts/python.exe -m workflow create --template literary-translation-v1 --work WORK_ID --work-version VERSION_ID
 .venv-workflow/Scripts/python.exe -m workflow step RUN
 .venv-workflow/Scripts/python.exe -m workflow status RUN
-.venv-workflow/Scripts/python.exe -m workflow create --template literary-translation-v1 --work WORK_ID
 ```
 
-`--work` starts the workflow on an existing work's source; it is refused with
-`work_busy` while another run on that work is unfinished and with
-`workflow_read_only` once that workflow is finalized on the work. Every run
-prepares again; confirmed shared metadata is reused from the work library.
+Editing/translation require an explicit ready `--work-version`. The run copies
+its verified Markdown/front matter/assets and frozen analysis without another
+intake/reading. Missing or pending preparation returns `work_not_prepared`;
+unfinished jobs/runs still enforce `work_busy`. Each new workflow run publishes
+the next accepted workflow edition; accepted versions never mutate.
+
+Work preparation uses models enabled for `work-preparation` or either consumer
+workflow, since it replaces their former shared intake phases. Selection remains
+explicit and unsupported model keys never fall back silently. Saving a completed
+reading is a deterministic publication stage: storage retries do not call a model.
+Ready packages are Work assets, independent of producer workspaces. Validated
+analysis remains provisional unless its own review policy has been satisfied.
+Workflow/DOCX acceptance is not story-claim or catalogue-metadata approval.
+
+Accepted changed Markdown also registers a derived Work version with parent/run
+lineage and analysis pending. Translation does not replace the original source.
+Unchanged text or formatting-only output attaches deliverables without inventing
+a new manuscript version. Use `works prepare WORK --source-version VERSION` to
+prepare/analyze a pending edited or translated version.
+
+Existing run snapshots/receipts are not migrated or implicitly approved. Engine
+regression fixtures retain historical inline-intake compositions; production
+Work-version tests exercise the new entry point and consumer templates directly.
 `works list`, `works show WORK`, `works publications WORK`, and `works verify WORK`
 inspect works and their libraries.
 
@@ -187,13 +213,18 @@ passage continuation use their own saved gate IDs and free-text responses.
 Studio intake requires only the manuscript. Preparation produces source-supported
 draft metadata, including explicit contributor credits, and detects language and
 computes extent. There is no preliminary metadata form or language-hint field.
-The post-preparation Overview audit is the single metadata editor, including for
-later corrections; the Work page links there rather than offering another form.
+The Work preparation review is the single metadata intake editor. For later
+corrections, prepare from an existing ready version: metadata review creates a
+new immutable version with the same text and analysis and requires no model turn.
+`--refresh-analysis` explicitly requests another reading without re-extraction.
+The analysis records the metadata snapshot it actually consumed; consumers see
+when a newer confirmed metadata snapshot differs and must not mistake old
+profile/catalogue assumptions for current metadata.
 Optional unknown fields can remain empty. On reruns, the host retains reviewed
 shared metadata and shows source discrepancies at audit; the agent no longer
 receives or merges a mutable prior-work-record file.
 
-When preparation completes, the run waits at a `metadata_review` gate before any
+When extraction completes, the Work job waits at a `metadata_review` gate before any
 translation turn. `review` lists every shared `work.json` metadata field with its
 value, origin, review status, and confidence, plus unknown and stale fields. No
 agent runs at this gate. Edit one field at a time with a JSON value file:

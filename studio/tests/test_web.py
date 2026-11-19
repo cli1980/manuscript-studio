@@ -21,6 +21,7 @@ from workflow.src.storage import Store, digest, now
 from workflow.tests.test_execution import profile_data
 from workflow.tests.interior_fixture import apply_target, proposal_for
 from workflow.tests.analysis_fixture import analyze
+from workflow.tests.inline_intake_fixture import inline_intake_templates
 
 HAS_WEB = importlib.util.find_spec("fastapi") and importlib.util.find_spec("httpx")
 ORIGIN = "http://127.0.0.1:8765"
@@ -28,6 +29,11 @@ ORIGIN = "http://127.0.0.1:8765"
 
 @unittest.skipUnless(HAS_WEB, "Install studio/requirements.txt.")
 class StartupProfileTests(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.enterContext(inline_intake_templates(Path(folder.name)))
+
     def test_server_entrypoint_exposes_merged_startup_snapshot_and_user_model_selection(self):
         from fastapi.testclient import TestClient
         from studio.server.__main__ import main
@@ -296,6 +302,7 @@ class WebApiTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         base = Path(self.temp.name)
+        self.enterContext(inline_intake_templates(base))
         self.source = base / "original.md"
         self.source.write_bytes("# 故事\n\n他回来了。\n".encode())
         self.app = create_app(base / "server", runtime_factory=lambda: Scripted(translate), owner="tester")

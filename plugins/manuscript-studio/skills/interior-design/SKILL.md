@@ -27,6 +27,17 @@ reading only for its bound text/scope; otherwise read the available prepared
 units and include fresh analysis. Do not treat a source-language synopsis as a
 reading of changed translated text, or a sample as the whole book.
 
+In a hosted workflow, the selected Work version owns original preparation and
+analysis. Reuse that exact package when the text still matches; do not restart
+intake for a new run. Formatting edited/translated output still requires the
+existing exact-output preparation handoff and current-text reading. Missing
+prerequisites for the selected original input version return to Work preparation
+(or the sibling preparation/analysis skills in standalone use). Reading approved
+edited/translated output for design is not a replacement shared story ledger:
+follow the host's exact-output handoff without starting a competing Work job
+inside an active parent run. A layout-only result attaches to its text version;
+it does not create or approve a different manuscript.
+
 Keep supplied facts separate from inference. Reuse computed extent rather than
 asking users to retype word counts. Do not infer ISBN, imprint, authorship,
 publishing plans, brand, personal demographics or future series titles. Unknown

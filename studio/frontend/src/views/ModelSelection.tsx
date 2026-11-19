@@ -7,7 +7,9 @@ export function useModelSelection(workflow: string | undefined) {
   const [selected, setSelected] = useState<{ workflow: string | undefined; key: string }>({ workflow, key: "" });
   const configured = !!execution.data?.models.length;
   const models = execution.data?.models.filter((m) =>
-    workflow && (!m.workflows.length || m.workflows.includes(workflow))) ?? [];
+    workflow && (!m.workflows.length || m.workflows.includes(workflow)
+      || (workflow === "work-preparation"
+        && m.workflows.some((w) => w === "literary-editing" || w === "literary-translation")))) ?? [];
   const key = selected.workflow === workflow ? selected.key : "";
   const model = models.find((m) => m.model_key === key)?.model_key
     || models.find((m) => m.model_key === execution.data?.default_model)?.model_key || "";

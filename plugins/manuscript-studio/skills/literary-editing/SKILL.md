@@ -7,6 +7,16 @@ description: Review and edit book-length literary manuscripts through profession
 
 Route each request to the appropriate professional editorial service. Keep the source and workspace separate, review first, and change nothing until the user explicitly approves identified proposals.
 
+For a hosted whole-work flow, require a ready Work version before editorial
+jobs. Work preparation owns extraction, metadata review and manuscript analysis;
+the run consumes its pinned front matter, Markdown, assets and reading. Do not
+re-extract or trigger another reading merely because a new editing run starts.
+If the prerequisite is missing or stale, return it to Work preparation instead
+of creating an editorial-local preparation/analysis fork. Without a host,
+delegate missing preparation to prepare-manuscript and missing source-bound
+reading to manuscript-analysis before whole-work editorial assessment. Do not
+expand an explicitly isolated service request into unauthorized whole-work work.
+
 When the host supplies `manuscript_analysis`, reuse the
 [shared source reading](../manuscript-analysis/references/workflow-handoff.md)
 instead of creating a competing story ledger. Developmental editing still

@@ -5,6 +5,7 @@ import json
 import os
 import re
 import tempfile
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -33,6 +34,31 @@ def live_feed(route, path, runs, revision=None):
 class StudioCaseTests(unittest.TestCase):
     """Each case gets a fresh server root and app; no model runtime is started unless a case asks for one."""
 
+    def prepared_input(self, page, origin, work_id, *, metadata=None):
+        """Build real Work inputs; individual browser cases then focus on their consumer UI."""
+        headers = {"Origin": origin}
+        response = page.request.post(origin + f"/api/works/{work_id}/prepare", headers=headers, data={})
+        self.assertTrue(response.ok, response.text())
+        job_url = origin + "/api/runs/" + response.json()["id"]
+        reviewed = False
+        for _ in range(200):
+            job = page.request.get(job_url).json()
+            if job["status"] == "COMPLETED":
+                return job["prepared_version_id"]
+            if (job.get("gate") or {}).get("kind") == "metadata_review" and not reviewed:
+                for field, value in (metadata or {}).items():
+                    response = page.request.post(job_url + "/metadata", headers=headers,
+                        data={"field": field, "value": value, "rationale": "Explicit synthetic reviewer input."})
+                    self.assertTrue(response.ok, response.text())
+                job = page.request.get(job_url).json()
+                response = page.request.post(job_url + "/metadata/confirm", headers=headers,
+                    data={"gate_id": job["gate"]["id"], "record_revision": job["gate"]["record_revision"]})
+                self.assertTrue(response.ok, response.text())
+                reviewed = True
+            self.assertNotIn(job["status"], ("FAILED", "BLOCKED", "PAUSED"), job.get("error"))
+            time.sleep(0.1)
+        self.fail("Work preparation did not complete.")
+
     @unittest.skipUnless(os.environ.get("STUDIO_BROWSER") == "1", "Browser check: build frontend and set STUDIO_BROWSER=1.")
     def test_intake_requires_only_a_manuscript_and_defers_metadata_to_overview(self):
         from playwright.sync_api import expect
@@ -54,9 +80,10 @@ class StudioCaseTests(unittest.TestCase):
             expect(page.locator(".author-form")).to_have_count(0)
             expect(page.get_by_role("heading", name="About this manuscript", exact=True)).to_have_count(0)
             expect(page.locator(".metadata button")).to_have_count(0)
-            expect(page.get_by_text("Start a workflow to prepare this manuscript and review its metadata.")).to_be_visible()
+            expect(page.get_by_text("Prepare this Work to review its metadata.")).to_be_visible()
             workflow = page.get_by_role("heading", name="Start a workflow", exact=True).locator("..")
-            workflow.get_by_role("combobox").select_option("literary-translation-v1")
+            workflow.get_by_label("Workflow", exact=True).select_option("literary-translation-v1")
+            expect(workflow.get_by_role("button", name="Start", exact=True)).to_be_disabled()
             workflow.locator("summary").filter(has_text="Advanced").click()
             limit = workflow.get_by_label("Maximum passage size", exact=False)
             expect(limit).to_have_attribute("placeholder", "Automatic")
@@ -101,23 +128,21 @@ class StudioCaseTests(unittest.TestCase):
             page.goto(origin + "/#/works/" + work["id"])
             expect(page.get_by_role("heading", name="Format as DOCX", exact=True)).to_have_count(0)
             start = page.get_by_role("heading", name="Start a workflow", exact=True).locator("..")
-            expect(start.get_by_role("combobox").locator('option[value="manuscript-formatting-v1"]')).to_have_count(0)
-            start.get_by_role("combobox").select_option("literary-editing-v1")
-            with page.expect_response(lambda r: r.url == origin + "/api/runs" and r.request.method == "POST") as created:
-                start.get_by_role("button", name="Start", exact=True).click()
-            self.assertTrue(created.value.ok, created.value.text())
-            run = created.value.json()
+            expect(start.get_by_label("Workflow", exact=True).locator('option[value="manuscript-formatting-v1"]')).to_have_count(0)
+            expect(start.get_by_role("button", name="Start", exact=True)).to_be_disabled()
+            version_id = self.prepared_input(page, origin, work["id"])
+            created = page.request.post(origin + "/api/runs", headers=headers,
+                                        data={"template_id": "literary-editing-v1", "work_id": work["id"],
+                                              "work_version_id": version_id})
+            self.assertTrue(created.ok, created.text())
+            run = created.json()
             run_url = origin + "/api/runs/" + run["id"]
             for _ in range(100):
                 run = page.request.get(run_url).json()
                 if run.get("gate"):
                     break
                 time.sleep(0.1)
-            self.assertEqual(run["gate"]["kind"], "metadata_review")
-            confirmed = page.request.post(run_url + "/metadata/confirm", headers=headers, data={
-                "gate_id": run["gate"]["id"], "record_revision": run["metadata"]["record_revision"],
-            })
-            self.assertTrue(confirmed.ok, confirmed.text())
+            self.assertEqual(run["gate"]["kind"], "pass_choice")
             page.goto(f"{origin}/#/runs/{run['id']}/chapters")
             expect(page.get_by_role("button", name="Format", exact=True)).to_have_count(0)
             expect(page.get_by_role("button", name="Proceed to interior design", exact=True)).to_have_count(0)
@@ -401,8 +426,8 @@ class StudioCaseTests(unittest.TestCase):
             self.assertTrue(approved.value.ok, approved.value.text())
             expect(page.get_by_role("heading", name="Approve design and DOCX", exact=True)).to_be_visible()
             current = page.request.get(run_url).json()
-            # Preparation, shared analysis and design; native production adds no agent turn.
-            self.assertEqual((current["status"], current["finalized"], current["attempts"]), ("WAITING_FOR_ACCEPTANCE", False, 3))
+            # The run consumes Work preparation/analysis; only proposal authoring calls an agent.
+            self.assertEqual((current["status"], current["finalized"], current["attempts"]), ("WAITING_FOR_ACCEPTANCE", False, 1))
             self.assertIsNone(current.get("gate"))
             self.assertEqual(current["production"]["summary"]["toc"]["depth"], 2)
             expect(page.get_by_text("TOC field: update in Word", exact=True)).to_be_visible()
@@ -465,7 +490,7 @@ class StudioCaseTests(unittest.TestCase):
             expect(page.get_by_role("link", name="Download accepted DOCX", exact=True)).to_be_visible()
             page.goto(origin + "/#/works/" + work["id"])
             expect(page.get_by_role("heading", name="Story", exact=True)).to_be_visible()
-            page.get_by_role("link", name="Review and edit metadata in Overview", exact=True).click()
+            page.get_by_role("link", name="Review metadata", exact=True).click()
             expect(page.locator(".metadata tr").filter(
                 has=page.locator("th").filter(has_text=re.compile("^Title$")))).to_contain_text("Story")
             expect(page.locator(".metadata tr").filter(
@@ -494,7 +519,9 @@ class StudioCaseTests(unittest.TestCase):
             page.on("pageerror", lambda error: errors.append(str(error)))
             work = {"id": "model-work", "title": "Story", "manuscript_language": "en", "source_name": "story.md",
                     "owner": "test", "runs": [], "publications": [], "workflows": {}, "heads": {},
-                    "unfinished_run": None, "metadata": None}
+                    "unfinished_run": None, "metadata": None, "versions": [
+                        {"version_id": "wv-ready", "status": "ready", "kind": "original", "language": "en",
+                         "analysis_status": "provisional", "documents": []}]}
 
             def serve(route):
                 path = urlsplit(route.request.url).path
@@ -521,9 +548,11 @@ class StudioCaseTests(unittest.TestCase):
 
             page.route("**/api/**", serve)
             page.goto(f"{origin}/#/works/model-work")
-            workflow = page.get_by_role("combobox").first
+            form = page.get_by_role("heading", name="Start a workflow", exact=True).locator("..")
+            form.get_by_label("Prepared version", exact=True).select_option("wv-ready")
+            workflow = form.get_by_label("Workflow", exact=True)
             workflow.select_option("literary-editing-v1")
-            model = page.get_by_role("combobox", name="Model", exact=True)
+            model = form.get_by_role("combobox", name="Model", exact=True)
             start = page.get_by_role("button", name="Start", exact=True)
             expect(model).to_have_value("")
             expect(model.locator("option")).to_have_count(3)
@@ -532,7 +561,7 @@ class StudioCaseTests(unittest.TestCase):
             start.click()
             expect(page.get_by_role("alert")).to_contain_text("Fixture stops")
             self.assertEqual(submitted[-1], {"template_id": "literary-editing-v1",
-                                           "work_id": "model-work", "model": "editing"})
+                                           "work_id": "model-work", "work_version_id": "wv-ready", "model": "editing"})
             workflow.select_option("literary-translation-v1")
             expect(model).to_have_value("translation")
             model.select_option("shared")
@@ -542,7 +571,8 @@ class StudioCaseTests(unittest.TestCase):
 
             configured = False
             page.reload()
-            page.get_by_role("combobox").first.select_option("literary-editing-v1")
+            form.get_by_label("Prepared version", exact=True).select_option("wv-ready")
+            form.get_by_label("Workflow", exact=True).select_option("literary-editing-v1")
             expect(page.get_by_role("combobox", name="Model", exact=True)).to_have_count(0)
             page.get_by_role("button", name="Start", exact=True).click()
             expect(page.get_by_role("alert")).to_contain_text("Fixture stops")
@@ -578,7 +608,8 @@ class StudioCaseTests(unittest.TestCase):
                     body = [{"id": "literary-translation-v1", "title": "Literary translation",
                              "workflow": "literary-translation", "stages": ["prepare"], "choices": {}}]
                 elif path == "/api/works":
-                    body = [{"id": "model-work", "title": "Story", "manuscript_language": "zh"}]
+                    body = [{"id": "model-work", "title": "Story", "manuscript_language": "zh",
+                             "versions": [{"version_id": "wv-ready", "status": "ready", "kind": "original", "language": "zh"}]}]
                 elif path == "/api/runs" and route.request.method == "POST":
                     submitted.append(route.request.post_data_json)
                     # Keep the form visible, so this test isolates model selection from run navigation.
@@ -596,10 +627,11 @@ class StudioCaseTests(unittest.TestCase):
             expect(model).to_have_value("one")
             model.select_option("two")
             page.get_by_role("combobox", name="Work", exact=True).select_option("model-work")
+            page.get_by_label("Prepared version", exact=True).select_option("wv-ready")
             page.get_by_role("button", name="Create and start", exact=True).click()
             expect(page.get_by_role("alert")).to_contain_text("Fixture stops")
             self.assertEqual(submitted, [{"template_id": "literary-translation-v1",
-                                         "work_id": "model-work", "model": "two"}])
+                                         "work_id": "model-work", "work_version_id": "wv-ready", "model": "two"}])
             expect(page.locator("form")).to_contain_text("without an OS sandbox")
             self.assertEqual(errors, [])
 
@@ -886,8 +918,12 @@ class StudioCaseTests(unittest.TestCase):
                             "# 故事\n\n他回来了。\n".encode()).decode()},
                         "manuscript_language": "zh",
                     }).json()
+                    version_id = self.prepared_input(page, origin, work["id"], metadata={
+                        "/title": "Renamed " + workflow,
+                        "/contributors": [{"id": "a-writer", "name": "A. Writer", "roles": ["author"]}],
+                    })
                     run = page.request.post(origin + "/api/runs", headers=headers, data={
-                        "work_id": work["id"], "template_id": workflow + "-v1",
+                        "work_id": work["id"], "template_id": workflow + "-v1", "work_version_id": version_id,
                     }).json()
                     run_url = origin + "/api/runs/" + run["id"]
                     for _ in range(100):
@@ -895,11 +931,10 @@ class StudioCaseTests(unittest.TestCase):
                         if run.get("gate"):
                             break
                         time.sleep(0.1)
-                    self.assertEqual(run["gate"]["kind"], "metadata_review")
-                    self.assertEqual(run["viewer_target"], {"kind": "overview"})
+                    self.assertNotEqual(run["gate"]["kind"], "metadata_review")
                     overview_url = f"{origin}/#/runs/{run['id']}/overview"
                     page.goto(overview_url)
-                    expect(page.get_by_role("heading", name="Story", exact=True)).to_be_visible()
+                    expect(page.get_by_role("heading", name="Renamed " + workflow, exact=True)).to_be_visible()
                     expect(page.get_by_role("region", name="Work metadata")).to_be_visible()
                     expect(page.get_by_role("heading", name="Translation brief", exact=True)).to_have_count(
                         1 if workflow == "literary-translation" else 0)
@@ -908,36 +943,25 @@ class StudioCaseTests(unittest.TestCase):
                     expect(navigation.locator(".overview-entry")).to_be_visible()
                     expect(navigation.get_by_text("Overview", exact=True)).to_be_visible()
                     expect(navigation.locator(".overview-entry").get_by_text(
-                        "awaiting your review: metadata", exact=True)).to_have_count(1)
+                        "awaiting your review: metadata", exact=True)).to_have_count(0)
                     expect(navigation.locator("ol.chapters li")).to_have_count(1)
                     expect(navigation.locator("ol.chapters li")).to_contain_text("1.")
                     self.assertEqual(navigation.locator("ol .overview-entry").count(), 0)
                     navigation.locator("ol.chapters a").first.click()
                     expect(page).to_have_url(re.compile(r"/chapters/story$"))
                     expect(page.locator(".overview-section")).to_have_count(0)
-                    expect(page.locator(".approval-notice a").first).to_have_attribute("href", re.compile(r"/overview$"))
                     navigation.locator(".overview-entry a").click()
                     expect(page).to_have_url(overview_url)
                     original = page.request.get(run_url + "/overview").json()
                     title_row = page.locator(".metadata tr").filter(
                         has=page.locator("th").filter(has_text=re.compile("^Title$")))
-                    title_row.get_by_role("button", name="Edit", exact=True).click()
-                    title_row.locator("input").first.fill("Renamed " + workflow)
-                    with page.expect_response(lambda r: r.url == run_url + "/metadata") as renamed:
-                        title_row.get_by_role("button", name="Save", exact=True).click()
-                    self.assertTrue(renamed.value.ok, renamed.value.text())
-                    expect(page.get_by_role("heading", name="Renamed " + workflow, exact=True)).to_be_visible()
+                    expect(title_row).to_contain_text("Renamed " + workflow)
+                    expect(title_row.get_by_role("button")).to_have_count(0)
                     contributors = page.locator(".metadata tr").filter(
                         has=page.locator("th").filter(has_text=re.compile("^Contributors$")))
-                    contributors.get_by_role("button", name="Add", exact=True).click()
-                    contributors.get_by_role("button", name="Add person", exact=True).click()
-                    contributors.get_by_placeholder("Full name", exact=True).fill("A. Writer")
                     page.set_viewport_size({"width": 390, "height": 844})
                     self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 391)
                     page.set_viewport_size({"width": 1280, "height": 900})
-                    with page.expect_response(lambda r: r.url == run_url + "/metadata") as credited:
-                        contributors.get_by_role("button", name="Save", exact=True).click()
-                    self.assertTrue(credited.value.ok, credited.value.text())
                     expect(contributors).to_contain_text("A. Writer (author)")
                     expect(navigation.locator(".overview-entry a")).to_have_attribute("href", re.compile(r"/overview$"))
                     current = page.request.get(run_url + "/overview").json()
@@ -956,13 +980,7 @@ class StudioCaseTests(unittest.TestCase):
                     if evidence:
                         page.screenshot(path=str(Path(evidence) / f"{workflow}-overview-mobile.png"), full_page=True)
                     page.set_viewport_size({"width": 1280, "height": 900})
-                    # Both workflows hand analysis directly to their next stage, without an analysis approval.
-                    current_run = page.request.get(run_url).json()
-                    confirmed = page.request.post(run_url + "/metadata/confirm", headers=headers, data={
-                        "gate_id": current_run["gate"]["id"],
-                        "record_revision": current_run["gate"]["record_revision"],
-                    })
-                    self.assertTrue(confirmed.ok, confirmed.text())
+                    # Both workflows receive the selected Work reading immediately, with no analysis gate.
                     for _ in range(100):
                         ready = page.request.get(run_url + "/overview").json()
                         if ready.get("analysis"):
@@ -991,16 +1009,11 @@ class StudioCaseTests(unittest.TestCase):
                     expect(analysis.locator("input, textarea")).to_have_count(0)
                     analysis.get_by_role("tab", name="Synopsis", exact=True).click()
                     expect(analysis.get_by_role("tabpanel")).to_contain_text("Synthetic synopsis")
-                    # The same Overview editor remains available after the audit; approval stays a snapshot.
+                    # A workflow shows its pinned metadata, not a second mutable intake editor.
                     audience = page.locator(".metadata tr").filter(
                         has=page.locator("th").filter(has_text=re.compile("^Audience$")))
-                    expect(audience.get_by_role("button", name="Add", exact=True)).to_be_visible()
-                    audience.get_by_role("button", name="Add", exact=True).click()
-                    audience.locator("select").select_option("adult")
-                    with page.expect_response(lambda r: r.url == run_url + "/metadata") as completed:
-                        audience.get_by_role("button", name="Save", exact=True).click()
-                    self.assertTrue(completed.value.ok, completed.value.text())
-                    expect(audience).to_contain_text("adult")
+                    expect(audience.get_by_role("button")).to_have_count(0)
+                    expect(page.get_by_text("Metadata is pinned to the selected Work version.", exact=False)).to_be_visible()
                     page.set_viewport_size({"width": 390, "height": 844})
                     self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
                     if evidence:
@@ -1024,8 +1037,9 @@ class StudioCaseTests(unittest.TestCase):
                 "upload": {"name": "reference.md", "data": base64.b64encode("# 故事\n\n他回来了。\n".encode()).decode()},
                 "manuscript_language": "zh",
             }).json()
+            version_id = self.prepared_input(page, origin, work["id"])
             run = page.request.post(origin + "/api/runs", headers=headers, data={
-                "work_id": work["id"], "template_id": "literary-translation-v1",
+                "work_id": work["id"], "template_id": "literary-translation-v1", "work_version_id": version_id,
             }).json()
             run_url = origin + "/api/runs/" + run["id"]
 
@@ -1037,11 +1051,6 @@ class StudioCaseTests(unittest.TestCase):
                     time.sleep(0.1)
                 self.fail(f"Did not reach {kind}")
 
-            run = waiting("metadata_review")
-            response = page.request.post(run_url + "/metadata/confirm", headers=headers, data={
-                "gate_id": run["gate"]["id"], "record_revision": run["gate"]["record_revision"],
-            })
-            self.assertTrue(response.ok, response.text())
             run = waiting("brief_samples")
             response = page.request.post(run_url + "/reply", headers=headers, data={
                 "gate_id": run["gate"]["id"], "text": "S1 choose A: Preserve the plain voice.",

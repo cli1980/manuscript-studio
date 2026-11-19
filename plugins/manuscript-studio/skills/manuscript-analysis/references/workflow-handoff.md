@@ -1,12 +1,24 @@
 # Workflow Handoff
 
-Studio's literary editing and translation flows compose:
+Studio prepares a Work version before literary editing or translation:
 
-`Preparation -> Metadata confirmation -> Manuscript analysis -> Workflow-specific work`
+`Upload -> Work preparation -> Metadata confirmation -> Manuscript analysis -> Validated Work version`
+
+`Select ready Work version -> Workflow-specific work -> Accept output -> Attach deliverables/derived text`
+
+The Work preparation job owns the frozen package. Each consumer run pins its
+exact input version and analysis identity/checksum rather than re-running this
+reading. The Work library stores the complete preparation, front matter, ordered
+units/assets, metadata snapshot and analysis independently of producer workspaces.
+Publication retries reuse the completed reading without another agent turn.
+Newer Work versions never silently replace an active run's selected input.
+Changed accepted text may become a derived version with preparation/analysis
+pending; it cannot inherit the original analysis as a reading of changed text.
+Translation preserves the original and its still-valid source analysis.
 
 Metadata confirmation remains intake's existing human gate. Analysis introduces
-no new approval gate: a complete, evidence-audited reading passes directly to
-translation briefing or editing-pass selection. It remains provisional and does
+no new approval gate: a complete, evidence-audited reading makes a version
+eligible for translation briefing or editing-pass selection. It remains provisional and does
 not satisfy querying's separate atomic author-review and final-closure policy.
 Real questions or incomplete reading may still block progress.
 

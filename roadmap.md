@@ -22,6 +22,56 @@ their remaining work is not removed by this priority change.
 
 ## Cross-cutting decisions
 
+- **Work-owned preparation and manuscript versions (owner direction; implemented and verified):**
+  Refactor on `feature/work-preparation-versions`. After intake, a Work-owned
+  preparation job composes extraction/normalization, the existing metadata
+  review, manuscript analysis and validation. Editing and translation select
+  an immutable ready Work version containing prepared front matter, ordered
+  Markdown, assets, metadata and source-bound analysis rather than repeating
+  intake for every run. Keep preparation and analysis as separate skills.
+  Runs pin exact input and analysis revisions; newer versions never replace
+  active inputs. Accepted changed text may produce a derived Work version
+  with parent/run/language provenance; translation preserves the original,
+  unchanged developmental assessments do not duplicate text, and formatting
+  attaches deliverables rather than inventing another manuscript revision.
+  Changed text cannot inherit analysis approval or claim current analysis
+  without a matching binding. Preserve validated provisional context where
+  consumers permit it; querying retains its stricter claim-review policy.
+  Storage/readiness, human approval and catalogue-metadata adoption remain
+  distinct. Expose preparation progress/review/retry and version selection on
+  the Work; make starting agent work explicit. Preserve existing live runs and
+  their receipts; no active-run migration or automatic approval.
+  Implemented on the feature branch: separate Work jobs, source-canonicalized
+  immutable version packages (including historical metadata objects/receipts),
+  explicit consumer version selection, accepted changed-text write-back with
+  analysis pending, and Work-owned review/recovery UI. Metadata-only revisions
+  reuse preparation/analysis with zero model turns; explicitly refreshed readings
+  reuse extraction without pretending the older reading saw newer metadata.
+  Focused verification passes 14 Work lifecycle regressions, the production
+  API/worker/change-feed test and the intake case. Checks include full unchanged
+  editing-to-DOCX acceptance without a duplicate text version, accepted translation
+  and independent target-language preparation, incomplete/stale/cross-Work input
+  refusal, producer-workspace independence, metadata history, and interrupted
+  publication retry without another reading. Restarts preserve the explicitly
+  selected version rather than adopting newer metadata; historical runs without
+  a selected version are refused before cancellation, not migrated or discarded.
+  The 138 broader workflow/execution/Studio API regressions pass. The real GUI
+  and case suite passes 11 checks, with one expected live-model case skipped;
+  this includes desktop/mobile Work preparation and selection, both consumers'
+  pinned Overview/analysis, and design save/generation/acceptance/download.
+  Mobile selectors, long paths and publication history remain within the page
+  using wrapping and locally scrollable tables. The isolated frontend build,
+  TypeScript, LF and whitespace checks pass. At the owner's subsequent request,
+  Studio was restarted with the tested frontend/backend and a fresh empty
+  workspace (`studio-empty-20261119T045219Z`). Browser/API checks confirm zero
+  Works/runs; all four prior run-state hashes remain unchanged in the preserved
+  workspace. Configuration and the 1800-second timeout are retained. No existing
+  runs were migrated or approved.
+  Evidence: `workflow/tests/test_work_versions.py`,
+  `studio/tests/test_work_preparation.py`; existing engine/metadata regression
+  fixtures explicitly retain historical inline-intake compositions and are not
+  presented as tests of the new production entrypoint.
+
 - **Analysis subject proposals (owner direction, 2026-11-18):**
   Manuscript analysis proposes BISAC Subjects, Thema Subjects, Keywords and
   Place Subjects after the whole-source reading. Contract `/2` binds all four

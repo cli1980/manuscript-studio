@@ -381,9 +381,13 @@ def write_report(engine, case):
                           "run.completed": "export"}.get(event["kind"]))
                 if stage and (not stages or stages[-1] != stage):
                     stages.append(stage)
-            require(stages == case["spec"]["expected_output"]["stage_sequence"],
+            expected = case["spec"]["expected_output"]["stage_sequence"]
+            if state.get("input_version"):
+                expected = [stage for stage in expected if stage not in ("prepare", "metadata", "analysis")]
+            require(stages == expected,
                     f"Unexpected executed stage sequence: {stages}")
-            return stages
+            return {"executed_in_run": stages, "pinned_work_version": state["input_version"]} \
+                if state.get("input_version") else stages
 
         check("stage-order", stage_order, ready=state["status"] == "COMPLETED")
 
@@ -707,6 +711,8 @@ def parser():
     result.add_argument("--server-root", type=Path, default=REPO / ".workflow-runs/e2e",
                         help="Workflow server root for E2E works and runs.")
     result.add_argument("--resume", help="Resume a run ID created by this launcher under the server root.")
+    result.add_argument("--work", help="Work containing the case's prepared source.")
+    result.add_argument("--work-version", help="Exact ready Work version; prepare it separately before a new E2E run.")
     result.add_argument("--codex", default="codex", help="Codex executable, not a shell command.")
     result.add_argument("--model", help="Override both agents' models on creation.")
     result.add_argument("--auto-approve-recommended", action="store_true",
@@ -745,6 +751,16 @@ def main(argv=None):
         from workflow.src.service import WorkflowService
         service = WorkflowService(args.server_root)
         run_id = args.resume
+        from workflow.src import registry
+        prepared_input = registry.get(case["template_id"]).get("prepared_input", False)
+        if not run_id and prepared_input and not args.preflight:
+            require(args.work and args.work_version,
+                    "Prepare the case manuscript on its Work first, then pass --work and --work-version. "
+                    "This launcher does not repeat preparation inside editing/translation.")
+            from workflow.src.work_versions import load_version
+            selected = load_version(service.library(args.work), args.work_version)
+            require(selected["source"]["sha256"] == case["spec"]["input"]["manuscript"]["sha256"],
+                    "Selected Work version does not match the case source.")
         if run_id:
             with service.open_run(run_id) as engine:
                 if engine.retired:
@@ -757,9 +773,12 @@ def main(argv=None):
             return 0
         model = args.model or case["spec"]["input"]["runtime"].get("model")
         if run_id is None:
-            # Each launch uploads the case manuscript, which always creates a new work.
-            run_id = service.create_run(case["template_id"], upload=Path(case["source_path"]),
-                                        manuscript_language=case["spec"]["input"]["manuscript_language"], model=model)
+            if prepared_input:
+                run_id = service.create_run(case["template_id"], work_id=args.work,
+                                            work_version_id=args.work_version, model=model)
+            else:
+                run_id = service.create_run(case["template_id"], upload=Path(case["source_path"]),
+                                            manuscript_language=case["spec"]["input"]["manuscript_language"], model=model)
         with service.open_run(run_id) as engine:
             bind_case(engine, case, runtime_info, model if not args.resume else args.model, resume=bool(args.resume))
             print(f"Run: {run_id}\nPath: {engine.root}\nResume: python workflow/tests/run_e2e.py --case "

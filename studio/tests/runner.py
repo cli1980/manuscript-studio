@@ -126,7 +126,14 @@ class CaseRunner:
 
     def step_start_run(self, step):
         """The work page's Start button: create a run on an existing work."""
-        status, body = self.request("POST", "/api/runs", {"template_id": step["template_id"], "work_id": step["work_id"]})
+        status, body = self.request("POST", "/api/runs", {"template_id": step["template_id"], "work_id": step["work_id"],
+                                                        "work_version_id": step.get("work_version_id")})
+        self.expect_status(status, step.get("status", 200), body)
+        return body
+
+    def step_prepare_work(self, step):
+        status, body = self.request("POST", f"/api/works/{step['work_id']}/prepare", {
+            "source_version_id": step.get("source_version_id"), "refresh_analysis": step.get("refresh_analysis", False)})
         self.expect_status(status, step.get("status", 200), body)
         return body
 
@@ -206,6 +213,9 @@ class CaseRunner:
             chapter = (f"/{gate['chapter_id']}" if run["status"] == "WAITING_FOR_HUMAN" and gate.get("chapter_id")
                        and gate["chapter_id"] != "_whole" else "")
             page.goto(f"{self.origin}/#/runs/{run_id}/chapters{chapter}")
+            page.wait_for_selector(".panel.gate", timeout=60000)
+        elif run.get("workflow") == "work-preparation":
+            page.goto(f"{self.origin}/#/works/{run['work_id']}/preparations/{run_id}")
             page.wait_for_selector(".panel.gate", timeout=60000)
         else:
             page.goto(f"{self.origin}/#/runs/{run_id}")

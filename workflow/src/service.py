@@ -17,6 +17,7 @@ from .library import WorkLibrary
 from .prepared import METADATA_CONFIRMATION, load_metadata_helper
 from .storage import Store, json_bytes, now, plain
 from .usage import run_usage
+from .work_versions import checkout_version, load_version, versions
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS works (
@@ -50,6 +51,7 @@ class WorkflowService:
         self.root.mkdir(parents=True, exist_ok=True)
         (self.root / "works").mkdir(exist_ok=True)
         (self.root / "runs").mkdir(exist_ok=True)
+        (self.root / "preparations").mkdir(exist_ok=True)
         self.owner = owner or default_owner()
         self.execution_profile = execution_profile
         self.db = sqlite3.connect(self.root / "index.sqlite3", timeout=10, isolation_level=None,
@@ -84,7 +86,7 @@ class WorkflowService:
                  "produces": t.get("produces"), "stages": [s["id"] for s in t["stages"]],
                  "choices": {s["id"]: s["options"] for s in t["stages"] if s["kind"] == "select"},
                  "passage_size": t.get("passage_size")}
-                for t in registry.templates().values()]
+                for t in registry.templates().values() if not t.get("work_preparation")]
 
     def _work_row(self, work_id):
         row = self.db.execute("SELECT * FROM works WHERE id=?", (work_id,)).fetchone()
@@ -116,6 +118,8 @@ class WorkflowService:
         workflows = {row["workflow"]: {"status": row["status"], "finalized_run_id": row["finalized_run_id"]}
                      for row in self.db.execute("SELECT * FROM work_workflows WHERE work_id=?", (work_id,))}
         for record in library.finalized():  # The latest accepted version of each workflow.
+            if not record["workflow"]:
+                continue
             workflows[record["workflow"]] = {"status": "completed", "finalized_run_id": record["run_id"],
                                              "version": next((a.split("/")[1] for a in record["areas"]), None)}
         info = library.info()
@@ -124,6 +128,18 @@ class WorkflowService:
                               for row in self.list_works()
                               if (self.library(row["id"]).info().get("origin") or {}).get("work_id") == work_id]
         work.update(workflows=workflows, runs=self.list_runs(work_id=work_id),
+                    versions=[{**{key: version.get(key) for key in (
+                        "version_id", "publication_id", "status", "kind", "language", "created_at",
+                        "parent_version_id", "producer_job_id", "producer_run_id")},
+                        "analysis_status": (version.get("analysis") or {}).get("approval_status"),
+                        "analysis_id": (version.get("analysis") or {}).get("analysis_id"),
+                        "documents": [{"path": path, "artifact": artifact["artifact"]}
+                                      for path, artifact in version.get("files", {}).items()
+                                      if path.endswith((".md", ".json"))]}
+                              for version in versions(library)],
+                    preparation_jobs=[dict(row) for row in self.db.execute(
+                        "SELECT * FROM runs WHERE work_id=? AND workflow='work-preparation' ORDER BY created_at",
+                        (work_id,))],
                     unfinished_run=self._unfinished(work_id),
                     heads={artifact: {key: record.get(key) for key in (
                         "id", "version", "sha256", "status", "review_status", "created_at", "run_id", "contract")}
@@ -189,7 +205,8 @@ class WorkflowService:
     def _record_state(self, run_id, state):
         self.db.execute("UPDATE runs SET status=?, stage=?, updated_at=? WHERE id=?",
                         (state["status"], state["stage"], now(), run_id))
-        if state.get("prepared") and state.get("manuscript_language"):
+        if state.get("prepared") and state.get("manuscript_language") and not state.get("input_version") \
+                and state.get("preparation_kind", "original") == "original":
             self.db.execute("UPDATE works SET manuscript_language=? WHERE id=?",
                             (state["manuscript_language"], state["work_id"]))
         if state.get("acceptance"):
@@ -236,7 +253,7 @@ class WorkflowService:
 
     def list_runs(self, owner=None, work_id=None):
         rows = self.db.execute("SELECT * FROM runs WHERE (?1 IS NULL OR owner=?1) AND (?2 IS NULL OR work_id=?2) "
-                               "ORDER BY created_at", (owner, work_id)).fetchall()
+                               "AND workflow != 'work-preparation' ORDER BY created_at", (owner, work_id)).fetchall()
         return [dict(row) for row in rows]
 
     def reindex(self):
@@ -249,7 +266,8 @@ class WorkflowService:
                     info["work_id"], info["title"], info["owner"], source["sha256"], info["source_name"],
                     info["manuscript_language"] or "und", info["created_at"]))
             known = {row["id"]: row["path"] for row in self.db.execute("SELECT id, path FROM runs")}
-            paths = {**{p.parent.name: str(p.parent) for p in (self.root / "runs").glob("*/state.sqlite3")}, **known}
+            paths = {**{p.parent.name: str(p.parent) for area in ("runs", "preparations")
+                        for p in (self.root / area).glob("*/state.sqlite3")}, **known}
             for run_id, path in paths.items():
                 state = self._load_state(path)
                 if run_id not in known:
@@ -267,9 +285,11 @@ class WorkflowService:
         return model
 
     def create_run(self, template_id, *, upload=None, manuscript_language=None, work_id=None, owner=None,
-                   model=None, agent_models=None, settings=None):
+                   model=None, agent_models=None, settings=None, work_version_id=None):
         """An upload creates a new work with an optional language hint; work_id uses an existing work."""
         template = registry.get(template_id)
+        if template.get("work_preparation"):
+            raise ValueError("Start Work preparation from the Work, not as an editing or translation workflow.")
         model = self._resolve_models(template, model, agent_models)
         if "consumes" in template:
             raise ValueError("This is a derived template; use create_derived_run with a publication.")
@@ -277,6 +297,11 @@ class WorkflowService:
             raise ValueError("Provide exactly one of an uploaded source (new work) or an existing work ID.")
         owner = owner or self.owner
         with self._transaction():
+            selected = None
+            if template.get("prepared_input"):
+                if upload is not None or not work_id or not work_version_id:
+                    raise WorkflowError("work_not_prepared", "Select a ready Work version before starting a workflow.")
+                selected = load_version(self.library(work_id), work_version_id)
             if upload is not None:
                 work_id = self._create_work(upload, manuscript_language, owner)
             else:
@@ -285,21 +310,56 @@ class WorkflowService:
                 manuscript_language = self._work_row(work_id)["manuscript_language"]
                 self._check_can_start(work_id, template["workflow"])
             return self._create(template, work_id, owner, manuscript_language, model, agent_models,
-                                settings=settings)
+                                settings=settings, selected_version=selected)
+
+    def create_preparation(self, work_id, *, source_version_id=None, model=None, agent_models=None,
+                           refresh_analysis=False):
+        """An explicitly requested Work job, not another manuscript workflow."""
+        template = registry.get("work-preparation-v1")
+        model = self._resolve_models(template, model, agent_models)
+        with self._transaction():
+            self._check_can_start(work_id, template["workflow"])
+            source_version = load_version(self.library(work_id), source_version_id, ready=False) \
+                if source_version_id else None
+            language = source_version["language"] if source_version else self.library(work_id).info()["manuscript_language"]
+            return self._create(template, work_id, self.owner, language, model, agent_models,
+                                preparation_version=source_version, refresh_analysis=refresh_analysis)
 
     def _create(self, template, work_id, owner, manuscript_language, model, agent_models, restart_of=None,
-                settings=None):
+                settings=None, selected_version=None, preparation_version=None, refresh_analysis=False):
         model = self._resolve_models(template, model, agent_models)
         library = self.library(work_id)
-        source, record = library.source()
+        if template.get("prepared_input") and selected_version is None:
+            raise WorkflowError("work_not_prepared", "A ready Work version is required.")
+        version_source = selected_version or preparation_version
+        if version_source:
+            record = library.publication(version_source["source"]["publication_id"])
+            source = library.path(record["artifact"])
+            manuscript_language = version_source["language"]
+        else:
+            source, record = library.source()
         run_id = str(uuid.uuid4())
-        root = self.root / "runs" / run_id
+        root = self.root / ("preparations" if template.get("work_preparation") else "runs") / run_id
         engine = registry.engine_class(template["engine"]).create(
             root, template, source=source, manuscript_language=manuscript_language, work_id=work_id, owner=owner,
             source_name=record.get("source_name"), model=model, agent_models=agent_models, library=library,
             run_id=run_id, settings=settings,
         )
         try:
+            if template.get("work_preparation"):
+                revision, state = engine.store.load()
+                state["preparation_source"] = {
+                    "artifact": record["artifact"], "publication_id": record["id"], "sha256": record["sha256"],
+                    "source_name": (version_source or {}).get("source", {}).get("source_name")
+                    or record.get("source_name") or source.name}
+                state["preparation_parent_version_id"] = (preparation_version or {}).get("version_id")
+                state["preparation_kind"] = (preparation_version or {}).get("kind", "original")
+                state["refresh_analysis"] = bool(refresh_analysis)
+                engine.store.save(revision, state, "work_preparation.requested", state["preparation_source"])
+                if preparation_version and preparation_version["status"] == "ready":
+                    engine.review_prepared_metadata(preparation_version, refresh_analysis=refresh_analysis)
+            if selected_version:
+                checkout_version(engine, selected_version)
             if self.execution_profile:
                 revision, state = engine.store.load()
                 state["execution"] = self.execution_profile.describe(model)
@@ -539,10 +599,21 @@ class WorkflowService:
                                                  restart_of=run_id)
             else:
                 # The old run is cancelled first, so the one-run-per-work rule does not block the restart.
+                if template.get("prepared_input") and not state.get("input_version"):
+                    raise WorkflowError("work_not_prepared", "This older run has no selected Work version. "
+                        "Finish or explicitly stop it, prepare a Work version, and start a new workflow. "
+                        "The original run has not been cancelled or migrated.")
+                selected = load_version(engine.library, state["input_version"]["version_id"]) \
+                    if template.get("prepared_input") and state.get("input_version") else None
+                preparation_version = load_version(
+                    engine.library, state["preparation_parent_version_id"], ready=False) \
+                    if template.get("work_preparation") and state.get("preparation_parent_version_id") else None
                 engine.cancel(superseded_by="pending", confirm_stopped=confirm_stopped)
                 with self._transaction():
                     new_id = self._create(template, row["work_id"], owner, state["manuscript_language"], model,
-                                          agent_models, restart_of=run_id, settings=state.get("settings"))
+                                          agent_models, restart_of=run_id, settings=state.get("settings"),
+                                          selected_version=selected, preparation_version=preparation_version,
+                                          refresh_analysis=state.get("refresh_analysis", False))
         self._mark_superseded(row["path"], new_id, reason)
         if carry:
             with self.open_run(new_id) as new:

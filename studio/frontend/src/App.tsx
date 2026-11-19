@@ -21,7 +21,8 @@ function useHash() {
 export function App() {
   const parts = useHash().replace(/^#\/?/, "").split("?")[0].split("/").map(decodeURIComponent);
   let view;
-  if (parts[0] === "works" && parts[1]) view = <WorkView workId={parts[1]} />;
+  if (parts[0] === "works" && parts[1] && parts[2] === "preparations" && parts[3]) view = <RunView runId={parts[3]} />;
+  else if (parts[0] === "works" && parts[1]) view = <WorkView workId={parts[1]} />;
   else if (parts[0] === "works") view = <Works />;
   else if (parts[0] === "runs" && parts[1] === "new") view = <Runs initialWork={parts[2]} />;
   else if (parts[0] === "runs" && parts[1] && parts[2] === "overview") view = <Chapters runId={parts[1]} />;

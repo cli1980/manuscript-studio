@@ -38,6 +38,12 @@ def profile_data():
 
 
 class ProfileTests(unittest.TestCase):
+    def setUp(self):
+        from .inline_intake_fixture import inline_intake_templates
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.enterContext(inline_intake_templates(Path(folder.name)))
+
     def test_restart_rejects_changed_models_without_cancelling_original(self):
         for change in ("removed-key", "restricted-workflow", "incompatible-default"):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as folder:
@@ -358,12 +364,13 @@ class UserProfileTests(unittest.TestCase):
                                            "workflows": ["literary-translation"]}]})
         source = self.root / "source.md"
         source.write_bytes(b"# Manuscript\n\nA short story.\n")
+        with WorkflowService(self.root / "server") as service:
+            work_id = service.create_work(source, "en")
         with contextlib.redirect_stdout(io.StringIO()) as output:
             code = cli.main(["--server-root", str(self.root / "server"),
                              "--execution-profile", str(self.project),
                              "--user-execution-profile", str(self.user),
-                             "create", "--template", "literary-translation-v1",
-                             "--source", str(source), "--manuscript-language", "en"])
+                             "works", "prepare", work_id])
         self.assertEqual(code, 0, output.getvalue())
         self.assertIn('"model": "personal-model"', output.getvalue())
         self.assertIn(f'--execution-profile "{self.project}"', output.getvalue())

@@ -25,14 +25,41 @@ and cannot contain traversal components, absolute paths, or links outside it.
 
 The received original remains authoritative and read-only during preparation.
 In Studio the only required user intake is that manuscript. The host assigns
-work/revision IDs, output location and whole-work scope. Preparation produces
-draft metadata with the verified text; optional entry and corrections happen
-at the existing Overview audit, not before extraction. Reviewed shared metadata
-is host-owned on reruns and remains separate from the original source text.
+work/revision IDs, output location and whole-work scope. Work preparation
+composes this skill, metadata review, manuscript-analysis and validation before
+publishing a ready Work version. Starting that agent job is explicit after
+upload. Preparation produces draft metadata with verified text; corrections
+happen at the Work preparation review, not in a pre-extraction questionnaire.
+Reviewed shared metadata remains separate from the original source text.
 The prepared package is a verified source representation, never an editorial
 working copy. Keep it outside the original source location and all downstream
 working/output directories. It can be shared by several workflows without letting
 one workflow's edits replace another workflow's source.
+
+## Work-owned versions and runs
+
+The preparation package format remains independent of Studio and its database.
+Studio's Work library stores immutable prepared-version manifests under the
+`prepared-work-version/1` contract, with exact source publication/checksum,
+prepared files/assets, front matter, metadata review provenance and analysis
+references. The source locator is canonicalized to the unchanged Work-owned
+source before metadata review and analysis freeze hashes. Package snapshots
+remain usable without the producer job's workspace.
+
+Editing/translation runs select a ready version and materialize its exact bytes
+into an isolated workspace. They do not repeat extraction, metadata intake or
+analysis at each new workflow. Selection pins version and analysis identities;
+an update to the Work cannot change an active run's inputs. Provisional analysis
+may support context without claiming author approval. Stricter consumer review
+requirements, notably querying's claim-level gate, still apply.
+
+Only explicitly accepted changed text may become a derived Work version. Keep
+its parent version, producing run, language and source provenance. Translation
+preserves the original; its target text needs its own preparation/analysis
+binding. A derived version may be saved as `analysis_pending` and cannot be
+selected as ready until Work preparation validates it. Unchanged text and
+layout-only deliverables do not duplicate the manuscript. Original analysis
+remains historical source context where edited text differs.
 
 ## Work record
 

@@ -1,0 +1,46 @@
+{
+  "id": "work-preparation-v1",
+  "title": "Work preparation",
+  "workflow": "work-preparation",
+  "engine": "workflow.src.work_preparation:WorkPreparationEngine",
+  "work_preparation": true,
+  "locked_metadata": ["/manuscript_language"],
+  "agents": {
+    "prepare": {
+      "skill": "prepare-manuscript",
+      "skills": ["prepare-manuscript"],
+      "model": null
+    },
+    "analysis": {
+      "skill": "manuscript-analysis",
+      "skills": ["prepare-manuscript", "manuscript-analysis", "review-approval-sheet"],
+      "model": null
+    }
+  },
+  "gates": {
+    "question": {"sheet": "optional", "binding": "optional"}
+  },
+  "stages": [
+    {
+      "id": "prepare",
+      "kind": "agent",
+      "agent": "prepare",
+      "preparation": true,
+      "gates": ["question"],
+      "owns": ["prepared/", "source/"]
+    },
+    {"id": "metadata", "kind": "metadata_review"},
+    {
+      "id": "analysis",
+      "kind": "agent",
+      "agent": "analysis",
+      "gates": ["question"],
+      "owns": ["manuscript-analysis/"]
+    },
+    {"id": "save-preparation", "kind": "publication"}
+  ],
+  "library": {
+    "checkout": [],
+    "areas": []
+  }
+}

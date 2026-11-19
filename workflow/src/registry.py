@@ -25,6 +25,8 @@ TEMPLATE_SCHEMA = {
         "workflow": ID,
         "engine": {"type": "string", "pattern": r"^[A-Za-z_][\w.]*:[A-Za-z_]\w*$"},
         "locked_metadata": PATHS,
+        "prepared_input": {"type": "boolean"},
+        "work_preparation": {"type": "boolean"},
         # Default maximum passage size, by unit; a run may choose another value at creation.
         "passage_size": {"type": "object", "required": ["cjk_chars", "words"], "additionalProperties": False,
                          "properties": {"cjk_chars": {"type": "integer", "minimum": 100},
@@ -66,7 +68,8 @@ TEMPLATE_SCHEMA = {
             "type": "object", "required": ["id", "kind"],
             "properties": {
                 "id": ID,
-                "kind": {"enum": ["agent", "metadata_review", "select", "acceptance", "production", "export"]},
+                "kind": {"enum": ["agent", "metadata_review", "select", "acceptance", "production",
+                                   "publication", "export"]},
                 "agent": {"type": "string"},
                 "preparation": {"type": "boolean"},
                 # A select stage: the user picks option stages one at a time (e.g. editing passes) and accepts
@@ -114,7 +117,7 @@ def validate(template, *, origin="template"):
         if stage.get("front_matter"):
             before = template["stages"][:template["stages"].index(stage)]
             if stage["kind"] != "agent" or stage.get("iterate") or stage.get("preparation") \
-                    or not any(s.get("preparation") for s in before):
+                    or not (template.get("prepared_input") or any(s.get("preparation") for s in before)):
                 raise ValueError(f"{origin}: a front-matter stage is a non-iterating agent stage after preparation.")
             if not any("documents" in template["gates"][gate] for gate in stage.get("gates", [])):
                 raise ValueError(f"{origin}: a front-matter stage needs a gate that presents documents.")

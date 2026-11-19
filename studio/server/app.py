@@ -24,6 +24,7 @@ from workflow.src.prepared import WHOLE
 from workflow.src.runtime import CodexRuntime
 from workflow.src.service import WorkflowService
 from workflow.src.storage import digest, plain
+from workflow.src.work_versions import load_version
 from .live import Watcher, visible
 from .worker import Workers
 
@@ -128,7 +129,8 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         for work in svc.list_works():
             detail = svc.get_work(work["id"])
             result.append({**work, "workflows": detail["workflows"], "unfinished_run": detail["unfinished_run"],
-                           "runs": len(detail["runs"]), "artifacts": len(detail["heads"])})
+                           "runs": len(detail["runs"]), "artifacts": len(detail["heads"]),
+                           "versions": detail["versions"]})
         return result
 
     @app.post("/api/works")
@@ -174,6 +176,23 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         svc.edit_work_metadata(work_id, payload["field"], payload["value"],
                                payload.get("rationale") or "Explicit metadata edit.")
         return work(work_id, svc)
+
+    @app.post("/api/works/{work_id}/prepare")
+    def prepare_work(work_id: str, payload: dict = Body(default={}), svc: WorkflowService = Depends(service)):
+        job_id = svc.create_preparation(work_id, source_version_id=payload.get("source_version_id"),
+                                        model=payload.get("model"), refresh_analysis=payload.get("refresh_analysis") is True)
+        if payload.get("start", True):
+            workers.start(job_id)
+        return run_detail(svc, job_id)
+
+    @app.get("/api/works/{work_id}/versions/{version_id}/artifact")
+    def version_artifact(work_id: str, version_id: str, path: str, svc: WorkflowService = Depends(service)):
+        library = svc.library(work_id)
+        version = load_version(library, version_id)
+        artifact = version["files"].get(path)
+        if artifact is None or not path.endswith((".md", ".json")):
+            raise HTTPException(404, "No readable document at this version path.")
+        return library.read(artifact).decode("utf-8")
 
     @app.get("/api/works/{work_id}/artifact")
     def artifact(work_id: str, path: str, svc: WorkflowService = Depends(service)):
@@ -284,7 +303,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         if any(key in payload for key in ("derived", "publication_id", "options", "new_edition")):
             raise HTTPException(400, "Separate formatting runs were removed. Use the workflow's final formatting phase.")
         run_id = svc.create_run(template_id, work_id=payload.get("work_id"), model=payload.get("model"),
-                                settings=payload.get("settings"))
+                                settings=payload.get("settings"), work_version_id=payload.get("work_version_id"))
         if payload.get("start", True):
             workers.start(run_id)
         return run_detail(svc, run_id)
@@ -456,7 +475,8 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
         front = next((c for c in state.get("chapters") or [] if c["role"] == "front_matter"), None)
         # Review edits are run-local until confirmation publishes them to the work.
         title = metadata["metadata"].get("title") if metadata else None
-        if (state.get("finalized") or state["status"] == "CANCELLED") and not svc._unfinished(state["work_id"]):
+        if not state.get("input_version") and (state.get("finalized") or state["status"] == "CANCELLED") \
+                and not svc._unfinished(state["work_id"]):
             title = svc.get_work(state["work_id"])["title"]
         return {"work_id": state["work_id"], "title": title or svc.get_work(state["work_id"])["title"],
                 "source_unit_id": front["chapter_id"] if front else None}
@@ -468,7 +488,13 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
             metadata = engine.metadata_view(state) if state.get("prepared") else None
             editor_run = svc.metadata_editor_run(state["work_id"])
             edit_target = None
-            if metadata and editor_run == run_id:
+            if metadata and state.get("input_version") and state["workflow"] != "work-preparation":
+                approved = json.loads(engine.store.content(state["metadata_approval"]))
+                metadata = {**metadata, "metadata": approved["metadata"],
+                            "provenance": approved["metadata_provenance"],
+                            "record_revision": approved["record_revision"]}
+                editor_run = None
+            elif metadata and editor_run == run_id:
                 if svc._unfinished(state["work_id"]) == run_id:
                     if state["status"] != "RUNNING" and engine.summary(state)["engine_current"]:
                         edit_target = "run"
@@ -487,7 +513,7 @@ def create_app(server_root, *, port=8765, runtime_factory=None, codex="codex", t
                     "metadata_edit": {"target": edit_target, "run_id": editor_run},
                     "analysis": ({key: analysis[key] for key in (
                         "analysis_id", "approval_status", "qualifications", "coverage_verification",
-                        "current_text_matches_source")} | {
+                        "current_text_matches_source", "current_metadata_matches_analysis")} | {
                             "subject_proposals": analysis.get("subject_proposals"),
                             "documents": documents(engine, analysis["artifacts"].values())} if analysis else None),
                     "metadata_fields": svc.metadata_fields(),

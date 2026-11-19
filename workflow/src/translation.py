@@ -181,6 +181,7 @@ class TranslationEngine(PreparedManuscriptEngine):
             "map_exceptions_approval": state["approvals"].get("map_exceptions"),
             "sanity_approval": state["approvals"].get("chapter_sanity"),
             "metadata_approval": state.get("metadata_approval"),
+            "work_version": state.get("input_version"),
             "manuscript_analysis": self.analysis_handoff(state),
             "brief_samples_approval": state["approvals"].get("brief_samples") if stage.get("front_matter") else None,
             "translation_brief_approval": (state.get("front_matter_approvals") or {}).get("translation_brief"),

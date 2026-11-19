@@ -23,6 +23,18 @@ For a new project, or an existing project missing a verified prepared source, `g
 
 Use the shared `work.json` and its current revision manifest as the source handoff. Read chapters in manifest order and preserve the prepared source files. Update only `workflows.literary-translation` under the [shared status contract](../prepare-manuscript/references/preparation-contract.md#downstream-status-and-ownership), pointing to the translation project's actual state location. Bind the operation and chapter scope to the prepared revision. Chapter completion is not whole-work completion.
 
+For a hosted whole-work flow, consume the selected ready Work version, including
+prepared front matter, ordered Markdown, assets, metadata and analysis. Do not
+repeat extraction, metadata intake or analysis at the start of each run, or
+silently switch to a newer Work version. Missing/stale prerequisites return to
+Work preparation. Standalone whole-work use delegates missing preparation to
+prepare-manuscript and missing source-bound reading to manuscript-analysis;
+an explicitly isolated passage remains scoped/provisional, not permission to
+read an undesignated whole book. Original/prepared source stays unchanged.
+Changes to translation drafts do not invalidate unchanged source analysis.
+An accepted translation is a language-specific derived version, not a rewrite
+of the original; analysis of that translated text needs its own exact binding.
+
 When the host supplies `manuscript_analysis`, consume the source-bound
 [shared analysis handoff](../manuscript-analysis/references/workflow-handoff.md)
 for the glossary, voice record, samples and chapter/whole-book context. Reuse

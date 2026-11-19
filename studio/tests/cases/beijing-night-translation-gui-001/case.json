@@ -30,12 +30,23 @@
       ]
     },
     {
+      "action": "prepare_work",
+      "work_id": "$work.id",
+      "save_as": "preparation"
+    },
+    {
+      "action": "drive_run",
+      "run_id": "$preparation.id",
+      "until": "metadata",
+      "timeout": 21600
+    },
+    {
       "action": "post",
-      "path": "/api/works/$work.id/metadata",
+      "path": "/api/runs/$preparation.id/metadata",
       "payload": {
         "field": "/title",
         "value": "北京一夜",
-        "rationale": "Author input before starting a workflow"
+        "rationale": "Author input during Work preparation metadata review"
       },
       "expect": [
         {
@@ -45,14 +56,26 @@
       ]
     },
     {
+      "action": "drive_run",
+      "run_id": "$preparation.id",
+      "until": "COMPLETED",
+      "timeout": 21600
+    },
+    {
+      "action": "get",
+      "path": "/api/works/$work.id",
+      "save_as": "ready_work"
+    },
+    {
       "action": "start_run",
       "template_id": "literary-translation-v1",
       "work_id": "$work.id",
+      "work_version_id": "$ready_work.versions.0.version_id",
       "save_as": "run",
       "expect": [
         {
           "path": "stage",
-          "value": "prepare"
+          "value": "brief"
         }
       ]
     },

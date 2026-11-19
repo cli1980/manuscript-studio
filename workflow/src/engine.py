@@ -607,6 +607,8 @@ class Engine:
             stage = self.stage_def(state)
             if stage["kind"] == "production":
                 return self.production_step(revision, state)
+            if stage["kind"] == "publication":
+                return self.advance_publication(revision, state)
             if stage["kind"] == "export":
                 return self._export(revision, state)
             if stage["kind"] in ("metadata_review", "select", "acceptance"):
@@ -1011,7 +1013,7 @@ class Engine:
         result = {key: state.get(key) for key in (
             "id", "template_id", "workflow", "work_id", "owner", "status", "stage", "attempts", "error",
             "export_path", "document_path", "manuscript_language", "restart_of", "superseded_by", "settings",
-            "handed_off_work", "execution")}
+            "handed_off_work", "execution", "input_version", "prepared_version_id", "output_work_version_id")}
         result["chapter_id"] = iteration["chapter_id"] if iteration else None
         result["requires_runtime"] = self._stage_or_empty(state).get("kind") == "agent"
         result["production"] = self.production_view(state) if hasattr(self, "production_view") else None

@@ -15,6 +15,10 @@ th { background: #eef1f4; }
 .mono { font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem; }
 .docx-delivery .mono { overflow-wrap: anywhere; }
 .docx-delivery pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.work-detail .row > label { min-width: 0; max-width: 100%; }
+.work-detail select { max-width: 100%; }
+.work-detail a, .work-detail button.link, .work-detail .mono { overflow-wrap: anywhere; }
+.work-detail .table-scroll { max-width: 100%; overflow-x: auto; }
 .panel { background: #fff; border: 1px solid #dde2e7; border-radius: 6px; padding: 0.8rem 1rem; margin: 1rem 0; }
 .panel summary h2 { display: inline; }
 .gate { border-left: 4px solid #d08a00; }

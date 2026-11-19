@@ -31,16 +31,27 @@ need new authoring/review rather than an automatic approval migration.
   are selected after that language is known.
   Preparation proposes a title/subtitle when explicitly present in the source.
   Users review/correct titles, contributor credits and optional metadata in one
-  place: the post-preparation Overview audit. Later corrections use the same
-  editor; the Work page links there instead of offering another form. User
+  place: the Work preparation review. Later metadata-only revisions reuse the
+  same editor without another extraction or reading; select the ready source
+  version on the Work page. User
   corrections are authoritative and need not appear in the source.
   Re-preparation drafts source metadata independently; the host retains reviewed
   values (including deliberate clearing) and shows discrepancies at audit.
   Published metadata supplies the work's display title; the upload filename is
   only a fallback. A title proposal does not overwrite a supplied title or an
   intentional clearing, and a generated filename heading is not a source title.
-- **Workflows** starts a workflow on an existing work (preparation is its first
-  stage) and lists runs with what each needs. A background worker runs agent
+- **Work preparation** is an explicitly started Work-owned job after upload:
+  extract/normalize, review metadata, analyze, validate and publish a ready
+  immutable version. Jobs have their own progress/review/recovery pages under
+  Works, not the workflow list. Ready versions include verified front matter,
+  ordered Markdown/assets, metadata snapshots and source-bound provisional
+  analysis. Storage retries do not repeat a completed model reading.
+- **Workflows** starts editing or translation from an explicitly selected ready
+  Work version and lists runs with what each needs. It does not repeat intake.
+  The exact version/analysis identities remain pinned throughout the run.
+  Accepted changed text creates a derived version with analysis pending;
+  translation preserves the original. Unchanged/layout-only output attaches
+  deliverables without creating another text version. A background worker runs agent
   turns or deterministic production steps until a human is needed; Pause stops after the current step. The run page
   shows controls from `available_actions` and native gate forms: approval-sheet
   items and the separate closure, exact command replies, metadata edits and
@@ -322,7 +333,8 @@ this is not credential isolation from agent tools.
 ## Interior-design review in literary editing
 
 Start a new literary-editing run, or restart an older run whose engine has changed.
-After preparation, metadata review and shared manuscript analysis, run and accept any editing passes, or
+Select a ready Work version containing preparation, reviewed metadata and shared
+manuscript analysis; then run and accept any editing passes, or
 finish with zero passes. Choose **Review manuscript**, inspect the candidate
 chapters under **Approve manuscript for formatting**, and choose
 **Approve manuscript and continue**. This approval freezes the

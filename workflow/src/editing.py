@@ -304,6 +304,7 @@ class EditingEngine(InteriorDesignPhase, PreparedManuscriptEngine):
             "work_record": state["prepared"]["work_record"] if state["prepared"] else None,
             "domain_state": state["domain_state"], "user_receipt": state["next_input"],
             "metadata_approval": state.get("metadata_approval"),
+            "work_version": state.get("input_version"),
             "manuscript_analysis": self.analysis_handoff(state),
             "skills": [str(self.root / "skills" / name / "SKILL.md") for name in agent["skills"]],
             "python_executable": sys.executable,

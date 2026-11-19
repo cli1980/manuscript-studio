@@ -153,7 +153,9 @@ class ExecutionProfile:
         model = next((m for m in self.models if m.key == key), None)
         if model is None:
             raise ValueError("The selected model is unavailable in the startup profile; no fallback was applied.")
-        if workflow and model.workflows and workflow not in model.workflows:
+        shared_preparation = workflow == "work-preparation" and bool(
+            {"literary-editing", "literary-translation"}.intersection(model.workflows))
+        if workflow and model.workflows and workflow not in model.workflows and not shared_preparation:
             raise ValueError(f"Model {model.key} is not enabled for workflow {workflow}.")
         return model
 

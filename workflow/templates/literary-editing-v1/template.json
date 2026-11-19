@@ -3,18 +3,9 @@
   "title": "Literary editing",
   "workflow": "literary-editing",
   "engine": "workflow.src.editing:EditingEngine",
+  "prepared_input": true,
   "locked_metadata": ["/manuscript_language"],
   "agents": {
-    "prepare": {
-      "skill": "prepare-manuscript",
-      "skills": ["prepare-manuscript"],
-      "model": null
-    },
-    "analysis": {
-      "skill": "manuscript-analysis",
-      "skills": ["prepare-manuscript", "manuscript-analysis", "review-approval-sheet"],
-      "model": null
-    },
     "interior-design": {
       "skill": "interior-design",
       "skills": ["prepare-manuscript", "interior-design"],
@@ -47,11 +38,6 @@
     "question": {}
   },
   "stages": [
-    {"id": "prepare", "kind": "agent", "agent": "prepare", "preparation": true, "gates": ["question"],
-     "owns": ["prepared/", "source/", "manuscript/", "editorial/"]},
-    {"id": "metadata", "kind": "metadata_review"},
-    {"id": "analysis", "kind": "agent", "agent": "analysis",
-     "gates": ["question"], "owns": ["manuscript-analysis/"]},
     {"id": "passes", "kind": "select", "options": [
       {"stage": "developmental", "title": "Developmental edit",
        "description": "Structure, character, pacing, and theme across the whole book: a verdict and recommendations for later passes. The text does not change."},

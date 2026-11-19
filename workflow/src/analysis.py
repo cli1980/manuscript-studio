@@ -52,6 +52,11 @@ INSTRUCTIONS = (
     "result schema. Paths are workspace-relative with forward slashes; use python_executable for helpers.\n\n"
 )
 CONSUMER_INSTRUCTIONS = (
+    "WORK INPUT: when work_version is supplied, it pins an already prepared Work snapshot and analysis. "
+    "Do not repeat extraction, metadata intake or manuscript analysis for a new workflow. Never silently "
+    "switch to a newer Work version. Original/prepared source stays read-only; editing uses its working copy. "
+    "When current_metadata_matches_analysis is false, retain the original reading provenance and prefer the "
+    "current confirmed metadata over old profile/catalogue assumptions; do not present the old metadata as current. "
     "SHARED ANALYSIS: manuscript_analysis is the frozen, provisional source reading. Reuse its synopsis, "
     "chapter summaries, ledger and profile rather than creating a competing story model. Read its manifest "
     "and qualifications; verify claims against source passages. It is not author approval, a translation "
@@ -179,6 +184,7 @@ class ManuscriptAnalysisPhase:
             snapshots[key] = self.checkpoint(path, "manuscript_analysis")
         state["analysis"] = {
             **expected, "created_at": now(), "qualifications": qualifications,
+            "metadata_sha256": state["analysis_input"],
             "manifest": self.checkpoint(manifest_path, "analysis_manifest"), "artifacts": snapshots,
             "coverage": coverage, "subject_proposals": proposals, "producer": {
                 "agent": self.stage_def(state)["agent"],
@@ -215,7 +221,11 @@ class ManuscriptAnalysisPhase:
         current = state.get("manuscript")
         matches = not current or all(digest(read_bytes(self.file(current[c["chapter_id"]]))) == c["sha256"]
                                      for c in state["chapters"])
-        return {**analysis, "basis_kind": "prepared-source", "current_text_matches_source": bool(matches)}
+        metadata_sha = analysis.get("metadata_sha256")
+        return {**analysis, "basis_kind": "prepared-source", "current_text_matches_source": bool(matches),
+                "current_metadata_matches_analysis": (metadata_sha ==
+                    (state.get("metadata_approval") or {}).get("sha256", digest(read_bytes(self._work_path(state)))))
+                    if metadata_sha else None}
 
     def delivery_files(self, state):
         files = super().delivery_files(state)

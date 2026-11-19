@@ -196,7 +196,7 @@ export class EditingWorkflowUI extends ChapterViewerWorkflowUI {
 
   override stageSummary(template: Template) {
     const passes = Object.values(template.choices).flat().map((o) => o.title.toLowerCase());
-    return `After preparation and metadata review you choose editing passes one at a time (${passes.join(", ")}), `
+    return `Using the selected prepared Work version, choose editing passes one at a time (${passes.join(", ")}), `
       + "in any order and as often as needed, and accept each pass's output. Finish editing and approve the manuscript; "
       + "the final formatting phase then starts automatically with interior design and its editable specification review. "
       + "Review the generation plan, download the checked editable DOCX and accept it to finish. PDF and rendered-page checks are deferred.";

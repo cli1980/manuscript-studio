@@ -120,6 +120,17 @@ def parser():
     work_sub.add_parser("list")
     for name in ("show", "verify", "publications"):
         work_sub.add_parser(name).add_argument("work")
+    add_work = work_sub.add_parser("add", help="Upload a source as a new Work without starting agent work.")
+    add_work.add_argument("source", type=Path)
+    add_work.add_argument("--manuscript-language")
+    work_sub.add_parser("versions", help="List immutable manuscript versions.").add_argument("work")
+    prepare_work = work_sub.add_parser("prepare", help="Prepare/review/analyze a Work source version.")
+    prepare_work.add_argument("work")
+    prepare_work.add_argument("--source-version")
+    prepare_work.add_argument("--model")
+    prepare_work.add_argument("--agent-model", action="append", metavar="AGENT=MODEL")
+    prepare_work.add_argument("--refresh-analysis", action="store_true",
+                              help="Re-read a ready version after metadata review; otherwise reuse its analysis.")
     work_metadata = work_sub.add_parser("metadata", help="Show the work's shared metadata or its history.")
     work_metadata.add_argument("work")
     work_metadata.add_argument("--history", action="store_true")
@@ -131,6 +142,7 @@ def parser():
     work_edit.add_argument("--reason", default="Explicit metadata edit.")
     create = sub.add_parser("create", help="Create a run: --source makes a new work; --work uses an existing work.")
     create.add_argument("--template", required=True)
+    create.add_argument("--work-version", help="Exact ready Work version to consume; required by editing/translation.")
     origin = create.add_mutually_exclusive_group(required=True)
     origin.add_argument("--source", type=Path, help="Upload a manuscript; always creates a new work.")
     origin.add_argument("--work", help="Start this workflow on an existing work.")
@@ -227,6 +239,19 @@ def run(service, args):
             emit(service.verify_work(args.work))
         elif sub == "publications":
             emit(service.work_publications(args.work))
+        elif sub == "add":
+            emit(service.get_work(service.create_work(args.source, args.manuscript_language)))
+        elif sub == "versions":
+            emit(service.get_work(args.work)["versions"])
+        elif sub == "prepare":
+            job = service.create_preparation(args.work, source_version_id=args.source_version,
+                                              model=args.model, agent_models=agent_models(args.agent_model),
+                                              refresh_analysis=args.refresh_analysis)
+            show(service, job)
+            profile_option = f' --execution-profile "{args.execution_profile}"' if args.execution_profile else ""
+            if args.user_execution_profile:
+                profile_option += f' --user-execution-profile "{args.user_execution_profile}"'
+            print(f'\nNext: python -m workflow --server-root "{service.root}"{profile_option} step {job}')
         elif sub == "metadata":
             emit(service.work_metadata_version(args.work, args.version) if args.version is not None else
                  service.work_metadata_history(args.work) if args.history else service.get_work_metadata(args.work))
@@ -237,6 +262,7 @@ def run(service, args):
         run_id = service.create_run(args.template, upload=args.source, work_id=args.work,
                                     manuscript_language=args.manuscript_language, model=args.model,
                                     agent_models=agent_models(args.agent_model),
+                                    work_version_id=args.work_version,
                                     settings={"passage_size": args.passage_size} if args.passage_size else None)
         show(service, run_id)
         profile_option = f' --execution-profile "{args.execution_profile}"' if args.execution_profile else ""

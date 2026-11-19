@@ -76,7 +76,8 @@ class Watcher:
     def _scan(self):
         runs = {}
         previous = (self.snapshot or {}).get("runs", {})
-        for path in sorted((self.root / "runs").glob("*/state.sqlite3")):
+        for path in sorted(path for area in ("runs", "preparations")
+                           for path in (self.root / area).glob("*/state.sqlite3")):
             run_id = path.parent.name
             try:
                 runs[run_id] = self._run(run_id, path)

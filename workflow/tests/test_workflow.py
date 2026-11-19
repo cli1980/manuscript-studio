@@ -27,6 +27,7 @@ from . import monitor_performance
 from .test_execution import profile_data
 from .interior_fixture import apply_target, proposal_for
 from .analysis_fixture import analyze, analysis_context
+from .inline_intake_fixture import inline_intake_templates
 
 TRANSLATION = "literary-translation-v1"
 FORMATTING = "manuscript-formatting-v1"
@@ -81,6 +82,7 @@ class WorkflowTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name).resolve()
+        self.enterContext(inline_intake_templates(self.base))
         self.source = self.base / "original.md"
         self.source.write_bytes("# 故事\n\n他回来了。\n".encode())
         self.service = WorkflowService(self.base / "server with spaces", owner="tester")
@@ -116,7 +118,7 @@ class WorkflowTests(unittest.TestCase):
         return relative
 
     def preparation(self, request):
-        source = self.engine.root / "input" / self.source.name
+        source = self.engine.root / "input" / self.engine.state()["source_name"]
         content = source.read_bytes()
         parts = getattr(self, "parts", [content.decode()])
         # Every prepared revision starts with exactly one front-matter unit (here the title heading).

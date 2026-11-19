@@ -34,6 +34,8 @@ export function Overview({ data, run, onSaved }: { data: OverviewData; run: RunD
           <a href={`#/runs/${data.metadata_edit.run_id}/overview`}>Open the current metadata editor</a>
         </p>}
         <a href={`#/works/${encodeURIComponent(data.work_id)}`}>Open shared work record</a>
+        {run.input_version && <p className="muted">Metadata is pinned to the selected Work version.
+          Review metadata on the Work to create another version without repeating the reading.</p>}
       </section>
       <section className="panel" aria-label="Manuscript analysis">
         <h2>Manuscript Analysis</h2>
@@ -42,6 +44,10 @@ export function Overview({ data, run, onSaved }: { data: OverviewData; run: RunD
           <p className="muted">{data.analysis.coverage_verification}</p>
           {!data.analysis.current_text_matches_source && <div className="banner warn">
             The manuscript has changed since this source analysis. Refer to current text and editorial records for later changes.
+          </div>}
+          {data.analysis.current_metadata_matches_analysis === false && <div className="banner">
+            This reading used an earlier metadata snapshot. Its text binding is unchanged; use current confirmed
+            metadata rather than older profile or catalogue assumptions.
           </div>}
           {data.analysis.qualifications.length > 0 && <ul>
             {data.analysis.qualifications.map((note, i) => <li key={i}>{note}</li>)}

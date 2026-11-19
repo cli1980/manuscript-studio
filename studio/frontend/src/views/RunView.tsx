@@ -26,7 +26,8 @@ export function RunView({ runId }: { runId: string }) {
     try {
       const next = await operation();
       setActionError(null);
-      if (next.id !== runId) window.location.hash = `#/runs/${next.id}`;
+      if (next.id !== runId) window.location.hash = next.workflow === "work-preparation"
+        ? `#/works/${encodeURIComponent(next.work_id)}/preparations/${next.id}` : `#/runs/${next.id}`;
       else setData(next);
     } catch (exc) {
       setActionError(exc instanceof Error ? exc.message : String(exc));
@@ -39,8 +40,13 @@ export function RunView({ runId }: { runId: string }) {
   const live = run.status === "RUNNING" || run.worker.active;
   return (
     <section>
-      <p><a href="#/runs">← Workflows</a> · <a href={`#/works/${encodeURIComponent(run.work_id)}`}>Work {run.work_id}</a></p>
+      <p>{run.workflow !== "work-preparation" && <><a href="#/runs">Workflows</a> · </>}
+        <a href={`#/works/${encodeURIComponent(run.work_id)}`}>Work {run.work_id}</a></p>
       <h1>{run.template_title ?? run.template_id} <span className="mono muted">{run.id.slice(0, 8)}</span></h1>
+      {run.prepared_version_id && run.status === "COMPLETED" && <div className="banner">
+        Work version {run.prepared_version_id} is ready. Analysis remains provisional context, not author approval.
+        {" "}<a href={`#/works/${encodeURIComponent(run.work_id)}`}>Choose it for a workflow</a>.
+      </div>}
       {run.finalized && (
         <div className="banner final">This run is final: its output is an accepted version of {run.workflow} on this work and cannot change. Start a new run on the work to publish the next version.</div>
       )}
@@ -60,6 +66,10 @@ export function RunView({ runId }: { runId: string }) {
             {p.number} · {ui.stageTitle(run, p.stage)} · {p.accepted ? "accepted" : p.completed ? "awaiting acceptance" : "in progress"}
           </span>))}</div>}
         <div><span>Turns</span>{run.attempts}</div>
+        {run.input_version && <div><span>Input version</span><a href={`#/works/${encodeURIComponent(run.work_id)}`}>
+          {run.input_version.version_id}</a> · analysis {run.input_version.analysis_id}</div>}
+        {run.output_work_version_id && <div><span>Saved text version</span>
+          <a href={`#/works/${encodeURIComponent(run.work_id)}`}>{run.output_work_version_id}</a> · analysis pending</div>}
         {run.execution && <div><span>Execution</span>{run.execution.profile} · {run.execution.harness} ·{" "}
           {run.execution.model} · {run.execution.endpoint ?? "installed provider"}
           <small className="muted"> · {run.execution.sandbox}</small></div>}
@@ -124,9 +134,10 @@ function Controls({ run, actions, perform }: { run: RunDetail; actions: Record<s
         }}>Restart stage</button>
       <button disabled={disabled("restart_workflow")} title={title("restart_workflow")}
         onClick={() => {
-          const reason = window.prompt("Reason for restarting the workflow");
+          const reason = window.prompt(run.workflow === "work-preparation"
+            ? "Reason for restarting preparation" : "Reason for restarting the workflow");
           if (reason && confirmed("restart_workflow")) perform(() => api.action(run.id, "restart", { reason, confirm_stopped: run.status === "RUNNING" && !run.worker.active }));
-        }}>Restart workflow</button>
+        }}>{run.workflow === "work-preparation" ? "Restart preparation" : "Restart workflow"}</button>
       <button className="danger" disabled={disabled("stop")} title={title("stop")}
         onClick={() => { if (confirmed("stop")) perform(() => api.action(run.id, "stop")); }}>Stop</button>
     </div>

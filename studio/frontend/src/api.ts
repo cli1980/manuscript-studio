@@ -134,6 +134,9 @@ export interface RunSummary {
   } | null;
   id: string;
   execution?: ExecutionIdentity | null;
+  input_version?: { version_id: string; language: string; analysis_id: string } | null;
+  prepared_version_id?: string | null;
+  output_work_version_id?: string | null;
   retired: boolean;
   recorded_status?: string;
   acceptance_title?: string;
@@ -232,6 +235,20 @@ export interface Template { id: string; title: string; workflow: string; consume
   choices: Record<string, StageOption[]>;
   passage_size: { cjk_chars: number; words: number } | null }
 
+export interface WorkVersion {
+  version_id: string;
+  status: "ready" | "analysis_pending" | "preparation_pending";
+  kind: string;
+  language: string | null;
+  created_at: string;
+  parent_version_id: string | null;
+  producer_job_id: string | null;
+  producer_run_id: string | null;
+  analysis_status: string | null;
+  analysis_id: string | null;
+  documents: { path: string; artifact: string }[];
+}
+
 export interface WorkSummary {
   id: string;
   title: string;
@@ -243,6 +260,7 @@ export interface WorkSummary {
   unfinished_run: string | null;
   runs: number;
   artifacts: number;
+  versions: WorkVersion[];
 }
 
 export interface Publication {
@@ -252,6 +270,7 @@ export interface Publication {
 
 export interface WorkDetail extends Omit<WorkSummary, "runs" | "artifacts"> {
   runs: { id: string; template_id: string; status: string; stage: string; created_at: string }[];
+  preparation_jobs: { id: string; status: string; stage: string; created_at: string }[];
   heads: Record<string, { id: string; version: number; status: string; review_status: string; created_at: string; contract?: string }>;
   metadata: { record_revision: number; metadata: Record<string, unknown>; provenance: MetadataView["provenance"] } | null;
   metadata_fields: MetadataField[];
@@ -312,6 +331,7 @@ export interface Overview {
   prepared: boolean;
   analysis?: { analysis_id: string; approval_status: "provisional"; qualifications: string[];
     coverage_verification: string; current_text_matches_source: boolean;
+    current_metadata_matches_analysis?: boolean | null;
     subject_proposals?: SubjectProposalGroups | null;
     documents: { path: string; sha256: string; text: string }[] } | null;
   source: ChapterDetail | null;
@@ -352,6 +372,8 @@ export const api = {
   works: () => request<WorkSummary[]>("/api/works"),
   work: (id: string) => request<WorkDetail>(`/api/works/${encodeURIComponent(id)}`),
   artifact: (id: string, path: string) => request<string>(`/api/works/${encodeURIComponent(id)}/artifact?path=${encodeURIComponent(path)}`),
+  versionArtifact: (id: string, version: string, path: string) =>
+    request<string>(`/api/works/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/artifact?path=${encodeURIComponent(path)}`),
   sourceUrl: (id: string) => `/api/works/${encodeURIComponent(id)}/source`,  // A download link, not a fetch.
   docxUrl: (id: string, buildId: string) => `/api/runs/${encodeURIComponent(id)}/docx/${encodeURIComponent(buildId)}`,
   publishedDocxUrl: (id: string, publicationId: string) =>
@@ -369,6 +391,8 @@ export const api = {
   create: (payload: unknown) => post<RunDetail>("/api/runs", payload),
   editWorkMetadata: (id: string, payload: { field: string; value: unknown; rationale: string }) => post<WorkDetail>(`/api/works/${encodeURIComponent(id)}/metadata`, payload),
   createWork: (payload: { upload: { name: string; data: string }; manuscript_language?: string }) => post<WorkDetail>("/api/works", payload),
+  prepareWork: (id: string, payload: { source_version_id?: string; model?: string; refresh_analysis?: boolean }) =>
+    post<RunDetail>(`/api/works/${encodeURIComponent(id)}/prepare`, payload),
   reply: (id: string, gate_id: string, text: string) => post<RunDetail>(`/api/runs/${id}/reply`, { gate_id, text }),
   reviewInteriorDesign: (id: string, payload: {
     gate_id: string; expected_sha256: string; action: "save" | "generate" | "request-revision";

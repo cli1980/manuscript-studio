@@ -13,6 +13,7 @@ from pathlib import Path
 from .analysis import ANALYSIS_STAGE, ManuscriptAnalysisPhase
 from .engine import SKILLS, Engine, WorkflowError, module_at
 from .storage import digest, json_bytes, now, plain, read_bytes
+from .work_versions import publish_changed_output
 
 METADATA_CONFIRMATION = "confirm metadata"
 WHOLE = "_whole"  # Not a valid chapter ID, so it cannot collide with a prepared unit.
@@ -479,6 +480,9 @@ class PreparedManuscriptEngine(ManuscriptAnalysisPhase, Engine):
         )
         state["publications"] = {p["artifact"]: p["id"] for p in publications}
         state["library_heads"]["work.json"] = state["publications"]["work.json"]
+        derived = publish_changed_output(self, state)
+        if derived is not None:
+            state["output_work_version_id"] = derived["version_id"]
 
     # ----- preparation ----------------------------------------------------------------------
 
@@ -506,8 +510,8 @@ class PreparedManuscriptEngine(ManuscriptAnalysisPhase, Engine):
         work = json.loads(path.read_text(encoding="utf-8"))
         if work["work_id"] != state["work_id"]:
             raise ValueError(f"Preparation must use the assigned work ID {state['work_id']}.")
-        source = str(self.root / "input" / state["source_name"])
-        if work["discovery"]["location_kind"] != "file" or work["discovery"]["location"] != source:
+        source = self.root / "input" / state["source_name"]
+        if work["discovery"]["location_kind"] != "file" or Path(work["discovery"]["location"]).resolve() != source.resolve():
             raise ValueError("Preparation must bind the designated input snapshot.")
         if state["manuscript_language"] and work["metadata"][language_key(work)] != state["manuscript_language"]:
             raise ValueError("Preparation manuscript language differs from the run.")
