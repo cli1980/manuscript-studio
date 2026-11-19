@@ -901,7 +901,8 @@ status, owner, and relevant issue or implementation links. Use these statuses:
 - **Outcome:** The studio is organized as four distinct interfaces: an
   evolving page viewer, a separate run inspector, a separate works explorer,
   and one unified decision GUI for every kind of approval. The workflow engine
-  and its gate model do not change.
+  and its gate model do not change. The frontend supports multiple UI languages
+  through external localization assets rather than embedded display strings.
 - **Findings (design review, 2026-10-28):**
 
   | Perspective | Fit today | Main gaps |
@@ -944,6 +945,21 @@ status, owner, and relevant issue or implementation links. Use these statuses:
      target, diffs for line and copy editing, single-language reading,
      highlighting of sheet item locations) do not touch decision logic, and so
      several editing stages and the whole-book pass fit in one view.
+  5. **Resource-based frontend localization** (owner requirement; planned).
+     Treat application-owned UI text as external locale/message assets, not
+     hard-coded strings in component code. Components and workflow UI adapters
+     reference stable message keys for navigation, buttons, field labels,
+     statuses, validation messages, help text and notifications. Assets contain
+     complete messages with named placeholders and plural forms; do not build
+     sentences or labels by concatenating translated fragments.
+     The core acceptance criteria are that UI copy lives in localization
+     assets, UI code resolves it through stable keys, and parameterized and
+     singular/plural messages render from those assets. Adding or correcting
+     translations must not require changing component logic.
+     Initial languages, default/fallback language, language-selection behavior
+     and localization library remain open design choices. This is a frontend
+     requirement, not automatic translation of manuscript or agent-authored
+     document content; implementation has not started.
 - **Work Overview** (owner direction, 2026-11-16; prerequisite
   before manuscript-analysis workflow integration):
   - The book title opens an unnumbered Overview outside the chapter list. The
